@@ -1,9 +1,13 @@
+import { basename } from 'node:path';
 import { cancel, confirm, groupMultiselect, intro, isCancel, log, note, outro } from '@clack/prompts';
 import { detectPm, type Pm } from '../detect/pm';
 import { detectTarget } from '../detect/target';
+import { copyFileOp, type CopyResult } from '../fs/copy';
+import { writeAndInstall } from '../install/run';
 import { UNITS } from '../manifest/index';
 import { resolveSelection } from '../manifest/resolve';
 import type { Category, Unit, UnitId } from '../manifest/types';
+import { PKG_ROOT } from '../util/paths';
 
 // Human-readable group headers for the multiselect. Falls back to the raw
 // category key if a future category lands here without an explicit label.
@@ -43,7 +47,12 @@ export async function runInit(): Promise<void> {
 		process.exit(1);
 	}
 
-	note(formatPlan(resolution.ids, resolution.auto, UNITS, pm), 'Plan');
+	const byId = new Map(UNITS.map((u) => [u.id, u]));
+	const selectedUnits = resolution.ids
+		.map((id) => byId.get(id))
+		.filter((u): u is Unit => u !== undefined);
+
+	note(formatPlan(selectedUnits, resolution.auto, pm), 'Plan');
 
 	const proceed = await confirm({ message: 'Apply?', initialValue: true });
 	if (isCancel(proceed) || !proceed) {
@@ -51,10 +60,38 @@ export async function runInit(): Promise<void> {
 		return;
 	}
 
-	// File copy + package.json merge + install + post-install land in steps
-	// 7 and 8. For now the confirm is a no-op so users can walk the prompt
-	// flow end to end.
-	log.warn('Apply is a no-op until step 7. File copy and install land next.');
+	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
+	const copyResults: CopyResult[] = [];
+	for (const unit of selectedUnits) {
+		for (const file of unit.files) {
+			copyResults.push(await copyFileOp(file, {
+				pkgRoot: PKG_ROOT,
+				targetDir: target.dir,
+				projectName,
+			}));
+		}
+	}
+
+	const copied = copyResults.filter((r) => r.action === 'copied').length;
+	const overwrote = copyResults.filter((r) => r.action === 'overwrote').length;
+	const skipped = copyResults.filter((r) => r.action === 'skipped').length;
+	log.success(`Files: ${copied} written, ${overwrote} overwritten, ${skipped} skipped.`);
+
+	const installResult = await writeAndInstall({
+		targetDir: target.dir,
+		pm,
+		units: selectedUnits,
+	});
+
+	if (installResult.cancelled) {
+		log.warn(`Install interrupted. Re-run \`${pm} install\` in ${target.dir} to finish.`);
+	}
+	else if (installResult.error) {
+		log.error(installResult.error);
+	}
+	else if (!pm) {
+		log.message(formatNoPmNextSteps(target.dir, selectedUnits));
+	}
 
 	outro('Done.');
 }
@@ -83,26 +120,42 @@ async function promptSelection(units: Unit[]): Promise<UnitId[]> {
 	return result;
 }
 
-function formatPlan(ids: UnitId[], auto: UnitId[], units: Unit[], pm: Pm | null): string {
-	const byId = new Map(units.map((u) => [u.id, u]));
+function formatPlan(units: Unit[], auto: UnitId[], pm: Pm | null): string {
 	const lines: string[] = [];
 
-	for (const id of ids) {
-		const u = byId.get(id);
-		if (!u) continue;
-		const autoTag = auto.includes(id) ? ' (auto)' : '';
+	for (const u of units) {
+		const autoTag = auto.includes(u.id) ? ' (auto)' : '';
 		lines.push(`  • ${u.label}${autoTag}`);
 	}
 
-	const fileCount = ids.reduce((n, id) => n + (byId.get(id)?.files.length ?? 0), 0);
-	const depCount = ids.reduce((n, id) => {
-		const u = byId.get(id);
-		return n + Object.keys(u?.dependencies ?? {}).length + Object.keys(u?.devDependencies ?? {}).length;
-	}, 0);
+	const fileCount = units.reduce((n, u) => n + u.files.length, 0);
+	const depCount = units.reduce(
+		(n, u) => n + Object.keys(u.dependencies ?? {}).length + Object.keys(u.devDependencies ?? {}).length,
+		0,
+	);
 
 	lines.push('');
 	const installLine = pm ? `install via ${pm}` : 'no install (no package.json)';
-	lines.push(`${ids.length} units · ${fileCount} files · ${depCount} deps · ${installLine}`);
+	lines.push(`${units.length} units · ${fileCount} files · ${depCount} deps · ${installLine}`);
 
+	return lines.join('\n');
+}
+
+function formatNoPmNextSteps(targetDir: string, units: Unit[]): string {
+	const deps = new Set<string>();
+	const devDeps = new Set<string>();
+	for (const u of units) {
+		for (const name of Object.keys(u.dependencies ?? {})) deps.add(name);
+		for (const name of Object.keys(u.devDependencies ?? {})) devDeps.add(name);
+	}
+
+	const lines: string[] = [
+		'Files written. Install was skipped because no package.json was detected.',
+		'',
+		`  cd ${targetDir}`,
+		'  npm init -y           # or pnpm init / yarn init / bun init',
+	];
+	if (deps.size > 0) lines.push(`  npm install ${[...deps].sort().join(' ')}`);
+	if (devDeps.size > 0) lines.push(`  npm install -D ${[...devDeps].sort().join(' ')}`);
 	return lines.join('\n');
 }
