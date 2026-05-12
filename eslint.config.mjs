@@ -57,12 +57,14 @@ export default antfu(
 
 		// ============================================
 		// Ignored Paths
+		// Note: `@antfu/eslint-config` has a built-in GLOB_EXCLUDE that
+		// blanket-ignores '**/.claude' and '**/.agents'. We can't unignore
+		// files inside those. For JSON/JSONC files in .claude/, format-on-save
+		// is delegated to VS Code's built-in JSON formatter via the
+		// [json]/[jsonc] per-language override in .vscode/settings.json.
 		// ============================================
 		ignores: [
-			'.agents',
 			'.next',
-			'.claude',
-			'.specify',
 			'node_modules',
 			'dist',
 			'build',
@@ -72,9 +74,17 @@ export default antfu(
 			'src/components/ui', // shadcn-generated; don't lint
 			'**/components/ui', // ditto for monorepos
 			'*.min.*',
-			'**/.agents',
-			'**/.claude',
-			'**/.specify/**',
+
+			// .specify: ignore bundled extensions/scripts/templates/integrations
+			// (tool-managed). Project-owned config files lint normally.
+			'.specify/extensions/**',
+			'.specify/scripts/**',
+			'.specify/templates/**',
+			'.specify/integrations/**',
+			'**/.specify/extensions/**',
+			'**/.specify/scripts/**',
+			'**/.specify/templates/**',
+			'**/.specify/integrations/**',
 		],
 	},
 

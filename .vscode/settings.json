@@ -39,6 +39,17 @@
 		"editor.defaultFormatter": "stylelint.vscode-stylelint"
 	},
 
+	// JSON / JSONC: VS Code's built-in formatter (respects insertSpaces/tabSize).
+	// Why not ESLint? @antfu's default GLOB_EXCLUDE includes '**/.claude' which
+	// ESLint can't unignore. The built-in JSON formatter runs everywhere and
+	// produces identical 2-tab output to @antfu for our codebase.
+	"[json]": {
+		"editor.defaultFormatter": "vscode.json-language-features"
+	},
+	"[jsonc]": {
+		"editor.defaultFormatter": "vscode.json-language-features"
+	},
+
 	// Markdown: Prettier (only place it's still used).
 	// @antfu's markdown formatter is functional but Prettier handles prose-wrap,
 	// list reflow, and link tables better. Scope-limited to .md/.mdx, so it can't
