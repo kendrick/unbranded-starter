@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm view *)",
+      "Bash(pnpm --version)",
+      "Skill(humanizer)",
+      "Skill(humanizer:*)",
+      "Read(//Users/k.arnett/.claude/**)",
+      "Read(//private/tmp/**)",
+      "Bash(pnpm build *)",
+      "Bash(npm pack *)",
+      "Bash(curl -s *)",
+      "Bash(pnpm list *)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm typecheck *)"
+    ],
+    "additionalDirectories": [
+      "/Users/k.arnett/.claude/plans"
+    ]
+  }
+}
