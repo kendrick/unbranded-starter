@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint (includes formatting via @antfu)
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      # Add this step if the project has a real build (Next.js, Vite, etc.):
+      # - name: Build
+      #   run: pnpm build
+
+      # Add this step if the project uses the opt-in/playwright module:
+      # - name: Install Playwright browsers
+      #   run: pnpm exec playwright install --with-deps chromium webkit
+      # - name: Integration tests (mobile profile)
+      #   run: pnpm test:e2e --project=mobile-chrome --project=mobile-safari

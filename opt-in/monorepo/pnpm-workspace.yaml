@@ -1,0 +1,25 @@
+# Copy to repo root when starting a monorepo.
+# Drop `trustPolicy` / `trustPolicyExclude` if not on pnpm 9.4+.
+
+shellEmulator: true
+
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# Silences the post-install warning about unbuilt packages.
+# These are the common offenders across modern Next/Vite/React stacks.
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - unrs-resolver
+
+# Optional: pin peer dependency versions across all workspaces
+peerDependencyRules:
+  allowedVersions:
+    react: '19'
+    react-dom: '19'
+
+# Optional: force-resolve packages across workspaces
+# overrides:
+#   tailwind-merge: ^3.0.0

@@ -1,0 +1,123 @@
+# ---------------------------------------------------------------------------
+# unbranded-starter — .gitignore
+# Next.js (App Router) · React 19 · pnpm · Tailwind 4 · shadcn/ui · MDX
+# ---------------------------------------------------------------------------
+
+# --- Dependencies ----------------------------------------------------------
+node_modules/
+.pnpm-store/
+.pnp.*
+.yarn/
+jspm_packages/
+
+# --- Next.js build output --------------------------------------------------
+.next/
+out/
+next-env.d.ts
+.swc/
+
+# --- Production build artifacts --------------------------------------------
+build/
+dist/
+
+# --- Vercel ----------------------------------------------------------------
+.vercel/
+
+# --- Environment files -----------------------------------------------------
+# Ignore all envs, commit only the template
+.env
+.env.*
+!.env.example
+
+# --- Content layer caches (Velite / Contentlayer / similar) ----------------
+.velite/
+.contentlayer/
+.content-collections/
+
+# --- TypeScript / build caches ---------------------------------------------
+*.tsbuildinfo
+.tscache/
+
+# --- Test / coverage -------------------------------------------------------
+coverage/
+.nyc_output/
+*.lcov
+.vitest-cache/
+playwright-report/
+test-results/
+.playwright/
+
+# --- Linters / formatters --------------------------------------------------
+.eslintcache
+.stylelintcache
+.prettiercache
+
+# --- Logs ------------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# --- Caches ----------------------------------------------------------------
+.cache/
+.parcel-cache/
+.turbo/
+
+# --- Claude Code -----------------------------------------------------------
+# Commit project-level config; ignore local machine overrides only
+.claude/settings.local.json
+.claude/.credentials*
+.claude/*.log
+
+# --- Editors / IDEs --------------------------------------------------------
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS cruft (macOS) ------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+.DocumentRevisions-V100
+.TemporaryItems
+
+# --- OS cruft (Windows) ----------------------------------------------------
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# --- OS cruft (Linux) ------------------------------------------------------
+.directory
+.Trash-*
+.nfs*
+
+# --- Image working files ---------------------------------------------------
+*.psd
+*.psb
+*.ai
+*.sketch
+*.fig.bak
+*.xcf
+
+# --- Misc ------------------------------------------------------------------
+*.pem
+.history/
+.tmp/
+tmp/

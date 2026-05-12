@@ -1,0 +1,81 @@
+{
+	// Format on save — ESLint is the source of truth (because @antfu/eslint-config handles formatting).
+	"editor.formatOnSave": true,
+	"editor.codeActionsOnSave": {
+		"source.fixAll.eslint": "explicit",
+		"source.fixAll.stylelint": "explicit"
+	},
+	"editor.defaultFormatter": "dbaeumer.vscode-eslint",
+
+	// Tabs (matching .prettierrc and .editorconfig)
+	"editor.insertSpaces": false,
+	"editor.tabSize": 2,
+	"editor.detectIndentation": false,
+
+	// ESLint
+	"eslint.useFlatConfig": true,
+	"eslint.format.enable": false, // Use ESLint's auto-fix instead of format command
+	"eslint.validate": [
+		"javascript",
+		"javascriptreact",
+		"typescript",
+		"typescriptreact",
+		"json",
+		"jsonc",
+		"yaml",
+		"markdown",
+		"css",
+		"html"
+	],
+
+	// Stylelint
+	"stylelint.validate": ["css", "postcss", "scss"],
+
+	// Per-language overrides — CSS gets stylelint as default formatter
+	"[css]": {
+		"editor.defaultFormatter": "stylelint.vscode-stylelint"
+	},
+	"[postcss]": {
+		"editor.defaultFormatter": "stylelint.vscode-stylelint"
+	},
+
+	// Markdown: Prettier (only place it's still used).
+	// @antfu's markdown formatter is functional but Prettier handles prose-wrap,
+	// list reflow, and link tables better. Scope-limited to .md/.mdx, so it can't
+	// conflict with @antfu on JS/TS.
+	"[markdown]": {
+		"editor.defaultFormatter": "esbenp.prettier-vscode"
+	},
+	"[mdx]": {
+		"editor.defaultFormatter": "esbenp.prettier-vscode"
+	},
+
+	// Search / file watcher exclusions (matches .gitignore)
+	"search.exclude": {
+		"**/node_modules": true,
+		"**/.next": true,
+		"**/dist": true,
+		"**/out": true,
+		"**/build": true,
+		"**/.turbo": true,
+		"pnpm-lock.yaml": true
+	},
+	"files.watcherExclude": {
+		"**/node_modules/**": true,
+		"**/.next/**": true,
+		"**/dist/**": true,
+		"**/out/**": true,
+		"**/build/**": true,
+		"**/.turbo/**": true
+	},
+
+	// TypeScript: use workspace version, not VS Code's bundled one
+	"typescript.tsdk": "node_modules/typescript/lib",
+	"typescript.enablePromptUseWorkspaceTsdk": true,
+
+	// Tailwind v4 — official extension picks this up via CSS @theme
+	"tailwindCSS.experimental.classRegex": [
+		["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
+		["cx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]
+	]
+}
