@@ -35,6 +35,11 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # Catches the case where tsup succeeds but the bundle itself doesn't
+      # run (e.g. a runtime import error, broken shebang, missing PKG_ROOT).
+      - name: Smoke-test built CLI
+        run: node dist/cli.js --version
+
       # Add this step if the project uses the opt-in/playwright module:
       # - name: Install Playwright browsers
       #   run: pnpm exec playwright install --with-deps chromium webkit
