@@ -40,6 +40,13 @@ jobs:
       - name: Smoke-test built CLI
         run: node dist/cli.js --version
 
+      # E2E suite: spawns the built CLI in tmp dirs with --config recipes.
+      # Covers the no-install paths and the tarball contents snapshot. A
+      # matrix across PMs (npm/pnpm/yarn/bun) can land in a separate
+      # workflow once the install-mode tests exist.
+      - name: E2E tests
+        run: pnpm vitest run --config vitest.e2e.config.ts
+
       # Add this step if the project uses the opt-in/playwright module:
       # - name: Install Playwright browsers
       #   run: pnpm exec playwright install --with-deps chromium webkit

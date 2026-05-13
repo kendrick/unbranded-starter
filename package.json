@@ -33,6 +33,8 @@
 		"prepublishOnly": "pnpm build",
 		"test": "vitest run",
 		"test:watch": "vitest",
+		"test:e2e": "pnpm build && vitest run --config vitest.e2e.config.ts",
+		"test:all": "pnpm test && pnpm test:e2e",
 		"typecheck": "tsc --noEmit",
 		"lint": "eslint . && stylelint \"**/*.css\" --allow-empty-input",
 		"lint:fix": "eslint . --fix && stylelint \"**/*.css\" --fix --allow-empty-input"
