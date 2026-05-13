@@ -15,6 +15,11 @@
 	// ESLint
 	"eslint.useFlatConfig": true,
 	"eslint.format.enable": false, // Use ESLint's auto-fix instead of format command
+	// Markdown deliberately omitted: Prettier is the source of truth there
+	// (see [markdown] override below). Keeping it here makes the ESLint
+	// extension load the full antfu chain on every .md save and hang the
+	// editor on "Getting code actions from 'ESLint'". CLI `pnpm lint` still
+	// formats markdown via the formatters block in eslint.config.mjs.
 	"eslint.validate": [
 		"javascript",
 		"javascriptreact",
@@ -23,7 +28,6 @@
 		"json",
 		"jsonc",
 		"yaml",
-		"markdown",
 		"css",
 		"html"
 	],
