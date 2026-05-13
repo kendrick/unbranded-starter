@@ -12,15 +12,19 @@ import { PKG_ROOT } from '../util/paths';
 
 // Human-readable group headers for the multiselect. Falls back to the raw
 // category key if a future category lands here without an explicit label.
+// Display order is the object's insertion order, since we read it that way
+// when building the multiselect groups. Foundation first because those are
+// the universal basics; monorepo last because it's the most niche.
 const CATEGORY_LABELS: Record<Category, string> = {
+	foundation: 'Foundation',
 	lint: 'Linting',
-	style: 'Styles',
 	types: 'TypeScript',
+	style: 'Styles',
 	test: 'Testing',
 	e2e: 'End-to-end',
-	monorepo: 'Monorepo',
 	ui: 'UI',
 	git: 'Git hooks',
+	monorepo: 'Monorepo',
 };
 
 export async function runInit(): Promise<void> {

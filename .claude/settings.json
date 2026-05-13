@@ -12,7 +12,8 @@
       "Bash(curl -s *)",
       "Bash(pnpm list *)",
       "Bash(pnpm test *)",
-      "Bash(pnpm typecheck *)"
+      "Bash(pnpm typecheck *)",
+      "Bash(wait)"
     ],
     "additionalDirectories": [
       "/Users/k.arnett/.claude/plans"

@@ -3,7 +3,7 @@ export type UnitId =
 	| 'core-vitest' | 'core-postcss' | 'core-editorconfig'
 	| 'opt-monorepo' | 'opt-husky' | 'opt-playwright' | 'opt-shadcn';
 
-export type Category = 'lint' | 'style' | 'types' | 'test' | 'e2e' | 'monorepo' | 'ui' | 'git';
+export type Category = 'foundation' | 'lint' | 'style' | 'types' | 'test' | 'e2e' | 'monorepo' | 'ui' | 'git';
 
 export interface FileOp {
 	// Path relative to PKG_ROOT, written posix-style. Manifest authors don't

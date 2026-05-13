@@ -18,4 +18,19 @@ describe('manifest', () => {
 			}
 		}
 	});
+
+	it('implies/excludes/requires only reference defined UnitIds', () => {
+		const defined = new Set(UNITS.map((u) => u.id));
+		for (const unit of UNITS) {
+			for (const id of unit.implies ?? []) {
+				expect(defined.has(id), `${unit.id}.implies references unknown ${id}`).toBe(true);
+			}
+			for (const id of unit.excludes ?? []) {
+				expect(defined.has(id), `${unit.id}.excludes references unknown ${id}`).toBe(true);
+			}
+			for (const id of unit.requires ?? []) {
+				expect(defined.has(id), `${unit.id}.requires references unknown ${id}`).toBe(true);
+			}
+		}
+	});
 });
