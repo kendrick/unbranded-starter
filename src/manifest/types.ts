@@ -26,13 +26,18 @@ export interface FileOp {
 export interface PostInstall {
 	id: string;
 
-	// Templated against the detected PM. Manifest authors write the canonical
-	// shape (e.g. `pnpm exec husky init`); the runtime substitutes the user's
-	// actual PM before spawning.
-	command: string;
+	// Binary + args, run through the detected PM's exec wrapper. Authors write
+	// `['husky', 'init']` once; the runtime prepends `pnpm exec`, `npm exec --`,
+	// `yarn exec`, or `bun x` depending on the user's PM.
+	command: string[];
 
 	prompt: string;
 	default: boolean;
+
+	// Hard precondition the runtime checks before spawning. Today the only
+	// value is 'git' (husky init needs a repo); kept open as a string union
+	// so we can add others without churning every postInstall entry.
+	requires?: 'git';
 }
 
 export interface Unit {

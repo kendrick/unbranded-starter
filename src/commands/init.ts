@@ -3,6 +3,7 @@ import { cancel, confirm, groupMultiselect, intro, isCancel, log, note, outro } 
 import { detectPm, type Pm } from '../detect/pm';
 import { detectTarget } from '../detect/target';
 import { copyFileOp, type CopyResult } from '../fs/copy';
+import { runPostInstalls } from '../install/post';
 import { writeAndInstall } from '../install/run';
 import { UNITS } from '../manifest/index';
 import { resolveSelection } from '../manifest/resolve';
@@ -91,6 +92,16 @@ export async function runInit(): Promise<void> {
 	}
 	else if (!pm) {
 		log.message(formatNoPmNextSteps(target.dir, selectedUnits));
+	}
+
+	// Post-installs only make sense if the install step actually ran. Without
+	// node_modules the husky/playwright binaries aren't on PATH yet.
+	if (pm && installResult.installed) {
+		await runPostInstalls({
+			targetDir: target.dir,
+			pm,
+			units: selectedUnits,
+		});
 	}
 
 	outro('Done.');
