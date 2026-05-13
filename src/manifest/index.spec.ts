@@ -5,8 +5,8 @@ import { PKG_ROOT } from '../util/paths';
 import { UNITS } from './index';
 
 describe('manifest', () => {
-	it('UnitId values are unique across the manifest', () => {
-		const ids = UNITS.map((u) => u.id);
+	it('unitId values are unique across the manifest', () => {
+		const ids = UNITS.map(u => u.id);
 		expect(new Set(ids).size).toBe(ids.length);
 	});
 
@@ -20,7 +20,7 @@ describe('manifest', () => {
 	});
 
 	it('implies/excludes/requires only reference defined UnitIds', () => {
-		const defined = new Set(UNITS.map((u) => u.id));
+		const defined = new Set(UNITS.map(u => u.id));
 		for (const unit of UNITS) {
 			for (const id of unit.implies ?? []) {
 				expect(defined.has(id), `${unit.id}.implies references unknown ${id}`).toBe(true);

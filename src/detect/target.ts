@@ -58,11 +58,13 @@ export async function detectTarget(opts: DetectTargetOpts = {}): Promise<TargetC
 			message: 'Project name',
 			placeholder: 'my-app',
 			validate(value) {
-				if (!value) return 'Required';
+				if (!value)
+					return 'Required';
 				if (!/^[a-z0-9][a-z0-9_-]*$/.test(value)) {
 					return 'Lowercase letters, numbers, hyphens, underscores. Must start with a letter or digit.';
 				}
-				if (value.length > 214) return 'Too long (npm caps package names at 214 chars).';
+				if (value.length > 214)
+					return 'Too long (npm caps package names at 214 chars).';
 				return undefined;
 			},
 		});

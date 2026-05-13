@@ -13,7 +13,12 @@
       "Bash(pnpm list *)",
       "Bash(pnpm test *)",
       "Bash(pnpm typecheck *)",
-      "Bash(wait)"
+      "Bash(wait)",
+      "Bash(node dist/cli.js *)",
+      "Bash(pnpm test*)",
+      "Bash(gh run view *)",
+      "Bash(pnpm lint *)",
+      "Bash(pnpm lint:fix)"
     ],
     "additionalDirectories": [
       "/Users/k.arnett/.claude/plans"

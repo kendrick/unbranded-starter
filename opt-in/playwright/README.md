@@ -28,8 +28,8 @@ Mobile-first device matrix with axe-core integration. Pattern lifted from `for-c
 ## Example test with axe-core
 
 ```ts
-import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { expect, test } from '@playwright/test';
 
 test('home page passes axe-core WCAG 2.2 AA', async ({ page }) => {
 	await page.goto('/');

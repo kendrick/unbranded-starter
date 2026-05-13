@@ -6,8 +6,8 @@ export default antfu(
 		// ============================================
 		// Framework Configuration
 		// ============================================
-		react: true,    // react + react-hooks
-		nextjs: true,   // @next/eslint-plugin-next — REMOVE for non-Next projects
+		react: true, // react + react-hooks
+		nextjs: true, // @next/eslint-plugin-next — REMOVE for non-Next projects
 		typescript: true,
 
 		// ============================================
@@ -34,10 +34,20 @@ export default antfu(
 		// ============================================
 		rules: {
 			// General
-			'camelcase': ['error', { ignoreImports: true }],
+			// `properties: 'never'` lets snake_case data shapes through:
+			// env var keys (`npm_config_user_agent`), API responses, config
+			// files that aren't ours. The rule still polices identifiers.
+			'camelcase': ['error', { ignoreImports: true, properties: 'never' }],
 			'import/no-default-export': 'off', // Next.js needs default exports
 			'style/multiline-ternary': 'off',
 			'ts/no-explicit-any': 'error',
+
+			// This repo is a Node-only CLI. Forcing `import process from
+			// 'node:process'` and `import { Buffer } from 'node:buffer'`
+			// adds noise without improving anything — both are globals at
+			// every entry point we ship.
+			'node/prefer-global/process': 'off',
+			'node/prefer-global/buffer': 'off',
 
 			// -----------------------------------------
 			// Next.js Performance (no-ops for non-Next projects)

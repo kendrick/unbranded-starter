@@ -1,14 +1,16 @@
+import type { Pm } from '../detect/pm';
+import type { CopyResult } from '../fs/copy';
+import type { Category, Unit, UnitId } from '../manifest/types';
 import { basename } from 'node:path';
 import { cancel, confirm, groupMultiselect, intro, isCancel, log, note, outro } from '@clack/prompts';
 import { loadConfig } from '../config/load';
-import { detectPm, type Pm } from '../detect/pm';
+import { detectPm } from '../detect/pm';
 import { detectTarget } from '../detect/target';
-import { copyFileOp, type CopyResult } from '../fs/copy';
+import { copyFileOp } from '../fs/copy';
 import { runPostInstalls } from '../install/post';
 import { writeAndInstall } from '../install/run';
 import { UNITS } from '../manifest/index';
 import { resolveSelection } from '../manifest/resolve';
-import type { Category, Unit, UnitId } from '../manifest/types';
 import { PKG_ROOT } from '../util/paths';
 
 // Human-readable group headers for the multiselect. Falls back to the raw
@@ -36,7 +38,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 	// Loading config first means we fail with a clear error before prompting,
 	// rather than mid-flow after the user already started picking things.
 	const config = opts.configPath
-		? loadConfig(opts.configPath, new Set(UNITS.map((u) => u.id)))
+		? loadConfig(opts.configPath, new Set(UNITS.map(u => u.id)))
 		: null;
 
 	intro(config ? 'unbranded (--config)' : 'unbranded');
@@ -63,9 +65,9 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 		process.exit(1);
 	}
 
-	const byId = new Map(UNITS.map((u) => [u.id, u]));
+	const byId = new Map(UNITS.map(u => [u.id, u]));
 	const selectedUnits = resolution.ids
-		.map((id) => byId.get(id))
+		.map(id => byId.get(id))
 		.filter((u): u is Unit => u !== undefined);
 
 	note(formatPlan(selectedUnits, resolution.auto, pm), 'Plan');
@@ -93,9 +95,9 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 		}
 	}
 
-	const copied = copyResults.filter((r) => r.action === 'copied').length;
-	const overwrote = copyResults.filter((r) => r.action === 'overwrote').length;
-	const skipped = copyResults.filter((r) => r.action === 'skipped').length;
+	const copied = copyResults.filter(r => r.action === 'copied').length;
+	const overwrote = copyResults.filter(r => r.action === 'overwrote').length;
+	const skipped = copyResults.filter(r => r.action === 'skipped').length;
 	log.success(`Files: ${copied} written, ${overwrote} overwritten, ${skipped} skipped.`);
 
 	const installResult = await writeAndInstall({
@@ -187,7 +189,9 @@ function formatNoPmNextSteps(targetDir: string, units: Unit[]): string {
 		`  cd ${targetDir}`,
 		'  npm init -y           # or pnpm init / yarn init / bun init',
 	];
-	if (deps.size > 0) lines.push(`  npm install ${[...deps].sort().join(' ')}`);
-	if (devDeps.size > 0) lines.push(`  npm install -D ${[...devDeps].sort().join(' ')}`);
+	if (deps.size > 0)
+		lines.push(`  npm install ${[...deps].sort().join(' ')}`);
+	if (devDeps.size > 0)
+		lines.push(`  npm install -D ${[...devDeps].sort().join(' ')}`);
 	return lines.join('\n');
 }

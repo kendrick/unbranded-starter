@@ -28,10 +28,10 @@ describe('mergePackageJson', () => {
 	it('keeps existing scripts on collision (do not clobber user scripts)', () => {
 		const result = mergePackageJson(
 			{ scripts: { lint: 'my-custom-linter' } },
-			[{ scripts: { lint: 'eslint .', 'lint:fix': 'eslint . --fix' } }],
+			[{ scripts: { 'lint': 'eslint .', 'lint:fix': 'eslint . --fix' } }],
 		);
 		expect(result.scripts).toEqual({
-			lint: 'my-custom-linter',
+			'lint': 'my-custom-linter',
 			'lint:fix': 'eslint . --fix',
 		});
 	});
@@ -47,7 +47,7 @@ describe('mergePackageJson', () => {
 	it('alphabetizes dependencies', () => {
 		const result = mergePackageJson(
 			{},
-			[{ dependencies: { zod: '3.0.0', diff: '9.0.0', '@clack/prompts': '1.4.0' } }],
+			[{ dependencies: { 'zod': '3.0.0', 'diff': '9.0.0', '@clack/prompts': '1.4.0' } }],
 		);
 		expect(Object.keys(result.dependencies as object)).toEqual(['@clack/prompts', 'diff', 'zod']);
 	});

@@ -26,14 +26,17 @@ export const UNITS: Unit[] = [
 		],
 		devDependencies: {
 			// eslint.config.mjs imports @antfu/eslint-config and eslint-plugin-jsx-a11y
-			// directly. @next/eslint-plugin-next and eslint-plugin-format aren't
-			// imported by name but the config references their rules and formatters,
-			// so they have to be installed for the config to load.
+			// directly. The rest are optional peers of @antfu/eslint-config that
+			// our config opts into via `react: true` / `nextjs: true` — without
+			// them installed, eslint fails to load (CI has no TTY for antfu's
+			// auto-install prompt).
 			'@antfu/eslint-config': '8.3.0',
+			'@eslint-react/eslint-plugin': '3.0.0',
 			'@next/eslint-plugin-next': '15.5.18',
 			'eslint': '9.39.4',
 			'eslint-plugin-format': '2.0.1',
 			'eslint-plugin-jsx-a11y': '6.10.2',
+			'eslint-plugin-react-refresh': '0.5.2',
 		},
 		packageJsonPatch: {
 			scripts: {
@@ -63,7 +66,7 @@ export const UNITS: Unit[] = [
 		},
 		packageJsonPatch: {
 			scripts: {
-				'typecheck': 'tsc --noEmit',
+				typecheck: 'tsc --noEmit',
 			},
 		},
 	},
@@ -120,8 +123,8 @@ export const UNITS: Unit[] = [
 			{ src: 'vitest.config.ts', dest: 'vitest.config.ts' },
 		],
 		devDependencies: {
-			'vitest': '2.1.9',
-			'jsdom': '25.0.1',
+			vitest: '2.1.9',
+			jsdom: '25.0.1',
 		},
 		packageJsonPatch: {
 			scripts: {
@@ -191,7 +194,7 @@ export const UNITS: Unit[] = [
 			// `prepare` is npm's lifecycle hook for fresh clones — running it
 			// here means `pnpm install` after cloning rewires the hooks.
 			scripts: {
-				'prepare': 'husky',
+				prepare: 'husky',
 			},
 		},
 		postInstall: [
@@ -215,7 +218,7 @@ export const UNITS: Unit[] = [
 			{ src: 'opt-in/monorepo/turbo.json', dest: 'turbo.json' },
 		],
 		devDependencies: {
-			'turbo': '2.9.12',
+			turbo: '2.9.12',
 		},
 	},
 ];

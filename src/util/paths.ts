@@ -14,7 +14,8 @@ import { dirname, resolve } from 'node:path';
 function findPkgRoot(start: string): string {
 	let dir = start;
 	while (dir !== dirname(dir)) {
-		if (existsSync(resolve(dir, 'package.json'))) return dir;
+		if (existsSync(resolve(dir, 'package.json')))
+			return dir;
 		dir = dirname(dir);
 	}
 	throw new Error(`Could not locate package.json from ${start}`);

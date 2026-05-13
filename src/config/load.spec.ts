@@ -1,8 +1,8 @@
+import type { UnitId } from '../manifest/types';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { UnitId } from '../manifest/types';
 import { loadConfig, validate } from './load';
 
 const KNOWN_UNITS = new Set<UnitId>(['core-eslint', 'core-typescript', 'opt-shadcn']);

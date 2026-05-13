@@ -1,7 +1,7 @@
-export type UnitId =
-	| 'core-eslint' | 'core-stylelint' | 'core-typescript' | 'core-tailwind'
-	| 'core-vitest' | 'core-postcss' | 'core-editorconfig'
-	| 'opt-monorepo' | 'opt-husky' | 'opt-playwright' | 'opt-shadcn';
+export type UnitId
+	= | 'core-eslint' | 'core-stylelint' | 'core-typescript' | 'core-tailwind'
+		| 'core-vitest' | 'core-postcss' | 'core-editorconfig'
+		| 'opt-monorepo' | 'opt-husky' | 'opt-playwright' | 'opt-shadcn';
 
 export type Category = 'foundation' | 'lint' | 'style' | 'types' | 'test' | 'e2e' | 'monorepo' | 'ui' | 'git';
 

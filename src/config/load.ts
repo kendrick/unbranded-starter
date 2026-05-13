@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import type { Pm } from '../detect/pm';
 import type { UnitId } from '../manifest/types';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 export interface Config {
 	units: UnitId[];
@@ -47,10 +47,10 @@ export function validate(raw: unknown, knownUnits: Set<UnitId>): Config {
 	const obj = raw as Record<string, unknown>;
 
 	if (!Array.isArray(obj.units)) {
-		throw new Error('config.units must be an array of UnitId strings.');
+		throw new TypeError('config.units must be an array of UnitId strings.');
 	}
 	const unknownUnits = obj.units.filter(
-		(u) => typeof u !== 'string' || !knownUnits.has(u as UnitId),
+		u => typeof u !== 'string' || !knownUnits.has(u as UnitId),
 	);
 	if (unknownUnits.length > 0) {
 		throw new Error(`config.units contains unknown ids: ${unknownUnits.join(', ')}`);

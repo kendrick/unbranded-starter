@@ -1,32 +1,32 @@
 {
 	"name": "unbranded",
-	"version": "0.1.0",
-	"description": "Interactive CLI to scaffold your preferred project tooling into any project, using your existing package manager.",
-	"license": "MIT",
-	"author": "Kendrick Arnett",
-	"engines": {
-		"node": ">=20.11"
-	},
-	"packageManager": "pnpm@10.0.0",
 	"type": "module",
-	"bin": {
-		"unbranded": "./dist/cli.js"
-	},
+	"version": "0.1.0",
+	"packageManager": "pnpm@10.0.0",
+	"description": "Interactive CLI to scaffold your preferred project tooling into any project, using your existing package manager.",
+	"author": "Kendrick Arnett",
+	"license": "MIT",
 	"exports": {
 		".": "./dist/cli.js"
 	},
+	"bin": {
+		"unbranded": "./dist/cli.js"
+	},
 	"files": [
-		"dist",
-		"templates",
-		"opt-in",
-		"eslint.config.mjs",
-		"stylelint.config.mjs",
-		"tsconfig.base.json",
-		"postcss.config.mjs",
-		"vitest.config.ts",
 		".editorconfig",
-		".nvmrc"
+		".nvmrc",
+		"dist",
+		"eslint.config.mjs",
+		"opt-in",
+		"postcss.config.mjs",
+		"stylelint.config.mjs",
+		"templates",
+		"tsconfig.base.json",
+		"vitest.config.ts"
 	],
+	"engines": {
+		"node": ">=20.11"
+	},
 	"scripts": {
 		"dev": "tsup --watch",
 		"build": "tsup",
@@ -46,12 +46,14 @@
 	"devDependencies": {
 		"@antfu/eslint-config": "^8.2.0",
 		"@dreamsicle.io/stylelint-config-tailwindcss": "^1.2.2",
+		"@eslint-react/eslint-plugin": "^3.0.0",
 		"@next/eslint-plugin-next": "^15.1.0",
 		"@tailwindcss/postcss": "^4.0.0",
 		"@types/node": "^22.10.5",
 		"eslint": "^9.18.0",
 		"eslint-plugin-format": "^2.0.1",
 		"eslint-plugin-jsx-a11y": "^6.10.2",
+		"eslint-plugin-react-refresh": "^0.5.2",
 		"jsdom": "^25.0.1",
 		"stylelint": "^17.0.0",
 		"stylelint-config-standard": "^40.0.0",

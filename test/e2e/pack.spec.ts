@@ -18,8 +18,9 @@ describe('npm pack snapshot', () => {
 		const stdout = execSync('npm pack --dry-run --json', { cwd: PKG_ROOT, encoding: 'utf-8' });
 		const parsed = JSON.parse(stdout) as PackOutput[];
 		const first = parsed[0];
-		if (!first) throw new Error('npm pack returned no entries');
-		const actual = first.files.map((f) => f.path).sort();
+		if (!first)
+			throw new Error('npm pack returned no entries');
+		const actual = first.files.map(f => f.path).sort();
 
 		const expected = readFileSync(join(PKG_ROOT, 'test/fixtures/expected-pack.txt'), 'utf-8')
 			.trim()

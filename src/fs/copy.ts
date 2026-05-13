@@ -1,8 +1,8 @@
+import type { FileOp } from '../manifest/types';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join as joinNative, posix, resolve as resolveNative } from 'node:path';
 import { cancel, isCancel, log, select } from '@clack/prompts';
 import { createPatch } from 'diff';
-import type { FileOp } from '../manifest/types';
 
 export type CopyAction = 'copied' | 'overwrote' | 'skipped';
 
@@ -30,7 +30,7 @@ export async function copyFileOp(op: FileOp, opts: CopyOptions): Promise<CopyRes
 	const srcPath = joinNative(opts.pkgRoot, ...op.src.split(posix.sep));
 
 	const interpolatedDest = opts.projectName
-		? op.dest.replace(/{projectName}/g, opts.projectName)
+		? op.dest.replace(/\{projectName\}/g, opts.projectName)
 		: op.dest;
 	const destBase = resolveNative(opts.targetDir, ...interpolatedDest.split(posix.sep));
 
@@ -86,7 +86,8 @@ async function promptConflict(destPath: string, src: Buffer, dest: Buffer): Prom
 		cancel('Cancelled');
 		return process.exit(0);
 	}
-	if (firstChoice !== 'diff') return firstChoice;
+	if (firstChoice !== 'diff')
+		return firstChoice;
 
 	// Render unified diff with red/green +/- lines. `diff.createPatch` produces
 	// the standard hunk format; we colorize the prefix characters for the
@@ -112,9 +113,12 @@ function colorizeDiff(patch: string): string {
 	return patch.split('\n').map((line) => {
 		// Skip the file headers (`+++`, `---`) when coloring; they're metadata
 		// rather than content changes.
-		if (line.startsWith('+') && !line.startsWith('+++')) return `[32m${line}[0m`;
-		if (line.startsWith('-') && !line.startsWith('---')) return `[31m${line}[0m`;
-		if (line.startsWith('@@')) return `[36m${line}[0m`;
+		if (line.startsWith('+') && !line.startsWith('+++'))
+			return `[32m${line}[0m`;
+		if (line.startsWith('-') && !line.startsWith('---'))
+			return `[31m${line}[0m`;
+		if (line.startsWith('@@'))
+			return `[36m${line}[0m`;
 		return line;
 	}).join('\n');
 }

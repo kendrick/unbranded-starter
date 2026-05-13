@@ -6,11 +6,11 @@ export type Pm = 'npm' | 'pnpm' | 'yarn' | 'bun';
 
 export type PmSource = 'lockfile' | 'packageManager' | 'userAgent';
 
-export type PmInspection =
-	| { kind: 'detected'; pm: Pm; source: PmSource; lockfilePath?: string; packageManagerField?: string }
-	| { kind: 'needs-prompt' }
-	| { kind: 'no-pkg' }
-	| { kind: 'workspace-leaf'; workspaceRoot: string };
+export type PmInspection
+	= | { kind: 'detected'; pm: Pm; source: PmSource; lockfilePath?: string; packageManagerField?: string }
+		| { kind: 'needs-prompt' }
+		| { kind: 'no-pkg' }
+		| { kind: 'workspace-leaf'; workspaceRoot: string };
 
 // Walk-up generator. Workspace markers can live several levels above cwd
 // (e.g. `packages/app/src` → workspace root four dirs up).
@@ -19,7 +19,8 @@ function* walkUp(start: string): Generator<string> {
 	while (true) {
 		yield cur;
 		const parent = dirname(cur);
-		if (parent === cur) break;
+		if (parent === cur)
+			break;
 		cur = parent;
 	}
 }
@@ -28,17 +29,23 @@ function lockfileSignal(dir: string): { pm: Pm; file: string } | null {
 	// Order matters: pnpm-lock.yaml beats package-lock.json because the
 	// presence of a pnpm lockfile is a strong intent signal, even if npm
 	// happens to be the ambient PM via user-agent.
-	if (existsSync(join(dir, 'pnpm-lock.yaml'))) return { pm: 'pnpm', file: 'pnpm-lock.yaml' };
-	if (existsSync(join(dir, 'bun.lock'))) return { pm: 'bun', file: 'bun.lock' };
-	if (existsSync(join(dir, 'bun.lockb'))) return { pm: 'bun', file: 'bun.lockb' };
-	if (existsSync(join(dir, 'yarn.lock'))) return { pm: 'yarn', file: 'yarn.lock' };
-	if (existsSync(join(dir, 'package-lock.json'))) return { pm: 'npm', file: 'package-lock.json' };
+	if (existsSync(join(dir, 'pnpm-lock.yaml')))
+		return { pm: 'pnpm', file: 'pnpm-lock.yaml' };
+	if (existsSync(join(dir, 'bun.lock')))
+		return { pm: 'bun', file: 'bun.lock' };
+	if (existsSync(join(dir, 'bun.lockb')))
+		return { pm: 'bun', file: 'bun.lockb' };
+	if (existsSync(join(dir, 'yarn.lock')))
+		return { pm: 'yarn', file: 'yarn.lock' };
+	if (existsSync(join(dir, 'package-lock.json')))
+		return { pm: 'npm', file: 'package-lock.json' };
 	return null;
 }
 
 function readPackageJson(dir: string): { packageManager?: unknown } | null {
 	const path = join(dir, 'package.json');
-	if (!existsSync(path)) return null;
+	if (!existsSync(path))
+		return null;
 	try {
 		return JSON.parse(readFileSync(path, 'utf-8')) as { packageManager?: unknown };
 	}
@@ -52,19 +59,26 @@ function readPackageJson(dir: string): { packageManager?: unknown } | null {
 
 function parsePackageManagerField(pkg: { packageManager?: unknown }): { pm: Pm; field: string } | null {
 	const field = pkg.packageManager;
-	if (typeof field !== 'string') return null;
+	if (typeof field !== 'string')
+		return null;
 	const match = /^(pnpm|yarn|npm|bun)@/.exec(field);
-	if (!match || !match[1]) return null;
+	if (!match || !match[1])
+		return null;
 	return { pm: match[1] as Pm, field };
 }
 
 function userAgentSignal(env: NodeJS.ProcessEnv): Pm | null {
 	const ua = env.npm_config_user_agent;
-	if (!ua) return null;
-	if (ua.startsWith('pnpm/')) return 'pnpm';
-	if (ua.startsWith('bun/')) return 'bun';
-	if (ua.startsWith('yarn/')) return 'yarn';
-	if (ua.startsWith('npm/')) return 'npm';
+	if (!ua)
+		return null;
+	if (ua.startsWith('pnpm/'))
+		return 'pnpm';
+	if (ua.startsWith('bun/'))
+		return 'bun';
+	if (ua.startsWith('yarn/'))
+		return 'yarn';
+	if (ua.startsWith('npm/'))
+		return 'npm';
 	return null;
 }
 
@@ -128,7 +142,8 @@ export interface DetectPmOpts {
 // Throws for workspace-leaf because v1 doesn't support installing into a
 // nested workspace package; that lives in v1.1.
 export async function detectPm(cwd: string = process.cwd(), opts: DetectPmOpts = {}): Promise<Pm | null> {
-	if (opts.override !== undefined) return opts.override;
+	if (opts.override !== undefined)
+		return opts.override;
 	const inspection = inspectPm(cwd);
 
 	switch (inspection.kind) {

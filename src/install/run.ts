@@ -1,10 +1,11 @@
+import type { Pm } from '../detect/pm';
+import type { MergeInput } from '../fs/merge-json';
+import type { Unit } from '../manifest/types';
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { spinner } from '@clack/prompts';
-import type { Pm } from '../detect/pm';
-import { mergePackageJson, type MergeInput } from '../fs/merge-json';
-import type { Unit } from '../manifest/types';
+import { mergePackageJson } from '../fs/merge-json';
 
 export interface WriteAndInstallOpts {
 	targetDir: string;
@@ -32,7 +33,7 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 
 	const indent = had ? detectIndent(raw) : '  ';
 
-	const patches: MergeInput[] = opts.units.map((u) => ({
+	const patches: MergeInput[] = opts.units.map(u => ({
 		dependencies: u.dependencies,
 		devDependencies: u.devDependencies,
 		scripts: u.packageJsonPatch?.scripts,
@@ -68,7 +69,8 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 function detectIndent(content: string): string {
 	for (const line of content.split('\n')) {
 		const match = /^([ \t]+)\S/.exec(line);
-		if (match?.[1]) return match[1];
+		if (match?.[1])
+			return match[1];
 	}
 	return '  ';
 }
@@ -93,7 +95,8 @@ function runInstall(cwd: string, pm: Pm): Promise<InstallResult> {
 			cancelled = true;
 			child.kill('SIGTERM');
 			setTimeout(() => {
-				if (!child.killed) child.kill('SIGKILL');
+				if (!child.killed)
+					child.kill('SIGKILL');
 			}, 5000).unref();
 		};
 		process.on('SIGINT', onSigint);

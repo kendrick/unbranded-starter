@@ -9,22 +9,47 @@ export interface MergeInput {
 // in its original order so unknown fields (e.g. tool-specific config blocks)
 // stay where the user put them.
 const TOP_LEVEL_ORDER = [
-	'name', 'version', 'description', 'keywords', 'license', 'author',
-	'contributors', 'homepage', 'repository', 'bugs', 'funding',
-	'type', 'main', 'module', 'bin', 'exports', 'types', 'files',
-	'engines', 'packageManager',
+	'name',
+	'version',
+	'description',
+	'keywords',
+	'license',
+	'author',
+	'contributors',
+	'homepage',
+	'repository',
+	'bugs',
+	'funding',
+	'type',
+	'main',
+	'module',
+	'bin',
+	'exports',
+	'types',
+	'files',
+	'engines',
+	'packageManager',
 	'scripts',
-	'dependencies', 'devDependencies', 'peerDependencies',
-	'optionalDependencies', 'bundledDependencies', 'overrides',
-	'pnpm', 'workspaces',
+	'dependencies',
+	'devDependencies',
+	'peerDependencies',
+	'optionalDependencies',
+	'bundledDependencies',
+	'overrides',
+	'pnpm',
+	'workspaces',
 ];
 
 // Nested maps we sort alphabetically. The goal is reproducible diffs across
 // runs: today npm and pnpm both alphabetize on `install`, but we don't want
 // to depend on that — we do it ourselves before any tool gets to.
 const ALPHABETIZE_NESTED = new Set([
-	'scripts', 'dependencies', 'devDependencies', 'peerDependencies',
-	'optionalDependencies', 'engines',
+	'scripts',
+	'dependencies',
+	'devDependencies',
+	'peerDependencies',
+	'optionalDependencies',
+	'engines',
 ]);
 
 export function mergePackageJson(
@@ -77,24 +102,29 @@ function mergeAdditive(
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {
-	if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-	return Object.values(value).every((v) => typeof v === 'string');
+	if (!value || typeof value !== 'object' || Array.isArray(value))
+		return false;
+	return Object.values(value).every(v => typeof v === 'string');
 }
 
 function sortPackageJson(pkg: Record<string, unknown>): Record<string, unknown> {
 	const sorted: Record<string, unknown> = {};
 	for (const key of TOP_LEVEL_ORDER) {
-		if (key in pkg) sorted[key] = sortNested(key, pkg[key]);
+		if (key in pkg)
+			sorted[key] = sortNested(key, pkg[key]);
 	}
 	for (const key of Object.keys(pkg)) {
-		if (!(key in sorted)) sorted[key] = pkg[key];
+		if (!(key in sorted))
+			sorted[key] = pkg[key];
 	}
 	return sorted;
 }
 
 function sortNested(parentKey: string, value: unknown): unknown {
-	if (!ALPHABETIZE_NESTED.has(parentKey)) return value;
-	if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+	if (!ALPHABETIZE_NESTED.has(parentKey))
+		return value;
+	if (!value || typeof value !== 'object' || Array.isArray(value))
+		return value;
 	const obj = value as Record<string, unknown>;
 	const result: Record<string, unknown> = {};
 	for (const key of Object.keys(obj).sort()) result[key] = obj[key];

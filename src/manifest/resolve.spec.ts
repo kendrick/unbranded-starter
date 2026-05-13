@@ -1,6 +1,6 @@
+import type { Unit, UnitId } from './types';
 import { describe, expect, it } from 'vitest';
 import { resolveSelection } from './resolve';
-import type { Unit, UnitId } from './types';
 
 // Minimal fixture builder so tests stay readable.
 function unit(id: UnitId, extras: Partial<Unit> = {}): Unit {
@@ -32,7 +32,8 @@ describe('resolveSelection', () => {
 		];
 		const result = resolveSelection(['core-eslint'], units);
 		expect(result).toMatchObject({ kind: 'ok' });
-		if (result.kind !== 'ok') return;
+		if (result.kind !== 'ok')
+			return;
 		expect(new Set(result.ids)).toEqual(new Set(['core-eslint', 'core-typescript', 'core-tailwind']));
 		expect(new Set(result.auto)).toEqual(new Set(['core-typescript', 'core-tailwind']));
 	});
@@ -44,7 +45,8 @@ describe('resolveSelection', () => {
 		];
 		const result = resolveSelection(['core-eslint', 'core-typescript'], units);
 		expect(result).toMatchObject({ kind: 'ok' });
-		if (result.kind !== 'ok') return;
+		if (result.kind !== 'ok')
+			return;
 		expect(result.auto).toEqual([]);
 	});
 
@@ -75,7 +77,8 @@ describe('resolveSelection', () => {
 		];
 		const result = resolveSelection(['core-eslint', 'core-stylelint'], units);
 		expect(result).toMatchObject({ kind: 'conflict' });
-		if (result.kind !== 'conflict') return;
+		if (result.kind !== 'conflict')
+			return;
 		expect(new Set(result.pair)).toEqual(new Set(['core-eslint', 'core-stylelint']));
 	});
 

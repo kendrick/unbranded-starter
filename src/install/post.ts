@@ -1,9 +1,9 @@
+import type { Pm } from '../detect/pm';
+import type { PostInstall, Unit } from '../manifest/types';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { confirm, isCancel, log } from '@clack/prompts';
-import type { Pm } from '../detect/pm';
-import type { PostInstall, Unit } from '../manifest/types';
 
 export interface PostInstallOpts {
 	targetDir: string;
@@ -24,7 +24,8 @@ export async function runPostInstalls(opts: PostInstallOpts): Promise<PostInstal
 	const summary: PostInstallSummary = { ran: [], skipped: [], failed: [] };
 
 	for (const unit of opts.units) {
-		if (!unit.postInstall?.length) continue;
+		if (!unit.postInstall?.length)
+			continue;
 		for (const pi of unit.postInstall) {
 			// Hard preconditions first — no point confirming if we'd refuse anyway.
 			if (pi.requires === 'git' && !existsSync(join(opts.targetDir, '.git'))) {
@@ -54,7 +55,8 @@ export async function runPostInstalls(opts: PostInstallOpts): Promise<PostInstal
 			}
 
 			const result = await runOne(opts.targetDir, opts.pm, pi);
-			if (result.ok) summary.ran.push(pi.id);
+			if (result.ok)
+				summary.ran.push(pi.id);
 			else summary.failed.push({ id: pi.id, error: result.error });
 		}
 	}
@@ -95,7 +97,8 @@ function runOne(cwd: string, pm: Pm, pi: PostInstall): Promise<RunResult> {
 		const onSigint = (): void => {
 			child.kill('SIGTERM');
 			setTimeout(() => {
-				if (!child.killed) child.kill('SIGKILL');
+				if (!child.killed)
+					child.kill('SIGKILL');
 			}, 5000).unref();
 		};
 		process.on('SIGINT', onSigint);
