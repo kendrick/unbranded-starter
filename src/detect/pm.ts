@@ -116,11 +116,19 @@ export function inspectPm(cwd: string, env: NodeJS.ProcessEnv = process.env): Pm
 	return { kind: 'needs-prompt' };
 }
 
+// `override` short-circuits detection — config-mode passes the recipe's
+// pm field straight through. `null` is a meaningful value (skip install) so
+// we check explicitly against undefined.
+export interface DetectPmOpts {
+	override?: Pm | null;
+}
+
 // Async wrapper: resolves to the PM we should use, or null when there is no
 // package.json (caller writes files only and prints next-steps instructions).
 // Throws for workspace-leaf because v1 doesn't support installing into a
 // nested workspace package; that lives in v1.1.
-export async function detectPm(cwd: string = process.cwd()): Promise<Pm | null> {
+export async function detectPm(cwd: string = process.cwd(), opts: DetectPmOpts = {}): Promise<Pm | null> {
+	if (opts.override !== undefined) return opts.override;
 	const inspection = inspectPm(cwd);
 
 	switch (inspection.kind) {

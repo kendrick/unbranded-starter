@@ -9,6 +9,9 @@ export interface PostInstallOpts {
 	targetDir: string;
 	pm: Pm;
 	units: Unit[];
+	// Non-interactive answer for every prompt. 'all' runs every hook whose
+	// precondition passes; 'none' skips them. Config-mode wires this in.
+	auto?: 'all' | 'none';
 }
 
 export interface PostInstallSummary {
@@ -30,11 +33,22 @@ export async function runPostInstalls(opts: PostInstallOpts): Promise<PostInstal
 				continue;
 			}
 
-			const ok = await confirm({
-				message: pi.prompt,
-				initialValue: pi.default,
-			});
-			if (isCancel(ok) || !ok) {
+			let ok: boolean;
+			if (opts.auto !== undefined) {
+				ok = opts.auto === 'all';
+			}
+			else {
+				const answer = await confirm({
+					message: pi.prompt,
+					initialValue: pi.default,
+				});
+				if (isCancel(answer)) {
+					summary.skipped.push(pi.id);
+					continue;
+				}
+				ok = answer;
+			}
+			if (!ok) {
 				summary.skipped.push(pi.id);
 				continue;
 			}

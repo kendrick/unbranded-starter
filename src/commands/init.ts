@@ -1,5 +1,6 @@
 import { basename } from 'node:path';
 import { cancel, confirm, groupMultiselect, intro, isCancel, log, note, outro } from '@clack/prompts';
+import { loadConfig } from '../config/load';
 import { detectPm, type Pm } from '../detect/pm';
 import { detectTarget } from '../detect/target';
 import { copyFileOp, type CopyResult } from '../fs/copy';
@@ -27,16 +28,26 @@ const CATEGORY_LABELS: Record<Category, string> = {
 	monorepo: 'Monorepo',
 };
 
-export async function runInit(): Promise<void> {
-	intro('unbranded');
+export interface RunInitOpts {
+	configPath?: string;
+}
 
-	const target = await detectTarget();
+export async function runInit(opts: RunInitOpts = {}): Promise<void> {
+	// Loading config first means we fail with a clear error before prompting,
+	// rather than mid-flow after the user already started picking things.
+	const config = opts.configPath
+		? loadConfig(opts.configPath, new Set(UNITS.map((u) => u.id)))
+		: null;
+
+	intro(config ? 'unbranded (--config)' : 'unbranded');
+
+	const target = await detectTarget({ projectName: config?.projectName });
 	log.info(`Target: ${target.dir} (${target.mode})`);
 
-	const pm = await detectPm(target.dir);
+	const pm = await detectPm(target.dir, { override: config?.pm });
 	log.info(pm ? `Package manager: ${pm}` : 'No package.json — files will be written; install will be skipped.');
 
-	const selection = await promptSelection(UNITS);
+	const selection = config ? config.units : await promptSelection(UNITS);
 	if (selection.length === 0) {
 		outro('Nothing selected.');
 		return;
@@ -59,10 +70,14 @@ export async function runInit(): Promise<void> {
 
 	note(formatPlan(selectedUnits, resolution.auto, pm), 'Plan');
 
-	const proceed = await confirm({ message: 'Apply?', initialValue: true });
-	if (isCancel(proceed) || !proceed) {
-		cancel('Cancelled.');
-		return;
+	// In config mode the user has already opted in by supplying the recipe.
+	// Asking again would just slow CI down for no benefit.
+	if (!config) {
+		const proceed = await confirm({ message: 'Apply?', initialValue: true });
+		if (isCancel(proceed) || !proceed) {
+			cancel('Cancelled.');
+			return;
+		}
 	}
 
 	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
@@ -73,6 +88,7 @@ export async function runInit(): Promise<void> {
 				pkgRoot: PKG_ROOT,
 				targetDir: target.dir,
 				projectName,
+				onConflict: config?.onConflict,
 			}));
 		}
 	}
@@ -105,6 +121,7 @@ export async function runInit(): Promise<void> {
 			targetDir: target.dir,
 			pm,
 			units: selectedUnits,
+			auto: config?.postInstall,
 		});
 	}
 

@@ -33,31 +33,45 @@ export function inspectTarget(cwd: string): Inspection {
 	return { kind: 'new', parent: cwd };
 }
 
-export async function detectTarget(): Promise<TargetContext> {
+// `projectName`, when supplied, skips the text prompt — config-mode runs
+// pass it through so the new-project flow stays non-interactive.
+export interface DetectTargetOpts {
+	projectName?: string;
+}
+
+export async function detectTarget(opts: DetectTargetOpts = {}): Promise<TargetContext> {
 	const inspection = inspectTarget(process.cwd());
 
 	if (inspection.kind === 'augment') {
 		return { dir: inspection.dir, mode: 'augment' };
 	}
 
-	// No package.json. The user is starting fresh. Ask for a name, create the
-	// directory, then chdir so all subsequent file ops resolve relative to it.
-	const name = await text({
-		message: 'Project name',
-		placeholder: 'my-app',
-		validate(value) {
-			if (!value) return 'Required';
-			if (!/^[a-z0-9][a-z0-9_-]*$/.test(value)) {
-				return 'Lowercase letters, numbers, hyphens, underscores. Must start with a letter or digit.';
-			}
-			if (value.length > 214) return 'Too long (npm caps package names at 214 chars).';
-			return undefined;
-		},
-	});
+	// No package.json. The user is starting fresh. Either honor the supplied
+	// name or ask for one, then create the directory and chdir so subsequent
+	// file ops resolve relative to it.
+	let name: string;
+	if (opts.projectName) {
+		name = opts.projectName;
+	}
+	else {
+		const prompted = await text({
+			message: 'Project name',
+			placeholder: 'my-app',
+			validate(value) {
+				if (!value) return 'Required';
+				if (!/^[a-z0-9][a-z0-9_-]*$/.test(value)) {
+					return 'Lowercase letters, numbers, hyphens, underscores. Must start with a letter or digit.';
+				}
+				if (value.length > 214) return 'Too long (npm caps package names at 214 chars).';
+				return undefined;
+			},
+		});
 
-	if (isCancel(name)) {
-		cancel('Cancelled');
-		return process.exit(0);
+		if (isCancel(prompted)) {
+			cancel('Cancelled');
+			return process.exit(0);
+		}
+		name = prompted;
 	}
 
 	const newDir = resolve(inspection.parent, name);
