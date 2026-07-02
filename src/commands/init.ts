@@ -124,10 +124,11 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 		}
 	}
 
-	const copied = copyResults.filter(r => r.action === 'copied').length;
-	const overwrote = copyResults.filter(r => r.action === 'overwrote').length;
-	const skipped = copyResults.filter(r => r.action === 'skipped').length;
-	log.success(`Files: ${copied} written, ${overwrote} overwritten, ${skipped} skipped.`);
+	const count = (action: CopyResult['action']): number => copyResults.filter(r => r.action === action).length;
+	log.success(
+		`Files: ${count('copied')} written, ${count('overwrote')} overwritten, `
+		+ `${count('merged')} merged, ${count('appended')} appended, ${count('skipped')} skipped.`,
+	);
 
 	const installResult = await writeAndInstall({
 		targetDir: target.dir,

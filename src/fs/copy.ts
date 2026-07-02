@@ -5,7 +5,11 @@ import { isCancel, log, select } from '@clack/prompts';
 import { createPatch } from 'diff';
 import { cancelAndExit } from '../util/cancel';
 
-export type CopyAction = 'copied' | 'overwrote' | 'skipped';
+// 'merged' and 'appended' are the non-clobbering outcomes the two structured
+// modes produce: a merge-json write that folded new keys in, or an
+// append-if-missing write that added new lines. They stay distinct from
+// 'overwrote' so the summary can tell a wholesale replace from a graft.
+export type CopyAction = 'copied' | 'overwrote' | 'merged' | 'appended' | 'skipped';
 
 export interface CopyResult {
 	src: string;
@@ -26,6 +30,46 @@ export interface CopyOptions {
 }
 
 export async function copyFileOp(op: FileOp, opts: CopyOptions): Promise<CopyResult> {
+	const { srcPath, destPath } = resolvePaths(op, opts);
+
+	// Read as buffer, not string. Writing through a string round-trips through
+	// the default encoding, which clobbers Windows CRLF inside source files
+	// that were authored with mixed line endings.
+	const srcBuf = readFileSync(srcPath);
+
+	// Nothing to merge or append into yet, so every mode collapses to a plain
+	// write of the source. Keeps first-time scaffolding identical across modes.
+	if (!existsSync(destPath)) {
+		writeBuffer(destPath, srcBuf);
+		return { src: srcPath, dest: destPath, action: 'copied' };
+	}
+
+	// Short-circuit byte-identical files before we waste a prompt or a parse.
+	// A merge or append of a file into itself is a no-op, so this is correct
+	// for every mode, not just raw copy.
+	const destBuf = readFileSync(destPath);
+	if (srcBuf.equals(destBuf)) {
+		return { src: srcPath, dest: destPath, action: 'skipped', reason: 'identical' };
+	}
+
+	const mode = op.mode ?? 'copy';
+	if (mode === 'merge-json') {
+		return mergeJsonOp(srcPath, destPath, srcBuf, destBuf, opts.onConflict);
+	}
+	if (mode === 'append-if-missing') {
+		return appendIfMissingOp(srcPath, destPath, srcBuf, destBuf);
+	}
+
+	const resolution = opts.onConflict ?? await promptConflict(destPath, srcBuf, destBuf);
+
+	if (resolution === 'overwrite') {
+		writeBuffer(destPath, srcBuf);
+		return { src: srcPath, dest: destPath, action: 'overwrote' };
+	}
+	return { src: srcPath, dest: destPath, action: 'skipped', reason: 'user-skip' };
+}
+
+function resolvePaths(op: FileOp, opts: CopyOptions): { srcPath: string; destPath: string } {
 	// Manifest paths are posix-style for cross-platform authoring. Split on
 	// posix.sep and let node:path build the native form for the host.
 	const srcPath = joinNative(opts.pkgRoot, ...op.src.split(posix.sep));
@@ -42,29 +86,55 @@ export async function copyFileOp(op: FileOp, opts: CopyOptions): Promise<CopyRes
 		? resolveNative(dirname(destBase), op.rename)
 		: destBase;
 
-	// Read as buffer, not string. Writing through a string round-trips through
-	// the default encoding, which clobbers Windows CRLF inside source files
-	// that were authored with mixed line endings.
-	const srcBuf = readFileSync(srcPath);
+	return { srcPath, destPath };
+}
 
-	if (!existsSync(destPath)) {
-		writeBuffer(destPath, srcBuf);
-		return { src: srcPath, dest: destPath, action: 'copied' };
+async function mergeJsonOp(
+	srcPath: string,
+	destPath: string,
+	srcBuf: Buffer,
+	destBuf: Buffer,
+	onConflict: CopyOptions['onConflict'],
+): Promise<CopyResult> {
+	const existingText = destBuf.toString('utf-8');
+	const existing = JSON.parse(existingText) as unknown;
+	const incoming = JSON.parse(srcBuf.toString('utf-8')) as unknown;
+
+	const { merged, conflict } = deepMergeJson(existing, incoming);
+
+	// Re-serialize with the destination's own indentation so a merge doesn't
+	// silently reformat the user's file wider than the keys it actually touched.
+	const proposedBuf = Buffer.from(`${JSON.stringify(merged, null, detectIndent(existingText))}\n`, 'utf-8');
+
+	if (!conflict) {
+		// A clean merge that added nothing is a no-op — report it like an
+		// identical skip so idempotent reruns stay quiet.
+		if (deepEqual(merged, existing)) {
+			return { src: srcPath, dest: destPath, action: 'skipped', reason: 'identical' };
+		}
+		writeBuffer(destPath, proposedBuf);
+		return { src: srcPath, dest: destPath, action: 'merged' };
 	}
 
-	// Short-circuit identical files before we waste a prompt on the user.
-	const destBuf = readFileSync(destPath);
-	if (srcBuf.equals(destBuf)) {
-		return { src: srcPath, dest: destPath, action: 'skipped', reason: 'identical' };
-	}
-
-	const resolution = opts.onConflict ?? await promptConflict(destPath, srcBuf, destBuf);
-
+	// A same-key/different-value collision isn't ours to settle silently. Route
+	// it through the same diff-and-prompt UX raw copies use, showing the
+	// patch-wins merge as the proposed side. `onConflict` (config mode) resolves
+	// it without a prompt so CI never blocks.
+	const resolution = onConflict ?? await promptConflict(destPath, proposedBuf, destBuf);
 	if (resolution === 'overwrite') {
-		writeBuffer(destPath, srcBuf);
-		return { src: srcPath, dest: destPath, action: 'overwrote' };
+		writeBuffer(destPath, proposedBuf);
+		return { src: srcPath, dest: destPath, action: 'merged' };
 	}
 	return { src: srcPath, dest: destPath, action: 'skipped', reason: 'user-skip' };
+}
+
+function appendIfMissingOp(srcPath: string, destPath: string, srcBuf: Buffer, destBuf: Buffer): CopyResult {
+	const { content, changed } = appendMissingLines(destBuf, srcBuf);
+	if (!changed) {
+		return { src: srcPath, dest: destPath, action: 'skipped', reason: 'identical' };
+	}
+	writeBuffer(destPath, content);
+	return { src: srcPath, dest: destPath, action: 'appended' };
 }
 
 function writeBuffer(path: string, buf: Buffer): void {
@@ -106,6 +176,104 @@ async function promptConflict(destPath: string, src: Buffer, dest: Buffer): Prom
 		return cancelAndExit();
 	}
 	return secondChoice;
+}
+
+interface MergeResult {
+	merged: unknown;
+	// True once any leaf collides: same key, incompatible values. The caller
+	// needs this to decide between a silent write and a conflict prompt.
+	conflict: boolean;
+}
+
+// Generic recursive JSON merge. Unlike mergePackageJson this knows nothing about
+// package.json's canonical field order — for an arbitrary target file the only
+// stable ordering we can honor is the user's own, so existing keys keep their
+// position and incoming-only keys append in source order. Objects merge deep;
+// arrays and scalars are treated as atomic (a differing value is a conflict, not
+// something to splice).
+function deepMergeJson(existing: unknown, incoming: unknown): MergeResult {
+	if (isPlainObject(existing) && isPlainObject(incoming)) {
+		const merged: Record<string, unknown> = {};
+		let conflict = false;
+
+		for (const key of Object.keys(existing)) {
+			if (key in incoming) {
+				const sub = deepMergeJson(existing[key], incoming[key]);
+				merged[key] = sub.merged;
+				conflict ||= sub.conflict;
+			}
+			else {
+				merged[key] = existing[key];
+			}
+		}
+		for (const key of Object.keys(incoming)) {
+			if (!(key in existing))
+				merged[key] = incoming[key];
+		}
+		return { merged, conflict };
+	}
+
+	// Equal leaves aren't a conflict even when they collide — the user already
+	// has exactly what we'd write. Otherwise the patch wins the merged value,
+	// but we flag it so the caller can offer the choice rather than impose it.
+	if (deepEqual(existing, incoming))
+		return { merged: existing, conflict: false };
+	return { merged: incoming, conflict: true };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function deepEqual(a: unknown, b: unknown): boolean {
+	if (a === b)
+		return true;
+	if (Array.isArray(a) && Array.isArray(b)) {
+		return a.length === b.length && a.every((v, i) => deepEqual(v, b[i]));
+	}
+	if (isPlainObject(a) && isPlainObject(b)) {
+		const keys = Object.keys(a);
+		return keys.length === Object.keys(b).length
+			&& keys.every(k => k in b && deepEqual(a[k], b[k]));
+	}
+	return false;
+}
+
+// Match the destination's indentation so a merge writes back the way the user
+// (or their prior tooling) formatted it. Defaults to two spaces — what npm and
+// most package.json files in the wild use. Mirrors the detector in install/run;
+// duplicated rather than shared to avoid a util import just for six lines.
+function detectIndent(content: string): string {
+	for (const line of content.split('\n')) {
+		const match = /^([ \t]+)\S/.exec(line);
+		if (match?.[1])
+			return match[1];
+	}
+	return '  ';
+}
+
+interface AppendResult {
+	content: Buffer;
+	changed: boolean;
+}
+
+// Line-set append: fold in only the source lines the target doesn't already
+// carry, order-preserving. Built for ignore-style files where duplicate rules
+// are noise, so a rerun after the lines land is a no-op. Blank lines are never
+// appended — they'd otherwise accumulate on every run — and the trailing newline
+// is preserved so the file stays POSIX-clean.
+function appendMissingLines(existing: Buffer, incoming: Buffer): AppendResult {
+	const existingText = existing.toString('utf-8');
+	const present = new Set(existingText.split('\n'));
+
+	const missing = incoming.toString('utf-8').split('\n').filter(line => line !== '' && !present.has(line));
+	if (missing.length === 0)
+		return { content: existing, changed: false };
+
+	const base = existingText.length > 0 && !existingText.endsWith('\n')
+		? `${existingText}\n`
+		: existingText;
+	return { content: Buffer.from(`${base}${missing.join('\n')}\n`, 'utf-8'), changed: true };
 }
 
 function colorizeDiff(patch: string): string {

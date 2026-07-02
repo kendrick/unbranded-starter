@@ -1,8 +1,18 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { select } from '@clack/prompts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { copyFileOp } from './copy';
+
+// The merge-json conflict fallback re-uses the raw-copy `select` prompt. Stub
+// just that export so we can assert the interactive path fires without a TTY;
+// everything else (isCancel, log) stays real so the non-interactive tests are
+// unaffected.
+vi.mock('@clack/prompts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('@clack/prompts')>();
+	return { ...actual, select: vi.fn() };
+});
 
 describe('copyFileOp', () => {
 	let pkgRoot: string;
@@ -109,5 +119,151 @@ describe('copyFileOp', () => {
 			{ pkgRoot, targetDir },
 		);
 		expect(result.action).toBe('copied');
+	});
+});
+
+describe('copyFileOp mode: merge-json', () => {
+	let pkgRoot: string;
+	let targetDir: string;
+
+	beforeEach(() => {
+		pkgRoot = mkdtempSync(join(tmpdir(), 'unbranded-merge-pkg-'));
+		targetDir = mkdtempSync(join(tmpdir(), 'unbranded-merge-target-'));
+		vi.mocked(select).mockReset();
+	});
+
+	afterEach(() => {
+		rmSync(pkgRoot, { recursive: true, force: true });
+		rmSync(targetDir, { recursive: true, force: true });
+	});
+
+	function readJson(path: string): Record<string, unknown> {
+		return JSON.parse(readFileSync(path, 'utf-8')) as Record<string, unknown>;
+	}
+
+	it('copies the source verbatim when the destination does not exist', async () => {
+		writeFileSync(join(pkgRoot, 'c.json'), '{ "a": 1 }');
+		const result = await copyFileOp(
+			{ src: 'c.json', dest: 'c.json', mode: 'merge-json' },
+			{ pkgRoot, targetDir },
+		);
+		expect(result.action).toBe('copied');
+		expect(readJson(join(targetDir, 'c.json'))).toEqual({ a: 1 });
+	});
+
+	it('deep-merges disjoint keys and reports "merged"', async () => {
+		writeFileSync(join(pkgRoot, 'c.json'), JSON.stringify({ version: '1.0.0', settings: { b: 2 } }));
+		writeFileSync(join(targetDir, 'c.json'), `${JSON.stringify({ name: 'app', settings: { a: 1 } }, null, 2)}\n`);
+		const result = await copyFileOp(
+			{ src: 'c.json', dest: 'c.json', mode: 'merge-json' },
+			{ pkgRoot, targetDir },
+		);
+		expect(result.action).toBe('merged');
+		expect(readJson(join(targetDir, 'c.json'))).toEqual({
+			name: 'app',
+			settings: { a: 1, b: 2 },
+			version: '1.0.0',
+		});
+	});
+
+	it('reports "skipped (identical)" when the incoming keys are already present', async () => {
+		writeFileSync(join(pkgRoot, 'c.json'), JSON.stringify({ a: 1 }));
+		writeFileSync(join(targetDir, 'c.json'), `${JSON.stringify({ name: 'app', a: 1 }, null, 2)}\n`);
+		const result = await copyFileOp(
+			{ src: 'c.json', dest: 'c.json', mode: 'merge-json' },
+			{ pkgRoot, targetDir },
+		);
+		expect(result).toMatchObject({ action: 'skipped', reason: 'identical' });
+	});
+
+	it('is idempotent — a second merge run reports "skipped (identical)"', async () => {
+		writeFileSync(join(pkgRoot, 'c.json'), JSON.stringify({ b: 2 }));
+		writeFileSync(join(targetDir, 'c.json'), `${JSON.stringify({ a: 1 }, null, 2)}\n`);
+		const first = await copyFileOp({ src: 'c.json', dest: 'c.json', mode: 'merge-json' }, { pkgRoot, targetDir });
+		const second = await copyFileOp({ src: 'c.json', dest: 'c.json', mode: 'merge-json' }, { pkgRoot, targetDir });
+		expect(first.action).toBe('merged');
+		expect(second).toMatchObject({ action: 'skipped', reason: 'identical' });
+	});
+
+	it('resolves a same-key conflict via onConflict:"overwrite" (patch wins), no prompt', async () => {
+		writeFileSync(join(pkgRoot, 'c.json'), JSON.stringify({ license: 'Apache-2.0' }));
+		writeFileSync(join(targetDir, 'c.json'), `${JSON.stringify({ name: 'app', license: 'MIT' }, null, 2)}\n`);
+		const result = await copyFileOp(
+			{ src: 'c.json', dest: 'c.json', mode: 'merge-json' },
+			{ pkgRoot, targetDir, onConflict: 'overwrite' },
+		);
+		expect(select).not.toHaveBeenCalled();
+		expect(result.action).toBe('merged');
+		expect(readJson(join(targetDir, 'c.json'))).toMatchObject({ name: 'app', license: 'Apache-2.0' });
+	});
+
+	it('resolves a same-key conflict via onConflict:"skip" (existing wins), no prompt', async () => {
+		writeFileSync(join(pkgRoot, 'c.json'), JSON.stringify({ license: 'Apache-2.0' }));
+		writeFileSync(join(targetDir, 'c.json'), `${JSON.stringify({ name: 'app', license: 'MIT' }, null, 2)}\n`);
+		const result = await copyFileOp(
+			{ src: 'c.json', dest: 'c.json', mode: 'merge-json' },
+			{ pkgRoot, targetDir, onConflict: 'skip' },
+		);
+		expect(select).not.toHaveBeenCalled();
+		expect(result).toMatchObject({ action: 'skipped', reason: 'user-skip' });
+		expect(readJson(join(targetDir, 'c.json'))).toMatchObject({ license: 'MIT' });
+	});
+
+	it('falls back to the diff-and-prompt UX on a same-key conflict when no onConflict is set', async () => {
+		vi.mocked(select).mockResolvedValueOnce('overwrite');
+		writeFileSync(join(pkgRoot, 'c.json'), JSON.stringify({ license: 'Apache-2.0' }));
+		writeFileSync(join(targetDir, 'c.json'), `${JSON.stringify({ name: 'app', license: 'MIT' }, null, 2)}\n`);
+		const result = await copyFileOp(
+			{ src: 'c.json', dest: 'c.json', mode: 'merge-json' },
+			{ pkgRoot, targetDir },
+		);
+		expect(select).toHaveBeenCalledTimes(1);
+		expect(result.action).toBe('merged');
+		expect(readJson(join(targetDir, 'c.json'))).toMatchObject({ license: 'Apache-2.0' });
+	});
+});
+
+describe('copyFileOp mode: append-if-missing', () => {
+	let pkgRoot: string;
+	let targetDir: string;
+
+	beforeEach(() => {
+		pkgRoot = mkdtempSync(join(tmpdir(), 'unbranded-append-pkg-'));
+		targetDir = mkdtempSync(join(tmpdir(), 'unbranded-append-target-'));
+	});
+
+	afterEach(() => {
+		rmSync(pkgRoot, { recursive: true, force: true });
+		rmSync(targetDir, { recursive: true, force: true });
+	});
+
+	it('copies the source verbatim when the destination does not exist', async () => {
+		writeFileSync(join(pkgRoot, '.gitignore'), 'node_modules\n');
+		const result = await copyFileOp(
+			{ src: '.gitignore', dest: '.gitignore', mode: 'append-if-missing' },
+			{ pkgRoot, targetDir },
+		);
+		expect(result.action).toBe('copied');
+		expect(readFileSync(join(targetDir, '.gitignore'), 'utf-8')).toBe('node_modules\n');
+	});
+
+	it('appends only the missing lines and preserves the trailing newline', async () => {
+		writeFileSync(join(pkgRoot, '.gitignore'), 'node_modules\ndist\n');
+		writeFileSync(join(targetDir, '.gitignore'), 'node_modules\n.env\n');
+		const result = await copyFileOp(
+			{ src: '.gitignore', dest: '.gitignore', mode: 'append-if-missing' },
+			{ pkgRoot, targetDir },
+		);
+		expect(result.action).toBe('appended');
+		expect(readFileSync(join(targetDir, '.gitignore'), 'utf-8')).toBe('node_modules\n.env\ndist\n');
+	});
+
+	it('is idempotent — a second run reports "skipped (identical)"', async () => {
+		writeFileSync(join(pkgRoot, '.gitignore'), 'node_modules\ndist\n');
+		writeFileSync(join(targetDir, '.gitignore'), 'node_modules\n.env\n');
+		const first = await copyFileOp({ src: '.gitignore', dest: '.gitignore', mode: 'append-if-missing' }, { pkgRoot, targetDir });
+		const second = await copyFileOp({ src: '.gitignore', dest: '.gitignore', mode: 'append-if-missing' }, { pkgRoot, targetDir });
+		expect(first.action).toBe('appended');
+		expect(second).toMatchObject({ action: 'skipped', reason: 'identical' });
 	});
 });
