@@ -6,6 +6,10 @@
 	"description": "Interactive CLI to scaffold your preferred project tooling into any project, using your existing package manager.",
 	"author": "Kendrick Arnett",
 	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/kendrick/unbranded-starter.git"
+	},
 	"exports": {
 		".": "./dist/cli.js"
 	},

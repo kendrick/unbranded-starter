@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+# One release flow at a time, and never cancel a publish mid-flight.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create tags + GitHub Releases
+      pull-requests: write # open/update the release PR
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: rp
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing (OIDC) + provenance
+    steps:
+      - uses: actions/checkout@v4
+
+      # No `version:` — reads from package.json's packageManager field.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm >= 11.5.1; don't rely on whatever the
+      # Node image happens to bundle.
+      - run: npm install -g npm@latest
+
+      - run: pnpm install --frozen-lockfile
+
+      # The gate: the exact commit being released must pass the full pipeline.
+      # ci.yml also runs on this push, but this job verifies for itself rather
+      # than trusting a separate workflow.
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+      - run: node dist/cli.js --version
+      - run: pnpm vitest run --config vitest.e2e.config.ts
+
+      # Guard: the release PR's extra-files stamping actually landed, so we
+      # never publish create-unbranded pinned to a stale unbranded version.
+      - name: Verify create-unbranded is version-locked
+        run: |
+          TAG='${{ needs.release-please.outputs.tag_name }}'
+          V="${TAG#v}"
+          test "$(node -p 'require("./create-unbranded/package.json").version')" = "$V"
+          test "$(node -p 'require("./create-unbranded/package.json").dependencies.unbranded')" = "$V"
+
+      # OIDC: no NODE_AUTH_TOKEN. Provenance is attached automatically for
+      # trusted-publisher publishes. Root first so create-unbranded's pinned
+      # dependency resolves moments later.
+      - name: Publish unbranded
+        run: npm publish
+
+      - name: Publish create-unbranded
+        run: npm publish
+        working-directory: create-unbranded

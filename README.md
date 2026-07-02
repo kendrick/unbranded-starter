@@ -11,6 +11,8 @@
 
 # unbranded
 
+[![npm version](https://img.shields.io/npm/v/unbranded.svg)](https://www.npmjs.com/package/unbranded)
+
 An interactive CLI that adds project tooling to any directory or repo, using whichever package manager you already have. Eleven installable units across a bunch of categories. Pinned versions by default, `--latest` opts out per run.
 
 ## Quickstart

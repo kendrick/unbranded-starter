@@ -90,6 +90,13 @@ export default antfu(
 			'**/components/ui', // ditto for monorepos
 			'*.min.*',
 
+			// release-please owns these and rewrites them with its own
+			// formatting on every release PR; linting them just fails the
+			// release-merge commit. (release-please-config.json is ours — we
+			// author it, release-please never rewrites it — so it lints.)
+			'CHANGELOG.md',
+			'.release-please-manifest.json',
+
 			// .specify: ignore bundled extensions/scripts/templates/integrations
 			// (tool-managed). Project-owned config files lint normally.
 			'.specify/extensions/**',
