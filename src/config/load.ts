@@ -15,12 +15,18 @@ export interface Config {
 	// Only required when the target cwd has no package.json (new-project mode);
 	// in augment mode the directory already exists and this is ignored.
 	projectName?: string;
+	// New-project mode only: 'init' runs `git init`, 'init-commit' also stages a
+	// first commit, 'none' skips both. Defaults to 'none' so a scripted recipe
+	// never creates a repo it wasn't asked to; the interactive flow prompts
+	// instead (and defaults that prompt to yes).
+	git: 'init' | 'init-commit' | 'none';
 }
 
 const VALID_PMS = new Set<string>(['npm', 'pnpm', 'yarn', 'bun']);
 const VALID_ON_CONFLICT = new Set(['overwrite', 'skip']);
 const VALID_POST_INSTALL = new Set(['all', 'none']);
 const VALID_VERSIONS = new Set(['pinned', 'latest']);
+const VALID_GIT = new Set(['init', 'init-commit', 'none']);
 
 // v1 is JSON-only. YAML support is easy to add (we'd pull in `yaml` and key
 // off the file extension) but isn't load-bearing for the E2E suite, which is
@@ -81,6 +87,10 @@ export function validate(raw: unknown, knownUnits: Set<UnitId>): Config {
 		throw new Error('config.projectName must be a string when present.');
 	}
 
+	if (obj.git !== undefined && (typeof obj.git !== 'string' || !VALID_GIT.has(obj.git))) {
+		throw new Error('config.git must be "init", "init-commit", or "none" when present.');
+	}
+
 	return {
 		units: obj.units as UnitId[],
 		pm: obj.pm as Pm | null,
@@ -88,5 +98,6 @@ export function validate(raw: unknown, knownUnits: Set<UnitId>): Config {
 		postInstall: obj.postInstall as 'all' | 'none',
 		versions: (obj.versions as 'pinned' | 'latest') ?? 'pinned',
 		projectName: obj.projectName as string | undefined,
+		git: (obj.git as 'init' | 'init-commit' | 'none') ?? 'none',
 	};
 }

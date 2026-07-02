@@ -8,6 +8,7 @@ import { loadConfig } from '../config/load';
 import { detectPm } from '../detect/pm';
 import { detectTarget } from '../detect/target';
 import { copyFileOp } from '../fs/copy';
+import { maybeInitGit } from '../install/git';
 import { runPostInstalls } from '../install/post';
 import { writeAndInstall } from '../install/run';
 import { UNITS } from '../manifest/index';
@@ -124,6 +125,13 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 	}
 	else if (!pm) {
 		log.message(formatNoPmNextSteps(target.dir, selectedUnits));
+	}
+
+	// New projects get a git repo before post-installs run: husky's post-install
+	// gates on `.git`, so initializing here (not after) is what lets husky wire up
+	// its hooks in the same pass. Augment targets already have their own repo.
+	if (target.mode === 'new') {
+		await maybeInitGit({ targetDir: target.dir, plan: config?.git });
 	}
 
 	// Post-installs only make sense if the install step actually ran. Without

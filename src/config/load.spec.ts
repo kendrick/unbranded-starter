@@ -46,6 +46,21 @@ describe('validate (in-memory)', () => {
 			.toThrow(/versions must be/);
 	});
 
+	it('accepts each git value', () => {
+		expect(validate({ ...baseValid, git: 'init' }, KNOWN_UNITS).git).toBe('init');
+		expect(validate({ ...baseValid, git: 'init-commit' }, KNOWN_UNITS).git).toBe('init-commit');
+		expect(validate({ ...baseValid, git: 'none' }, KNOWN_UNITS).git).toBe('none');
+	});
+
+	it('defaults git to "none" when omitted (CI recipes stay repo-free unless asked)', () => {
+		expect(validate(baseValid, KNOWN_UNITS).git).toBe('none');
+	});
+
+	it('rejects an invalid git value', () => {
+		expect(() => validate({ ...baseValid, git: 'clone' }, KNOWN_UNITS))
+			.toThrow(/git must be/);
+	});
+
 	it('rejects non-object input', () => {
 		expect(() => validate(null, KNOWN_UNITS)).toThrow(/JSON object/);
 		expect(() => validate([], KNOWN_UNITS)).toThrow(/JSON object/);
