@@ -12,6 +12,7 @@ import { runPostInstalls } from '../install/post';
 import { writeAndInstall } from '../install/run';
 import { UNITS } from '../manifest/index';
 import { resolveSelection } from '../manifest/resolve';
+import { cancelAndExit } from '../util/cancel';
 import { PKG_ROOT } from '../util/paths';
 
 // Human-readable group headers for the multiselect. Falls back to the raw
@@ -82,7 +83,9 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 	// Asking again would just slow CI down for no benefit.
 	if (!config) {
 		const proceed = await confirm({ message: 'Apply?', initialValue: true });
-		if (isCancel(proceed) || !proceed) {
+		if (isCancel(proceed))
+			return cancelAndExit();
+		if (!proceed) {
 			cancel('Cancelled.');
 			return;
 		}
@@ -155,8 +158,7 @@ async function promptSelection(units: Unit[]): Promise<UnitId[]> {
 	});
 
 	if (isCancel(result)) {
-		cancel('Cancelled.');
-		return process.exit(0);
+		return cancelAndExit();
 	}
 	return result;
 }

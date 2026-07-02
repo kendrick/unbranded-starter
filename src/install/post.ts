@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { confirm, isCancel, log } from '@clack/prompts';
+import { cancelAndExit } from '../util/cancel';
 import { spawnOptions } from './spawn';
 
 export interface PostInstallOpts {
@@ -44,9 +45,10 @@ export async function runPostInstalls(opts: PostInstallOpts): Promise<PostInstal
 					message: pi.prompt,
 					initialValue: pi.default,
 				});
+				// Ctrl-C is a global abort, not a per-hook skip: exit here rather
+				// than quietly moving on to the next hook.
 				if (isCancel(answer)) {
-					summary.skipped.push(pi.id);
-					continue;
+					return cancelAndExit();
 				}
 				ok = answer;
 			}

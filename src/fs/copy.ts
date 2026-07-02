@@ -1,8 +1,9 @@
 import type { FileOp } from '../manifest/types';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join as joinNative, posix, resolve as resolveNative } from 'node:path';
-import { cancel, isCancel, log, select } from '@clack/prompts';
+import { isCancel, log, select } from '@clack/prompts';
 import { createPatch } from 'diff';
+import { cancelAndExit } from '../util/cancel';
 
 export type CopyAction = 'copied' | 'overwrote' | 'skipped';
 
@@ -83,8 +84,7 @@ async function promptConflict(destPath: string, src: Buffer, dest: Buffer): Prom
 		],
 	});
 	if (isCancel(firstChoice)) {
-		cancel('Cancelled');
-		return process.exit(0);
+		return cancelAndExit();
 	}
 	if (firstChoice !== 'diff')
 		return firstChoice;
@@ -103,8 +103,7 @@ async function promptConflict(destPath: string, src: Buffer, dest: Buffer): Prom
 		],
 	});
 	if (isCancel(secondChoice)) {
-		cancel('Cancelled');
-		return process.exit(0);
+		return cancelAndExit();
 	}
 	return secondChoice;
 }

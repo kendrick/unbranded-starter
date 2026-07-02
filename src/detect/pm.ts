@@ -1,7 +1,8 @@
 import type { TargetMode } from './target';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { cancel, isCancel, select } from '@clack/prompts';
+import { isCancel, select } from '@clack/prompts';
+import { cancelAndExit } from '../util/cancel';
 
 export type Pm = 'npm' | 'pnpm' | 'yarn' | 'bun';
 
@@ -188,8 +189,7 @@ export async function detectPm(cwd: string = process.cwd(), opts: DetectPmOpts =
 				],
 			});
 			if (isCancel(choice)) {
-				cancel('Cancelled');
-				return process.exit(0);
+				return cancelAndExit();
 			}
 			return choice;
 		}

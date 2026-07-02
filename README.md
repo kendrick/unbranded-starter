@@ -135,6 +135,12 @@ Recipe shape:
 
 Config mode skips the "Apply" confirmation.
 
+### Exit codes
+
+- `0` — finished (also when you answer No at the Apply prompt)
+- `1` — an error: a bad recipe, an unresolvable selection, or failed detection
+- `130` — cancelled with Ctrl-C at a prompt
+
 ## Requirements
 
 Node 22 or newer.

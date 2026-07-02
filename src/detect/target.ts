@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { cancel, isCancel, text } from '@clack/prompts';
+import { isCancel, text } from '@clack/prompts';
+import { cancelAndExit } from '../util/cancel';
 
 export type TargetMode = 'augment' | 'new';
 
@@ -70,8 +71,7 @@ export async function detectTarget(opts: DetectTargetOpts = {}): Promise<TargetC
 		});
 
 		if (isCancel(prompted)) {
-			cancel('Cancelled');
-			return process.exit(0);
+			return cancelAndExit();
 		}
 		name = prompted;
 	}
