@@ -31,6 +31,7 @@
 		"dev": "tsup --watch",
 		"build": "tsup",
 		"prepublishOnly": "pnpm build",
+		"prepare": "simple-git-hooks",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:e2e": "pnpm build && vitest run --config vitest.e2e.config.ts",
@@ -55,6 +56,8 @@
 		"eslint-plugin-jsx-a11y": "^6.10.2",
 		"eslint-plugin-react-refresh": "^0.5.2",
 		"jsdom": "^25.0.1",
+		"lint-staged": "^17.0.8",
+		"simple-git-hooks": "^2.13.1",
 		"stylelint": "^17.0.0",
 		"stylelint-config-standard": "^40.0.0",
 		"tailwindcss": "^4.0.0",
@@ -63,6 +66,16 @@
 		"vitest": "^2.1.8"
 	},
 	"pnpm": {
-		"onlyBuiltDependencies": ["esbuild"]
+		"onlyBuiltDependencies": [
+			"esbuild"
+		]
+	},
+	"simple-git-hooks": {
+		"pre-commit": "pnpm lint-staged",
+		"pre-push": "CI=true pnpm lint"
+	},
+	"lint-staged": {
+		"*": "eslint --fix",
+		"*.css": "stylelint --fix"
 	}
 }
