@@ -14,6 +14,22 @@ Each entry follows this shape:
 **Alternatives considered:** What was rejected, and why.
 ```
 
+## 2026-07-02: v0.3 real-repo ergonomics (issues #11-#17)
+
+**Source:** the v0.3 batch, built in three parallel worktrees then reconciled onto main; issues #11-#17
+
+**Context:** v0.3 ("try it on a real repo") covers current-dir support, git init, dry-run, the declared-but-dead FileOp modes, a unit catalog, inline flags, and target/pm overrides. Several choices weren't obvious from the issues.
+**Decision:**
+
+- `.` scaffolds into cwd unconditionally (no safe-set gate) since typing `.` is explicit intent; a _named_ existing dir instead gets the safe-set confirm (empty or only `.git`/`README.md`/`LICENSE`/`.gitignore`), else the never-clobber refusal holds. In-place runs stay `mode: 'new'`.
+- git init runs before post-installs so husky's `requires: 'git'` gate passes the same run; the recipe `git` field defaults to `'none'` (interactive prompts, default init). A missing git binary warns and continues.
+- `copyFileOp` now dispatches on `op.mode`: `merge-json` deep-merges and routes same-key collisions through the existing diff/prompt UX (`onConflict` resolves them in config mode), `append-if-missing` is idempotent. No unit ships these modes yet, so committed e2e fixtures under `test/fixtures/fileop-modes/` keep them live. `CopyAction` gained `merged`/`appended`.
+- `--dry-run` sits ahead of the Apply gate so it previews identically in interactive and `--config` mode, writing nothing; `--diff` adds the unified patch.
+- Inline flags build a `Config` through `resolveConfig` and win per-field over `--config` (mirrors `--latest` vs `versions`); `--yes` needs `--units` (or `--config`). `resolveConfig` must pass `git` through — the reconciliation caught it dropping the field.
+- `--target` threads a `cwd` into `detectTarget` rather than `process.chdir`, since every write/install already keys off `target.dir`; a relative `--config` therefore still resolves against the invocation cwd. `--pm` rides `detectPm`'s existing `override`, which short-circuits before the workspace-leaf refusal, so it doubles as the monorepo escape hatch.
+- Added a root `.gitattributes` (`* text=auto eol=lf`) so the Windows CI lint leg stops failing on CRLF: the runner checks out CRLF, and @antfu's Prettier markdown formatter flags the mismatch (it first bit `decisionLog.md`'s embedded fence).
+  **Alternatives considered:** For `--target`, a global `process.chdir` up front (rejected: it would break relative `--config` resolution and isn't needed since target.dir is explicit everywhere). For the FileOp modes, waiting for a real `.gitignore`/`opt-vscode` consumer before wiring dispatch (rejected in the issue itself: it would leave `mode` dead; fixtures prove the path now).
+
 ## 2026-07-02: `--latest` writes the `latest` dist-tag (not caret ranges)
 
 **Source:** commit 1133581; issue #3
