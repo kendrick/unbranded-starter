@@ -1,10 +1,11 @@
+import type { InlineFlags } from '../config/load';
 import type { Pm } from '../detect/pm';
 import type { CopyResult } from '../fs/copy';
 import type { Unit, UnitId } from '../manifest/types';
 import { existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { cancel, confirm, groupMultiselect, intro, isCancel, log, note, outro } from '@clack/prompts';
-import { loadConfig } from '../config/load';
+import { assertValidPm, loadConfig, resolveConfig } from '../config/load';
 import { detectPm } from '../detect/pm';
 import { detectTarget } from '../detect/target';
 import { copyFileOp } from '../fs/copy';
@@ -21,24 +22,58 @@ export interface RunInitOpts {
 	configPath?: string;
 	// From the `--latest` flag. Overrides the recipe's `versions` field.
 	latest?: boolean;
+	// Inline flags for a non-interactive run without a recipe file. When both a
+	// recipe and inline flags are present, inline wins per field.
+	inline?: InlineFlags;
 }
 
 export async function runInit(opts: RunInitOpts = {}): Promise<void> {
+	const inline = opts.inline ?? {};
+
+	// --yes means "don't prompt, just apply". With no selection there's nothing
+	// to apply and no prompt is allowed to fill the gap, so fail before any IO.
+	if (inline.yes && inline.units === undefined && !opts.configPath) {
+		throw new Error('`--yes` needs `--units <ids>` to know what to install, or point at a recipe with `--config <file>`.');
+	}
+
+	// Validate --pm up front so a bad value fails fast in every mode, not only
+	// once a full config gets assembled. The assertion narrows the raw flag
+	// string to `Pm | null` so it can feed detectPm's override below.
+	let pmOverride: Pm | null | undefined;
+	if (inline.pm !== undefined) {
+		assertValidPm(inline.pm);
+		pmOverride = inline.pm;
+	}
+
+	const known = new Set(UNITS.map(u => u.id));
+
 	// Loading config first means we fail with a clear error before prompting,
 	// rather than mid-flow after the user already started picking things.
-	const config = opts.configPath
-		? loadConfig(opts.configPath, new Set(UNITS.map(u => u.id)))
-		: null;
+	const fileConfig = opts.configPath ? loadConfig(opts.configPath, known) : null;
+
+	// A merged config drives every non-interactive path: a recipe file, inline
+	// --units, or --yes. A bare interactive run leaves it null.
+	const nonInteractive = fileConfig !== null || inline.units !== undefined || Boolean(inline.yes);
+	const config = nonInteractive ? resolveConfig(fileConfig, inline, known) : null;
 
 	// The flag wins over the recipe field, so `--config r.json --latest` works.
 	const latest = opts.latest || config?.versions === 'latest';
 
-	intro(config ? 'unbranded (--config)' : 'unbranded');
+	// Supplying a recipe or passing --yes is the opt-in, so skip the Apply
+	// confirm. Inline --units on its own still gets it, which keeps a flag typo
+	// catchable before anything is written.
+	const skipApply = Boolean(opts.configPath) || Boolean(inline.yes);
+
+	intro(config ? 'unbranded (non-interactive)' : 'unbranded');
 
 	const target = await detectTarget({ projectName: config?.projectName });
 	log.info(`Target: ${target.dir} (${target.mode})`);
 
-	const pm = await detectPm(target.dir, { override: config?.pm, mode: target.mode });
+	// --pm rides the existing detectPm override channel, so it skips the PM
+	// prompt in interactive runs too, not just config mode. Inline --pm wins
+	// over the recipe's pm; when neither is set the override is undefined and
+	// detection runs exactly as before.
+	const pm = await detectPm(target.dir, { override: pmOverride ?? fileConfig?.pm, mode: target.mode });
 	log.info(pm ? `Package manager: ${pm}` : 'No package.json — files will be written; install will be skipped.');
 
 	const selection = config ? config.units : await promptSelection(UNITS);
@@ -64,9 +99,9 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 
 	note(formatPlan(selectedUnits, resolution.auto, pm, latest), 'Plan');
 
-	// In config mode the user has already opted in by supplying the recipe.
-	// Asking again would just slow CI down for no benefit.
-	if (!config) {
+	// A recipe or --yes already opts in; asking again would just slow CI down.
+	// Inline --units without --yes still confirms, so a typo'd id is catchable.
+	if (!skipApply) {
 		const proceed = await confirm({ message: 'Apply?', initialValue: true });
 		if (isCancel(proceed))
 			return cancelAndExit();

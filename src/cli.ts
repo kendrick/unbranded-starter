@@ -22,27 +22,40 @@ Commands:
   list                  Print the unit catalog; add --json for machine-readable output
 
 Options:
-  --config, -c <file>   Run non-interactively with a JSON recipe
-  --latest              Install the latest dependency versions instead of the pinned defaults
-  --json                With \`list\`, emit the catalog as JSON
-  --help, -h            Show this help
-  --version, -v         Show the version
+  --config, -c <file>            Run non-interactively with a JSON recipe
+  --units <a,b,c>                Comma-separated unit ids (recipe field: units)
+  --pm <npm|pnpm|yarn|bun>       Package manager (recipe field: pm); also skips the prompt in interactive runs
+  --on-conflict <overwrite|skip> How to treat existing files (recipe field: onConflict)
+  --post-install <all|none>      Run post-install steps or skip them (recipe field: postInstall)
+  --yes                          Apply without the confirmation prompt; needs --units (or --config)
+  --latest                       Install the latest dependency versions, not the pinned defaults (recipe field: versions)
+  --json                         With \`list\`, emit the catalog as JSON
+  --help, -h                     Show this help
+  --version, -v                  Show the version
+
+Inline flags override the matching --config field per field, the same way --latest beats a recipe's versions.
 
 Examples:
-  unbranded                          # interactive prompt flow
-  unbranded list                     # print the unit catalog
-  unbranded list --json              # machine-readable catalog for tooling
-  unbranded --config recipe.json     # reproducible, scriptable run
-  unbranded --latest                 # take the newest versions, not the pins
+  unbranded                                            # interactive prompt flow
+  unbranded list                                       # print the unit catalog
+  unbranded list --json                                # machine-readable catalog for tooling
+  unbranded --config recipe.json                       # reproducible, scriptable run
+  unbranded --units core-eslint,core-vitest --pm pnpm --yes   # fully non-interactive, no recipe file
+  unbranded --latest                                   # take the newest versions, not the pins
 `;
 
 const { values, positionals } = parseArgs({
 	options: {
-		config: { type: 'string', short: 'c' },
-		latest: { type: 'boolean' },
-		json: { type: 'boolean' },
-		help: { type: 'boolean', short: 'h' },
-		version: { type: 'boolean', short: 'v' },
+		'config': { type: 'string', short: 'c' },
+		'units': { type: 'string' },
+		'pm': { type: 'string' },
+		'on-conflict': { type: 'string' },
+		'post-install': { type: 'string' },
+		'yes': { type: 'boolean' },
+		'latest': { type: 'boolean' },
+		'json': { type: 'boolean' },
+		'help': { type: 'boolean', short: 'h' },
+		'version': { type: 'boolean', short: 'v' },
 	},
 	// Positionals carry the subcommand (e.g. `unbranded list`). Bare `unbranded`
 	// with no positional still routes to the interactive init below.
@@ -78,7 +91,17 @@ if (command !== undefined) {
 	process.exit(1);
 }
 
-runInit({ configPath: values.config, latest: values.latest }).catch((err: unknown) => {
+runInit({
+	configPath: values.config,
+	latest: values.latest,
+	inline: {
+		units: values.units,
+		pm: values.pm,
+		onConflict: values['on-conflict'],
+		postInstall: values['post-install'],
+		yes: values.yes,
+	},
+}).catch((err: unknown) => {
 	// Top-level catch so an exception surfaces as a friendly clack error
 	// instead of a raw stack trace. detectPm throws for workspace-leaf and
 	// malformed package.json; config validation throws for bad recipes.

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { loadConfig, validate } from './load';
+import { assertValidPm, loadConfig, resolveConfig, validate } from './load';
 
 const KNOWN_UNITS = new Set<UnitId>(['core-eslint', 'core-typescript', 'opt-shadcn']);
 
@@ -142,5 +142,59 @@ describe('loadConfig (file IO)', () => {
 		writeFileSync(path, '{ not json');
 		expect(() => loadConfig(path, KNOWN_UNITS))
 			.toThrow(/Invalid JSON/);
+	});
+});
+
+describe('resolveConfig (inline flags)', () => {
+	it('builds a full config from inline flags alone, with sane defaults', () => {
+		const config = resolveConfig(null, { units: 'core-eslint,core-typescript', pm: 'pnpm', yes: true }, KNOWN_UNITS);
+		expect(config).toMatchObject({
+			units: ['core-eslint', 'core-typescript'],
+			pm: 'pnpm',
+			onConflict: 'overwrite',
+			postInstall: 'none',
+			versions: 'pinned',
+		});
+	});
+
+	it('trims whitespace around comma-separated units', () => {
+		const config = resolveConfig(null, { units: ' core-eslint , core-typescript ' }, KNOWN_UNITS);
+		expect(config.units).toEqual(['core-eslint', 'core-typescript']);
+	});
+
+	it('lets inline flags win per field over the recipe file', () => {
+		const file = validate({
+			units: ['opt-shadcn'],
+			pm: 'npm',
+			onConflict: 'skip',
+			postInstall: 'all',
+		}, KNOWN_UNITS);
+
+		const config = resolveConfig(file, { units: 'core-eslint', onConflict: 'overwrite' }, KNOWN_UNITS);
+		expect(config.units).toEqual(['core-eslint']); // inline wins
+		expect(config.onConflict).toBe('overwrite'); // inline wins
+		expect(config.pm).toBe('npm'); // inherited from the recipe
+		expect(config.postInstall).toBe('all'); // inherited from the recipe
+	});
+
+	it('reuses the recipe validator for an unknown inline unit', () => {
+		expect(() => resolveConfig(null, { units: 'not-a-unit', yes: true }, KNOWN_UNITS))
+			.toThrow(/unknown ids: not-a-unit/);
+	});
+
+	it('reuses the recipe validator for a bad inline pm', () => {
+		expect(() => resolveConfig(null, { units: 'core-eslint', pm: 'cargo' }, KNOWN_UNITS))
+			.toThrow(/pm must be one of/);
+	});
+});
+
+describe('assertValidPm', () => {
+	it('accepts the known package managers and null', () => {
+		expect(() => assertValidPm('pnpm')).not.toThrow();
+		expect(() => assertValidPm(null)).not.toThrow();
+	});
+
+	it('rejects anything else with the recipe-style message', () => {
+		expect(() => assertValidPm('cargo')).toThrow(/pm must be one of/);
 	});
 });
