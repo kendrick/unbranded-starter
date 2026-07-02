@@ -33,6 +33,8 @@ const CATEGORY_LABELS: Record<Category, string> = {
 
 export interface RunInitOpts {
 	configPath?: string;
+	// From the `--latest` flag. Overrides the recipe's `versions` field.
+	latest?: boolean;
 }
 
 export async function runInit(opts: RunInitOpts = {}): Promise<void> {
@@ -41,6 +43,9 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 	const config = opts.configPath
 		? loadConfig(opts.configPath, new Set(UNITS.map(u => u.id)))
 		: null;
+
+	// The flag wins over the recipe field, so `--config r.json --latest` works.
+	const latest = opts.latest || config?.versions === 'latest';
 
 	intro(config ? 'unbranded (--config)' : 'unbranded');
 
@@ -71,7 +76,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 		.map(id => byId.get(id))
 		.filter((u): u is Unit => u !== undefined);
 
-	note(formatPlan(selectedUnits, resolution.auto, pm), 'Plan');
+	note(formatPlan(selectedUnits, resolution.auto, pm, latest), 'Plan');
 
 	// In config mode the user has already opted in by supplying the recipe.
 	// Asking again would just slow CI down for no benefit.
@@ -105,6 +110,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 		targetDir: target.dir,
 		pm,
 		units: selectedUnits,
+		latest,
 	});
 
 	if (installResult.cancelled) {
@@ -155,7 +161,7 @@ async function promptSelection(units: Unit[]): Promise<UnitId[]> {
 	return result;
 }
 
-function formatPlan(units: Unit[], auto: UnitId[], pm: Pm | null): string {
+function formatPlan(units: Unit[], auto: UnitId[], pm: Pm | null, latest: boolean): string {
 	const lines: string[] = [];
 
 	for (const u of units) {
@@ -171,7 +177,7 @@ function formatPlan(units: Unit[], auto: UnitId[], pm: Pm | null): string {
 
 	lines.push('');
 	const installLine = pm ? `install via ${pm}` : 'no install (no package.json)';
-	lines.push(`${units.length} units · ${fileCount} files · ${depCount} deps · ${installLine}`);
+	lines.push(`${units.length} units · ${fileCount} files · ${depCount} deps (${latest ? 'latest' : 'pinned'}) · ${installLine}`);
 
 	return lines.join('\n');
 }

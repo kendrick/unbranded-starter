@@ -12,6 +12,9 @@ export interface WriteAndInstallOpts {
 	targetDir: string;
 	pm: Pm | null;
 	units: Unit[];
+	// When true, every dependency spec is rewritten to the `latest` dist-tag
+	// instead of the manifest's pinned version. Off by default (reproducible).
+	latest?: boolean;
 }
 
 export interface WriteAndInstallResult {
@@ -35,8 +38,8 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 	const indent = had ? detectIndent(raw) : '  ';
 
 	const patches: MergeInput[] = opts.units.map(u => ({
-		dependencies: u.dependencies,
-		devDependencies: u.devDependencies,
+		dependencies: opts.latest ? toLatest(u.dependencies) : u.dependencies,
+		devDependencies: opts.latest ? toLatest(u.devDependencies) : u.devDependencies,
 		scripts: u.packageJsonPatch?.scripts,
 		engines: u.packageJsonPatch?.engines,
 	}));
@@ -62,6 +65,15 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 	}
 	s.stop(`Install failed (exit ${result.code}).`);
 	return { wrote: true, installed: false, cancelled: false, error: result.error };
+}
+
+// The `--latest` escape hatch rewrites every pinned spec to the `latest`
+// dist-tag, so the install resolves the newest published versions. The lockfile
+// still records what actually resolved, so a single run stays reproducible.
+function toLatest(deps: Record<string, string> | undefined): Record<string, string> | undefined {
+	if (!deps)
+		return deps;
+	return Object.fromEntries(Object.keys(deps).map(name => [name, 'latest']));
 }
 
 // Match the existing file's indentation so we don't reformat what the user

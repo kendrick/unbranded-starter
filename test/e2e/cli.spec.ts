@@ -159,3 +159,69 @@ describe('cli --config (no package.json, pm:null)', () => {
 		expect(pkg.devDependencies.eslint).toBe('9.39.4');
 	});
 });
+
+describe('cli version policy (--latest / recipe versions)', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-latest-'));
+		writeJson(join(tmp, 'package.json'), { name: 'test-project', version: '0.0.0' });
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	function eslintSpec(): string {
+		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as {
+			devDependencies: Record<string, string>;
+		};
+		return pkg.devDependencies.eslint;
+	}
+
+	it('the --latest flag rewrites deps to the latest tag', () => {
+		writeJson(join(tmp, 'recipe.json'), {
+			units: ['core-eslint'],
+			pm: null,
+			onConflict: 'overwrite',
+			postInstall: 'none',
+		});
+
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json', '--latest'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
+
+		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
+		expect(eslintSpec()).toBe('latest');
+		// The plan note advertises the active policy before writing.
+		expect(result.stdout).toMatch(/latest/);
+	});
+
+	it('recipe versions: "latest" does the same without the flag', () => {
+		writeJson(join(tmp, 'recipe.json'), {
+			units: ['core-eslint'],
+			pm: null,
+			onConflict: 'overwrite',
+			postInstall: 'none',
+			versions: 'latest',
+		});
+
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+
+		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
+		expect(eslintSpec()).toBe('latest');
+	});
+
+	it('defaults to the manifest pins', () => {
+		writeJson(join(tmp, 'recipe.json'), {
+			units: ['core-eslint'],
+			pm: null,
+			onConflict: 'overwrite',
+			postInstall: 'none',
+		});
+
+		spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+		expect(eslintSpec()).toBe('9.39.4');
+	});
+});

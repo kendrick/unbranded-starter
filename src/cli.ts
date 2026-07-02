@@ -19,17 +19,20 @@ const HELP = `Usage: unbranded [options]
 
 Options:
   --config, -c <file>   Run non-interactively with a JSON recipe
+  --latest              Install the latest dependency versions instead of the pinned defaults
   --help, -h            Show this help
   --version, -v         Show the version
 
 Examples:
   unbranded                          # interactive prompt flow
   unbranded --config recipe.json     # reproducible, scriptable run
+  unbranded --latest                 # take the newest versions, not the pins
 `;
 
 const { values } = parseArgs({
 	options: {
 		config: { type: 'string', short: 'c' },
+		latest: { type: 'boolean' },
 		help: { type: 'boolean', short: 'h' },
 		version: { type: 'boolean', short: 'v' },
 	},
@@ -49,7 +52,7 @@ if (values.version) {
 	process.exit(0);
 }
 
-runInit({ configPath: values.config }).catch((err: unknown) => {
+runInit({ configPath: values.config, latest: values.latest }).catch((err: unknown) => {
 	// Top-level catch so an exception surfaces as a friendly clack error
 	// instead of a raw stack trace. detectPm throws for workspace-leaf and
 	// malformed package.json; config validation throws for bad recipes.

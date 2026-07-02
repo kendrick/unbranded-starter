@@ -8,6 +8,10 @@ export interface Config {
 	pm: Pm | null;
 	onConflict: 'overwrite' | 'skip';
 	postInstall: 'all' | 'none';
+	// Pinned to the manifest's exact versions by default; 'latest' rewrites
+	// every dependency to the `latest` dist-tag. The `--latest` flag overrides
+	// this per run (flag wins over the recipe field).
+	versions: 'pinned' | 'latest';
 	// Only required when the target cwd has no package.json (new-project mode);
 	// in augment mode the directory already exists and this is ignored.
 	projectName?: string;
@@ -16,6 +20,7 @@ export interface Config {
 const VALID_PMS = new Set<string>(['npm', 'pnpm', 'yarn', 'bun']);
 const VALID_ON_CONFLICT = new Set(['overwrite', 'skip']);
 const VALID_POST_INSTALL = new Set(['all', 'none']);
+const VALID_VERSIONS = new Set(['pinned', 'latest']);
 
 // v1 is JSON-only. YAML support is easy to add (we'd pull in `yaml` and key
 // off the file extension) but isn't load-bearing for the E2E suite, which is
@@ -68,6 +73,10 @@ export function validate(raw: unknown, knownUnits: Set<UnitId>): Config {
 		throw new Error('config.postInstall must be "all" or "none".');
 	}
 
+	if (obj.versions !== undefined && (typeof obj.versions !== 'string' || !VALID_VERSIONS.has(obj.versions))) {
+		throw new Error('config.versions must be "pinned" or "latest" when present.');
+	}
+
 	if (obj.projectName !== undefined && typeof obj.projectName !== 'string') {
 		throw new Error('config.projectName must be a string when present.');
 	}
@@ -77,6 +86,7 @@ export function validate(raw: unknown, knownUnits: Set<UnitId>): Config {
 		pm: obj.pm as Pm | null,
 		onConflict: obj.onConflict as 'overwrite' | 'skip',
 		postInstall: obj.postInstall as 'all' | 'none',
+		versions: (obj.versions as 'pinned' | 'latest') ?? 'pinned',
 		projectName: obj.projectName as string | undefined,
 	};
 }

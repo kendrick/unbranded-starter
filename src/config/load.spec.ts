@@ -33,6 +33,19 @@ describe('validate (in-memory)', () => {
 		expect(result.projectName).toBe('acme');
 	});
 
+	it('accepts versions: "latest"', () => {
+		expect(validate({ ...baseValid, versions: 'latest' }, KNOWN_UNITS).versions).toBe('latest');
+	});
+
+	it('defaults versions to "pinned" when omitted', () => {
+		expect(validate(baseValid, KNOWN_UNITS).versions).toBe('pinned');
+	});
+
+	it('rejects an invalid versions value', () => {
+		expect(() => validate({ ...baseValid, versions: 'newest' }, KNOWN_UNITS))
+			.toThrow(/versions must be/);
+	});
+
 	it('rejects non-object input', () => {
 		expect(() => validate(null, KNOWN_UNITS)).toThrow(/JSON object/);
 		expect(() => validate([], KNOWN_UNITS)).toThrow(/JSON object/);
