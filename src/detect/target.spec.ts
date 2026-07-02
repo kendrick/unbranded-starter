@@ -148,4 +148,19 @@ describe('detectTarget (new-project shell)', () => {
 		// a prompt — the never-clobber default holds without a package manager.
 		await expect(detectTarget({ projectName: 'proj' })).rejects.toThrow(/already exists/);
 	});
+
+	it('steers detection with the cwd option (for --target), never leaving process.cwd()', async () => {
+		// A directory the process is NOT chdir'd into: --target points here.
+		const other = mkdtempSync(join(tmpdir(), 'unbranded-target-opt-'));
+		writeFileSync(join(other, 'package.json'), '{}');
+		try {
+			const result = await detectTarget({ cwd: other });
+			// Augmented the --target dir, not the cwd we're sitting in.
+			expect(result).toEqual({ dir: other, mode: 'augment' });
+			expect(process.cwd()).toBe(cwd);
+		}
+		finally {
+			rmSync(other, { recursive: true, force: true });
+		}
+	});
 });

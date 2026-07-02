@@ -30,6 +30,11 @@ export interface RunInitOpts {
 	// patch for every file that would change.
 	dryRun?: boolean;
 	diff?: boolean;
+	// `--target <dir>`: scaffold against this directory instead of the cwd,
+	// already resolved to an absolute path in cli.ts. Relative `--config` paths
+	// still resolve against the invocation cwd, since loadConfig runs before this
+	// is threaded into detection and no process.chdir happens.
+	targetDir?: string;
 }
 
 export async function runInit(opts: RunInitOpts = {}): Promise<void> {
@@ -71,7 +76,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 
 	intro(config ? 'unbranded (non-interactive)' : 'unbranded');
 
-	const target = await detectTarget({ projectName: config?.projectName });
+	const target = await detectTarget({ projectName: config?.projectName, cwd: opts.targetDir });
 	log.info(`Target: ${target.dir} (${target.mode})`);
 
 	// --pm rides the existing detectPm override channel, so it skips the PM

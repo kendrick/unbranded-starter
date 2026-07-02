@@ -69,10 +69,15 @@ export function classifyExistingDir(entries: string[]): 'empty' | 'safe' | 'unsa
 // pass it through so the new-project flow stays non-interactive.
 export interface DetectTargetOpts {
 	projectName?: string;
+	// `--target <dir>`: the directory to scaffold against, already resolved to
+	// an absolute path by the caller. Defaults to process.cwd(). Every write and
+	// install keys off the returned `dir`, so steering detection here is enough —
+	// no process.chdir is needed for augment or in-place runs.
+	cwd?: string;
 }
 
 export async function detectTarget(opts: DetectTargetOpts = {}): Promise<TargetContext> {
-	const inspection = inspectTarget(process.cwd());
+	const inspection = inspectTarget(opts.cwd ?? process.cwd());
 
 	if (inspection.kind === 'augment') {
 		return { dir: inspection.dir, mode: 'augment' };

@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { log } from '@clack/prompts';
 import { runInit } from './commands/init';
@@ -23,8 +23,9 @@ Commands:
 
 Options:
   --config, -c <file>            Run non-interactively with a JSON recipe
+  --target <dir>                 Scaffold against <dir> instead of the current directory
   --units <a,b,c>                Comma-separated unit ids (recipe field: units)
-  --pm <npm|pnpm|yarn|bun>       Package manager (recipe field: pm); also skips the prompt in interactive runs
+  --pm <npm|pnpm|yarn|bun>       Package manager (recipe field: pm); skips detection, including the workspace-leaf refusal
   --on-conflict <overwrite|skip> How to treat existing files (recipe field: onConflict)
   --post-install <all|none>      Run post-install steps or skip them (recipe field: postInstall)
   --yes                          Apply without the confirmation prompt; needs --units (or --config)
@@ -50,6 +51,7 @@ Examples:
 const { values, positionals } = parseArgs({
 	options: {
 		'config': { type: 'string', short: 'c' },
+		'target': { type: 'string' },
 		'units': { type: 'string' },
 		'pm': { type: 'string' },
 		'on-conflict': { type: 'string' },
@@ -98,6 +100,9 @@ if (command !== undefined) {
 
 runInit({
 	configPath: values.config,
+	// Resolve against the invocation cwd now, before any detection runs, so the
+	// dir is stable even though a relative --config path is still read from here.
+	targetDir: values.target ? resolve(values.target) : undefined,
 	latest: values.latest,
 	dryRun: values['dry-run'],
 	diff: values.diff,

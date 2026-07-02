@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { inspectPm } from './pm';
+import { detectPm, inspectPm } from './pm';
 
 describe('inspectPm', () => {
 	let dir: string;
@@ -172,5 +172,34 @@ describe('inspectPm — new mode', () => {
 		writeFileSync(join(dir, 'package.json'), '{}');
 		writeFileSync(join(dir, 'pnpm-lock.yaml'), '');
 		expect(inspectPm(sub, {}, 'augment')).toMatchObject({ kind: 'detected', pm: 'pnpm', source: 'lockfile' });
+	});
+});
+
+// detectPm's override short-circuits before any filesystem inspection, which is
+// exactly what lets `--pm` skip the workspace-leaf refusal inspectPm would raise.
+// This is the monorepo-subpackage escape hatch #17 promises.
+describe('detectPm — override', () => {
+	let dir: string;
+
+	beforeEach(() => {
+		dir = mkdtempSync(join(tmpdir(), 'unbranded-pm-override-'));
+	});
+
+	afterEach(() => {
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	it('bypasses the workspace-leaf refusal when --pm is given', async () => {
+		const leaf = join(dir, 'packages', 'app');
+		mkdirSync(leaf, { recursive: true });
+		writeFileSync(join(dir, 'pnpm-workspace.yaml'), '');
+		writeFileSync(join(leaf, 'package.json'), '{}');
+
+		// Without an override this same leaf throws (see the inspectPm case above).
+		await expect(detectPm(leaf, { override: 'npm' })).resolves.toBe('npm');
+	});
+
+	it('passes a null override straight through, so install is skipped', async () => {
+		await expect(detectPm(dir, { override: null })).resolves.toBeNull();
 	});
 });
