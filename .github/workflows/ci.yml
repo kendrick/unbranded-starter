@@ -27,6 +27,12 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: pnpm
 
+      # Node 22 bundles an older npm that runs the prepare hook during
+      # `npm pack --dry-run --json` even with `--ignore-scripts`, corrupting the
+      # JSON the pack/version e2e tests parse. Pin to a current npm (the release
+      # workflow does the same) so both matrix legs behave identically.
+      - run: npm install -g npm@latest
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
