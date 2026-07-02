@@ -1,6 +1,6 @@
 import type { InlineFlags } from '../config/load';
 import type { Pm } from '../detect/pm';
-import type { CopyResult } from '../fs/copy';
+import type { CopyResult, FilePlan, PlanOutcome } from '../fs/copy';
 import type { Unit, UnitId } from '../manifest/types';
 import { existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -8,7 +8,7 @@ import { cancel, confirm, groupMultiselect, intro, isCancel, log, note, outro } 
 import { assertValidPm, loadConfig, resolveConfig } from '../config/load';
 import { detectPm } from '../detect/pm';
 import { detectTarget } from '../detect/target';
-import { copyFileOp } from '../fs/copy';
+import { copyFileOp, planFileOp, renderPlanDiff } from '../fs/copy';
 import { maybeInitGit } from '../install/git';
 import { runPostInstalls } from '../install/post';
 import { writeAndInstall } from '../install/run';
@@ -25,6 +25,11 @@ export interface RunInitOpts {
 	// Inline flags for a non-interactive run without a recipe file. When both a
 	// recipe and inline flags are present, inline wins per field.
 	inline?: InlineFlags;
+	// `--dry-run`: resolve and report what each FileOp would do, then stop
+	// before any write or install. `--diff` widens the report with the unified
+	// patch for every file that would change.
+	dryRun?: boolean;
+	diff?: boolean;
 }
 
 export async function runInit(opts: RunInitOpts = {}): Promise<void> {
@@ -99,6 +104,21 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 
 	note(formatPlan(selectedUnits, resolution.auto, pm, latest), 'Plan');
 
+	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
+
+	// --dry-run reports the same resolved plan a real run would apply, then
+	// stops before the first write. It sits ahead of the Apply gate so it works
+	// the same whether the selection came from a prompt or a --config recipe.
+	if (opts.dryRun) {
+		const plans = selectedUnits.flatMap(unit =>
+			unit.files.map(file => planFileOp(file, { pkgRoot: PKG_ROOT, targetDir: target.dir, projectName })),
+		);
+		note(formatDryRun(plans, opts.diff ?? false), 'Dry run (no files written)');
+		log.success(formatDryRunSummary(plans));
+		outro('Dry run: nothing written.');
+		return;
+	}
+
 	// A recipe or --yes already opts in; asking again would just slow CI down.
 	// Inline --units without --yes still confirms, so a typo'd id is catchable.
 	if (!skipApply) {
@@ -111,7 +131,6 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 		}
 	}
 
-	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
 	const copyResults: CopyResult[] = [];
 	for (const unit of selectedUnits) {
 		for (const file of unit.files) {
@@ -210,6 +229,44 @@ function formatPlan(units: Unit[], auto: UnitId[], pm: Pm | null, latest: boolea
 	lines.push(`${units.length} units · ${fileCount} files · ${depCount} deps (${latest ? 'latest' : 'pinned'}) · ${installLine}`);
 
 	return lines.join('\n');
+}
+
+// Left-padded verbs so the paths line up in a column, matching the tone of the
+// real run's per-file reporting. Order follows the plan list, not the outcome,
+// so the report reads top-to-bottom the way the files were resolved.
+const PLAN_LABELS: Record<PlanOutcome, string> = {
+	create: 'would create',
+	merge: 'would merge',
+	append: 'would append',
+	skip: 'identical',
+	conflict: 'conflict',
+};
+
+function formatDryRun(plans: FilePlan[], withDiff: boolean): string {
+	const width = Math.max(...Object.values(PLAN_LABELS).map(l => l.length));
+	const lines: string[] = [];
+
+	for (const plan of plans) {
+		lines.push(`${PLAN_LABELS[plan.outcome].padEnd(width)}  ${plan.rel}`);
+		if (withDiff) {
+			const diff = renderPlanDiff(plan);
+			if (diff)
+				lines.push(diff);
+		}
+	}
+
+	return lines.join('\n');
+}
+
+function formatDryRunSummary(plans: FilePlan[]): string {
+	const count = (outcome: PlanOutcome): number => plans.filter(p => p.outcome === outcome).length;
+	// Mirrors the real run's `Files: N written…` line, swapped to would-phrasing.
+	// Conflicts get their own tail count since dry-run reports them instead of
+	// resolving them into a write or a skip.
+	return (
+		`Would: ${count('create')} written, ${count('merge')} merged, `
+		+ `${count('append')} appended, ${count('skip')} skipped, ${count('conflict')} conflicts.`
+	);
 }
 
 function formatNoPmNextSteps(targetDir: string, units: Unit[]): string {

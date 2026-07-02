@@ -45,7 +45,7 @@ A run looks roughly like this:
 │
 ◇  Apply? Yes
 │
-●  Files: 3 written, 0 overwritten, 0 skipped.
+●  Files: 3 written, 0 overwritten, 0 merged, 0 appended, 0 skipped.
 │
 ○  Installing dependencies via pnpm
 │
@@ -140,6 +140,28 @@ Config mode skips the "Apply" confirmation.
 - `0` — finished (also when you answer No at the Apply prompt)
 - `1` — an error: a bad recipe, an unresolvable selection, or failed detection
 - `130` — cancelled with Ctrl-C at a prompt
+
+## Preview a run
+
+`--dry-run` resolves the whole plan and prints what each file would do, then stops before writing a byte or touching the package manager. It works with or without `--config`.
+
+```bash
+unbranded --dry-run
+unbranded --config recipe.json --dry-run
+```
+
+Every file gets one verdict:
+
+- `would create`, when the file isn't there yet
+- `would merge` or `would append`, when the merge-json or append-if-missing mode would fold the template into a file you already have
+- `identical`, when the source already matches and there's nothing to do
+- `conflict`, when the file exists and differs, so a real run would stop to ask you which side wins
+
+The closing summary mirrors the real run's `Files:` line, reworded as `Would:`. Add `--diff` to print the unified patch for every file that would change, so you can read the exact edit before you commit to it:
+
+```bash
+unbranded --dry-run --diff
+```
 
 ## Requirements
 

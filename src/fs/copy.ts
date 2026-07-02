@@ -1,6 +1,6 @@
 import type { FileOp } from '../manifest/types';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join as joinNative, posix, resolve as resolveNative } from 'node:path';
+import { dirname, join as joinNative, posix, relative, resolve as resolveNative } from 'node:path';
 import { isCancel, log, select } from '@clack/prompts';
 import { createPatch } from 'diff';
 import { cancelAndExit } from '../util/cancel';
@@ -135,6 +135,71 @@ function appendIfMissingOp(srcPath: string, destPath: string, srcBuf: Buffer, de
 	}
 	writeBuffer(destPath, content);
 	return { src: srcPath, dest: destPath, action: 'appended' };
+}
+
+// The would-do verdicts for --dry-run. 'conflict' has no run-time analogue —
+// a real run resolves it into an overwrite/merge or a skip — but the plan
+// surfaces it so the user can see every collision before committing to a run.
+export type PlanOutcome = 'create' | 'merge' | 'append' | 'skip' | 'conflict';
+
+export interface FilePlan {
+	src: string;
+	dest: string;
+	// dest relative to targetDir, so the report reads in the user's terms
+	// rather than dumping absolute scratch paths.
+	rel: string;
+	outcome: PlanOutcome;
+	// The before/after text, when a file exists and would change. Lets --diff
+	// render the unified patch without re-deriving the proposed content.
+	diff?: { existing: string; proposed: string };
+}
+
+// The read-only twin of copyFileOp: same dispatch, same merge/append math, but
+// it classifies instead of writing. Kept in lockstep with copyFileOp on purpose
+// so the dry-run preview can't drift from what a real run would actually do.
+export function planFileOp(op: FileOp, opts: CopyOptions): FilePlan {
+	const { srcPath, destPath } = resolvePaths(op, opts);
+	const rel = relative(opts.targetDir, destPath);
+	const srcBuf = readFileSync(srcPath);
+
+	const base = { src: srcPath, dest: destPath, rel };
+
+	if (!existsSync(destPath))
+		return { ...base, outcome: 'create' };
+
+	const destBuf = readFileSync(destPath);
+	if (srcBuf.equals(destBuf))
+		return { ...base, outcome: 'skip' };
+
+	const mode = op.mode ?? 'copy';
+	if (mode === 'merge-json') {
+		const existingText = destBuf.toString('utf-8');
+		const existing = JSON.parse(existingText) as unknown;
+		const { merged, conflict } = deepMergeJson(existing, JSON.parse(srcBuf.toString('utf-8')));
+		if (!conflict && deepEqual(merged, existing))
+			return { ...base, outcome: 'skip' };
+		const proposed = `${JSON.stringify(merged, null, detectIndent(existingText))}\n`;
+		return { ...base, outcome: conflict ? 'conflict' : 'merge', diff: { existing: existingText, proposed } };
+	}
+
+	if (mode === 'append-if-missing') {
+		const { content, changed } = appendMissingLines(destBuf, srcBuf);
+		if (!changed)
+			return { ...base, outcome: 'skip' };
+		return { ...base, outcome: 'append', diff: { existing: destBuf.toString('utf-8'), proposed: content.toString('utf-8') } };
+	}
+
+	// Raw copy into an existing, differing file: the user has to choose, so it's
+	// a conflict in plan terms even though a real run might auto-resolve it.
+	return { ...base, outcome: 'conflict', diff: { existing: destBuf.toString('utf-8'), proposed: srcBuf.toString('utf-8') } };
+}
+
+// Colorized unified patch for a plan that would change an existing file, or
+// null when there's nothing to diff (a fresh create or an identical skip).
+export function renderPlanDiff(plan: FilePlan): string | null {
+	if (!plan.diff)
+		return null;
+	return colorizeDiff(createPatch(plan.rel, plan.diff.existing, plan.diff.proposed, 'existing', 'proposed'));
 }
 
 function writeBuffer(path: string, buf: Buffer): void {

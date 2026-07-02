@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { select } from '@clack/prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { copyFileOp } from './copy';
+import { copyFileOp, planFileOp } from './copy';
 
 // The merge-json conflict fallback re-uses the raw-copy `select` prompt. Stub
 // just that export so we can assert the interactive path fires without a TTY;
@@ -265,5 +265,77 @@ describe('copyFileOp mode: append-if-missing', () => {
 		const second = await copyFileOp({ src: '.gitignore', dest: '.gitignore', mode: 'append-if-missing' }, { pkgRoot, targetDir });
 		expect(first.action).toBe('appended');
 		expect(second).toMatchObject({ action: 'skipped', reason: 'identical' });
+	});
+});
+
+describe('planFileOp (dry-run classification)', () => {
+	let pkgRoot: string;
+	let targetDir: string;
+
+	beforeEach(() => {
+		pkgRoot = mkdtempSync(join(tmpdir(), 'unbranded-plan-pkg-'));
+		targetDir = mkdtempSync(join(tmpdir(), 'unbranded-plan-target-'));
+	});
+
+	afterEach(() => {
+		rmSync(pkgRoot, { recursive: true, force: true });
+		rmSync(targetDir, { recursive: true, force: true });
+	});
+
+	it('reports "create" for a destination that does not exist, and writes nothing', () => {
+		writeFileSync(join(pkgRoot, 'a.txt'), 'hello\n');
+		const plan = planFileOp({ src: 'a.txt', dest: 'a.txt' }, { pkgRoot, targetDir });
+		expect(plan.outcome).toBe('create');
+		expect(existsSync(join(targetDir, 'a.txt'))).toBe(false);
+	});
+
+	it('reports "skip" when source and dest are byte-identical', () => {
+		writeFileSync(join(pkgRoot, 'a.txt'), 'same\n');
+		writeFileSync(join(targetDir, 'a.txt'), 'same\n');
+		expect(planFileOp({ src: 'a.txt', dest: 'a.txt' }, { pkgRoot, targetDir }).outcome).toBe('skip');
+	});
+
+	it('reports "conflict" for a differing raw-copy file, with a dest-relative path and no write', () => {
+		writeFileSync(join(pkgRoot, 'a.txt'), 'new\n');
+		mkdirSync(join(targetDir, 'sub'), { recursive: true });
+		writeFileSync(join(targetDir, 'sub', 'a.txt'), 'old\n');
+		const plan = planFileOp({ src: 'a.txt', dest: 'sub/a.txt' }, { pkgRoot, targetDir });
+		expect(plan.outcome).toBe('conflict');
+		expect(plan.rel).toBe(join('sub', 'a.txt'));
+		expect(plan.diff).toBeDefined();
+		// The plan must not touch the file it's describing.
+		expect(readFileSync(join(targetDir, 'sub', 'a.txt'), 'utf-8')).toBe('old\n');
+	});
+
+	it('reports "merge" for a clean merge-json overlay', () => {
+		writeFileSync(join(pkgRoot, 'c.json'), JSON.stringify({ b: 2 }));
+		writeFileSync(join(targetDir, 'c.json'), `${JSON.stringify({ a: 1 }, null, 2)}\n`);
+		const plan = planFileOp({ src: 'c.json', dest: 'c.json', mode: 'merge-json' }, { pkgRoot, targetDir });
+		expect(plan.outcome).toBe('merge');
+		expect(readFileSync(join(targetDir, 'c.json'), 'utf-8')).toBe(`${JSON.stringify({ a: 1 }, null, 2)}\n`);
+	});
+
+	it('reports "skip" for a merge-json overlay that adds nothing', () => {
+		writeFileSync(join(pkgRoot, 'c.json'), JSON.stringify({ a: 1 }));
+		writeFileSync(join(targetDir, 'c.json'), `${JSON.stringify({ a: 1, name: 'x' }, null, 2)}\n`);
+		expect(planFileOp({ src: 'c.json', dest: 'c.json', mode: 'merge-json' }, { pkgRoot, targetDir }).outcome).toBe('skip');
+	});
+
+	it('reports "conflict" for a merge-json same-key collision', () => {
+		writeFileSync(join(pkgRoot, 'c.json'), JSON.stringify({ license: 'Apache-2.0' }));
+		writeFileSync(join(targetDir, 'c.json'), `${JSON.stringify({ license: 'MIT' }, null, 2)}\n`);
+		expect(planFileOp({ src: 'c.json', dest: 'c.json', mode: 'merge-json' }, { pkgRoot, targetDir }).outcome).toBe('conflict');
+	});
+
+	it('reports "append" when append-if-missing would add lines, and "skip" once they exist', () => {
+		writeFileSync(join(pkgRoot, '.gitignore'), 'node_modules\ndist\n');
+		writeFileSync(join(targetDir, '.gitignore'), 'node_modules\n');
+		const plan = planFileOp({ src: '.gitignore', dest: '.gitignore', mode: 'append-if-missing' }, { pkgRoot, targetDir });
+		expect(plan.outcome).toBe('append');
+		// Nothing written by planning.
+		expect(readFileSync(join(targetDir, '.gitignore'), 'utf-8')).toBe('node_modules\n');
+
+		writeFileSync(join(targetDir, '.gitignore'), 'node_modules\ndist\n');
+		expect(planFileOp({ src: '.gitignore', dest: '.gitignore', mode: 'append-if-missing' }, { pkgRoot, targetDir }).outcome).toBe('skip');
 	});
 });

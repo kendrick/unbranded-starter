@@ -88,6 +88,9 @@ export function resolveConfig(fileConfig: Config | null, inline: InlineFlags, kn
 		postInstall: inline.postInstall ?? fileConfig?.postInstall ?? 'none',
 		versions: fileConfig?.versions ?? 'pinned',
 		projectName: fileConfig?.projectName,
+		// Not an inline flag — there's no --git yet, so it only ever comes from the
+		// recipe. Passing it through keeps `git: "init"` alive after the merge.
+		git: fileConfig?.git,
 	}, knownUnits);
 }
 

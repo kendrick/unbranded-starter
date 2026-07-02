@@ -29,6 +29,8 @@ Options:
   --post-install <all|none>      Run post-install steps or skip them (recipe field: postInstall)
   --yes                          Apply without the confirmation prompt; needs --units (or --config)
   --latest                       Install the latest dependency versions, not the pinned defaults (recipe field: versions)
+  --dry-run                      Report what each file would do, then exit without writing or installing
+  --diff                         With --dry-run, print the unified diff for every file that would change
   --json                         With \`list\`, emit the catalog as JSON
   --help, -h                     Show this help
   --version, -v                  Show the version
@@ -42,6 +44,7 @@ Examples:
   unbranded --config recipe.json                       # reproducible, scriptable run
   unbranded --units core-eslint,core-vitest --pm pnpm --yes   # fully non-interactive, no recipe file
   unbranded --latest                                   # take the newest versions, not the pins
+  unbranded --dry-run --diff                           # preview every change, including diffs, write nothing
 `;
 
 const { values, positionals } = parseArgs({
@@ -53,6 +56,8 @@ const { values, positionals } = parseArgs({
 		'post-install': { type: 'string' },
 		'yes': { type: 'boolean' },
 		'latest': { type: 'boolean' },
+		'dry-run': { type: 'boolean' },
+		'diff': { type: 'boolean' },
 		'json': { type: 'boolean' },
 		'help': { type: 'boolean', short: 'h' },
 		'version': { type: 'boolean', short: 'v' },
@@ -94,6 +99,8 @@ if (command !== undefined) {
 runInit({
 	configPath: values.config,
 	latest: values.latest,
+	dryRun: values['dry-run'],
+	diff: values.diff,
 	inline: {
 		units: values.units,
 		pm: values.pm,
