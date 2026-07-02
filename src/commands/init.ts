@@ -1,7 +1,8 @@
 import type { Pm } from '../detect/pm';
 import type { CopyResult } from '../fs/copy';
 import type { Category, Unit, UnitId } from '../manifest/types';
-import { basename } from 'node:path';
+import { existsSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import { cancel, confirm, groupMultiselect, intro, isCancel, log, note, outro } from '@clack/prompts';
 import { loadConfig } from '../config/load';
 import { detectPm } from '../detect/pm';
@@ -46,7 +47,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 	const target = await detectTarget({ projectName: config?.projectName });
 	log.info(`Target: ${target.dir} (${target.mode})`);
 
-	const pm = await detectPm(target.dir, { override: config?.pm });
+	const pm = await detectPm(target.dir, { override: config?.pm, mode: target.mode });
 	log.info(pm ? `Package manager: ${pm}` : 'No package.json — files will be written; install will be skipped.');
 
 	const selection = config ? config.units : await promptSelection(UNITS);
@@ -183,12 +184,21 @@ function formatNoPmNextSteps(targetDir: string, units: Unit[]): string {
 		for (const name of Object.keys(u.devDependencies ?? {})) devDeps.add(name);
 	}
 
+	// writeAndInstall seeds a package.json even when install is skipped, so by
+	// the time we print this one already exists on disk. Suggesting `npm init`
+	// then would clobber the seeded manifest — only offer it when there's
+	// genuinely nothing to install against.
+	const hasPkg = existsSync(join(targetDir, 'package.json'));
+
 	const lines: string[] = [
-		'Files written. Install was skipped because no package.json was detected.',
+		hasPkg
+			? 'Files written. Install was skipped; run install to finish.'
+			: 'Files written. Install was skipped because no package.json was detected.',
 		'',
 		`  cd ${targetDir}`,
-		'  npm init -y           # or pnpm init / yarn init / bun init',
 	];
+	if (!hasPkg)
+		lines.push('  npm init -y           # or pnpm init / yarn init / bun init');
 	if (deps.size > 0)
 		lines.push(`  npm install ${[...deps].sort().join(' ')}`);
 	if (devDeps.size > 0)

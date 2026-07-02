@@ -134,3 +134,43 @@ describe('inspectPm', () => {
 		expect(inspectPm(sub, {})).toMatchObject({ kind: 'detected', pm: 'pnpm', source: 'lockfile' });
 	});
 });
+
+// New-project mode runs against a freshly created, empty directory: no
+// package.json is seeded until later, so the old code took the no-pkg path and
+// never reached the user-agent check. These pin the mode-aware behavior.
+describe('inspectPm — new mode', () => {
+	let dir: string;
+
+	beforeEach(() => {
+		dir = mkdtempSync(join(tmpdir(), 'unbranded-pm-new-'));
+	});
+
+	afterEach(() => {
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	it('honors the user-agent up front, with no prompt', () => {
+		const env = { npm_config_user_agent: 'pnpm/9.0.0 npm/? node/v20.0.0' };
+		expect(inspectPm(dir, env, 'new')).toEqual({ kind: 'detected', pm: 'pnpm', source: 'userAgent' });
+	});
+
+	it('ignores a decoy lockfile in a parent directory', () => {
+		// A stray package-lock.json above a brand-new project is not intent.
+		const sub = join(dir, 'nested');
+		mkdirSync(sub);
+		writeFileSync(join(dir, 'package-lock.json'), '');
+		expect(inspectPm(sub, {}, 'new')).toEqual({ kind: 'needs-prompt' });
+	});
+
+	it('falls through to the prompt, never no-pkg, when the user-agent is absent', () => {
+		expect(inspectPm(dir, {}, 'new')).toEqual({ kind: 'needs-prompt' });
+	});
+
+	it('still walks up to a parent lockfile in augment mode (regression)', () => {
+		const sub = join(dir, 'src');
+		mkdirSync(sub);
+		writeFileSync(join(dir, 'package.json'), '{}');
+		writeFileSync(join(dir, 'pnpm-lock.yaml'), '');
+		expect(inspectPm(sub, {}, 'augment')).toMatchObject({ kind: 'detected', pm: 'pnpm', source: 'lockfile' });
+	});
+});
