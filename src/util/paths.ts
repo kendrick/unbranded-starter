@@ -10,7 +10,8 @@ import { dirname, resolve } from 'node:path';
 // position differs between source and bundle — walking up to package.json
 // works the same in both, including from inside node_modules/unbranded/.
 //
-// Engines field requires Node 24+, so import.meta.dirname is guaranteed.
+// import.meta.dirname is the anchor; it's been stable since Node 20.11, well
+// under our engines floor, so no runtime shim is needed.
 function findPkgRoot(start: string): string {
 	let dir = start;
 	while (dir !== dirname(dir)) {

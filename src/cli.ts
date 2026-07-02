@@ -3,7 +3,17 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { log } from '@clack/prompts';
 import { runInit } from './commands/init';
+import { nodeVersionError } from './util/node-version';
 import { PKG_ROOT } from './util/paths';
+
+// Gate before anything else: parseArgs and the rest assume a modern runtime, so
+// bail with one line rather than letting a too-old Node fail cryptically later.
+const NODE_FLOOR = 22;
+const versionError = nodeVersionError(process.versions.node, NODE_FLOOR);
+if (versionError) {
+	process.stderr.write(`${versionError}\n`);
+	process.exit(1);
+}
 
 const HELP = `Usage: unbranded [options]
 

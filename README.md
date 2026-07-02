@@ -137,7 +137,7 @@ Config mode skips the "Apply" confirmation.
 
 ## Requirements
 
-Node 24 or newer.
+Node 22 or newer.
 
 ## Philosophy
 
