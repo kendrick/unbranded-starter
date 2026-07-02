@@ -14,6 +14,14 @@ Each entry follows this shape:
 **Alternatives considered:** What was rejected, and why.
 ```
 
+## 2026-07-02: Release automation via release-please + npm trusted publishing
+
+**Source:** commits 004de87, 9f6e966; issues #1, #6
+
+**Context:** `unbranded` was published to npm by hand, with no tags, releases, changelog, or provenance. The commit history is already conventional, so the inputs for automated versioning existed but nothing consumed them.
+**Decision:** release-please (manifest mode, single package) maintains a rolling Release PR from conventional commits; merging it tags, cuts a GitHub release, and triggers a publish job that ships to npm over OIDC trusted publishing with provenance. The `create-unbranded` launcher lives in-repo and is version-locked to `unbranded` via release-please `extra-files` stamping, published by the same job. Backfilled a `v0.1.0` tag on the npm-recorded publish commit (3c578b6) so the first changelog only covers real post-0.1.0 history.
+**Alternatives considered:** semantic-release (publishes on every push, no human gate) — rejected for the PR-based gate. changesets (changeset-file driven, monorepo-shaped) — rejected for a single package with already-conventional commits. A long-lived `NPM_TOKEN` — rejected for tokenless OIDC. A pnpm workspace holding both packages — rejected because a root `pnpm-workspace.yaml` re-triggers `eslint-plugin-pnpm` (see the entry below) and the launcher's dependency must resolve from the registry, not a workspace link.
+
 ## 2026-07-01: Disable `pnpm/yaml-enforce-settings`
 
 **Source:** commit 10777d7
