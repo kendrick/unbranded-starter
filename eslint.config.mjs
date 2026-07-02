@@ -41,6 +41,11 @@ export default antfu(
 			'import/no-default-export': 'off', // Next.js needs default exports
 			'style/multiline-ternary': 'off',
 			'ts/no-explicit-any': 'error',
+			// eslint-plugin-pnpm (auto-enabled by antfu when a pnpm-workspace.yaml
+			// exists) injects `trustPolicy: no-downgrade` into it on every --fix,
+			// which makes pnpm reject the lockfile. Off so monorepos scaffolded
+			// from this starter stay clean.
+			'pnpm/yaml-enforce-settings': 'off',
 
 			// This repo is a Node-only CLI. Forcing `import process from
 			// 'node:process'` and `import { Buffer } from 'node:buffer'`
