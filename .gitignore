@@ -125,3 +125,6 @@ tmp.*
 
 # Local-only active context (working-memory-kit)
 _working-memory/activeContext.md
+
+# Parallel-work git worktrees (isolated per-issue branches)
+.worktrees/
