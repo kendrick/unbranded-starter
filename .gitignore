@@ -122,3 +122,6 @@ $RECYCLE.BIN/
 .tmp/
 tmp/
 tmp.*
+
+# Local-only active context (working-memory-kit)
+_working-memory/activeContext.md
