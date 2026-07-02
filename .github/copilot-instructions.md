@@ -1,6 +1,7 @@
 # Copilot Project Instructions
 
 <!-- working-memory:start -->
+
 ## Working Memory
 
 This project maintains a two-tier working memory at `_working-memory/` for cross-session context.

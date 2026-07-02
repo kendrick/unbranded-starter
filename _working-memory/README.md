@@ -44,15 +44,15 @@ For a one-time deeper hydration of an existing codebase — scanning code, git h
 
 If this project also runs a spec-driven process tool (Spec Kit, OpenSpec, Kiro, BMAD, Agent OS, Task Master), the two layers divide cleanly. That tool owns the per-feature verbs (constitution, specs, plans, tasks); working memory owns the durable, cross-feature project state. The installer detects a neighbor and prints a who-owns-what map; this is the boundary it encodes:
 
-| Concern | Lives in |
-|---|---|
-| Inviolable principles | the neighbor's principles file (constitution / project.md / steering / standards) |
-| Tactical "how we code" | `conventions.md`, which points at the principles file and never restates it |
-| A feature's what and how | the neighbor's per-feature specs and plans |
-| Cross-feature decisions | `decisionLog.md`; per-feature rationale stays in the neighbor's plan, promoted up as a one-line pointer when it's cross-cutting |
-| Canonical data contracts | `dataContracts.md`, pointing at the neighbor's data model rather than duplicating it |
-| Current focus | `activeContext.md` |
-| Agent entry point | `AGENTS.md`; the kit's section is fenced, the neighbor keeps its own dirs |
+| Concern                  | Lives in                                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| Inviolable principles    | the neighbor's principles file (constitution / project.md / steering / standards)                                               |
+| Tactical "how we code"   | `conventions.md`, which points at the principles file and never restates it                                                     |
+| A feature's what and how | the neighbor's per-feature specs and plans                                                                                      |
+| Cross-feature decisions  | `decisionLog.md`; per-feature rationale stays in the neighbor's plan, promoted up as a one-line pointer when it's cross-cutting |
+| Canonical data contracts | `dataContracts.md`, pointing at the neighbor's data model rather than duplicating it                                            |
+| Current focus            | `activeContext.md`                                                                                                              |
+| Agent entry point        | `AGENTS.md`; the kit's section is fenced, the neighbor keeps its own dirs                                                       |
 
 Altitude rule: the principles file states a principle; `conventions.md` encodes the concrete pattern that honors it. They nest, they don't duplicate.
 
