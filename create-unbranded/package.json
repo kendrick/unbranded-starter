@@ -1,0 +1,25 @@
+{
+	"name": "create-unbranded",
+	"type": "module",
+	"version": "0.1.0",
+	"description": "`npm create unbranded` — a launcher for the unbranded CLI.",
+	"author": "Kendrick Arnett",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/kendrick/unbranded-starter.git",
+		"directory": "create-unbranded"
+	},
+	"bin": {
+		"create-unbranded": "./index.js"
+	},
+	"files": [
+		"index.js"
+	],
+	"engines": {
+		"node": ">=24"
+	},
+	"dependencies": {
+		"unbranded": "0.1.0"
+	}
+}

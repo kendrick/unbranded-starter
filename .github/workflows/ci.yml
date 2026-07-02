@@ -47,6 +47,27 @@ jobs:
       - name: E2E tests
         run: pnpm vitest run --config vitest.e2e.config.ts
 
+      # The create-unbranded launcher pins an exact `unbranded` version that
+      # only resolves from the registry after publish, so the sole pre-publish
+      # way to exercise the real forwarding path is to pack both packages and
+      # co-install the tarballs into a throwaway project.
+      - name: Smoke-test create-unbranded launcher
+        run: |
+          # --ignore-scripts keeps the prepare hook (simple-git-hooks) from
+          # printing to the stdout we capture the tarball name from. dist/ is
+          # already built by the Build step above, so packing skips no work.
+          root_tgz="$(cd "$GITHUB_WORKSPACE" && npm pack --silent --ignore-scripts)"
+          create_tgz="$(cd "$GITHUB_WORKSPACE/create-unbranded" && npm pack --silent --ignore-scripts)"
+          smoke="$(mktemp -d)"
+          cd "$smoke"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund --ignore-scripts \
+            "$GITHUB_WORKSPACE/$root_tgz" \
+            "$GITHUB_WORKSPACE/create-unbranded/$create_tgz"
+          expected="$(node -p 'require("'"$GITHUB_WORKSPACE"'/package.json").version')"
+          actual="$(./node_modules/.bin/create-unbranded --version)"
+          test "$actual" = "$expected"
+
       # Add this step if the project uses the opt-in/playwright module:
       # - name: Install Playwright browsers
       #   run: pnpm exec playwright install --with-deps chromium webkit
