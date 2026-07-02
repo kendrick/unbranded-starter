@@ -14,6 +14,22 @@ Each entry follows this shape:
 **Alternatives considered:** What was rejected, and why.
 ```
 
+## 2026-07-02: Lower the Node floor to 22 (supersedes the Node 24 decision)
+
+**Source:** commit 88f1ae3; issue #5
+
+**Context:** `engines` required Node 24, but an audit found nothing in the code needs it — the only modern API, `import.meta.dirname`, is stable since Node 20.11. Node 22 is the active LTS most machines run, so the 24 floor filtered out real users for no reason. The earlier "Bump minimum Node to 24" entry below rested on a backwards comment in `src/util/paths.ts`, now corrected.
+**Decision:** `engines.node`, the tsup target, and `.nvmrc` all move to 22 (and `create-unbranded` with them). Since npm only warns on `engines`, `cli.ts` checks `process.versions.node` up front and exits 1 with one readable line when it's too old. CI runs a Node 22 + 24 matrix.
+**Alternatives considered:** Keeping 24 and only adding the friendly guard — rejected; the floor itself was the problem, not just the error message. Dropping to Node 20 — rejected, 20 is EOL (2026-04).
+
+## 2026-07-02: New-project PM detection is mode-aware and skips the ancestor walk-up
+
+**Source:** commit 47d002f; issue #2
+
+**Context:** New-project mode created an empty directory, then detected the package manager against it before `writeAndInstall` seeded `package.json`, so `inspectPm` returned `no-pkg`/null before the user-agent check ran. The flagship "start from nothing" flow skipped install, post-installs, and husky.
+**Decision:** Detection takes the target mode. In new mode it reads `npm_config_user_agent` first, prompts otherwise, and never returns null. It skips the ancestor lockfile walk-up entirely so a stray parent lockfile can't pose as intent. Consequence: new mode no longer hits the workspace-leaf refusal (that refusal shares the walk-up loop), so scaffolding a brand-new isolated subdirectory inside a monorepo is now allowed. Augment mode is unchanged, workspace-leaf refusal included.
+**Alternatives considered:** Keeping the walk-up but special-casing the null return — rejected; the walk-up is meaningless for a brand-new directory and its signals are noise.
+
 ## 2026-07-02: Release automation via release-please + npm trusted publishing
 
 **Source:** commits 004de87, 9f6e966; issues #1, #6
