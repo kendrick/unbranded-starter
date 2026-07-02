@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { confirm, isCancel, log } from '@clack/prompts';
+import { spawnOptions } from './spawn';
 
 export interface PostInstallOpts {
 	targetDir: string;
@@ -89,7 +90,7 @@ function runOne(cwd: string, pm: Pm, pi: PostInstall): Promise<RunResult> {
 	log.step(`${pi.id}: ${bin} ${args.join(' ')}`);
 
 	return new Promise((resolve) => {
-		const child = spawn(bin, args, { cwd, stdio: 'inherit' });
+		const child = spawn(bin, args, spawnOptions(cwd));
 
 		// Same SIGINT discipline as install/run.ts: SIGTERM first, escalate
 		// to SIGKILL after 5s if the child ignores it. .unref() lets us exit

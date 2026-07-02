@@ -7,13 +7,14 @@ on:
 
 jobs:
   build-and-test:
-    # Falls back to ubuntu until an `os:` axis exists, so widening to more OSes
-    # is a one-line addition to the matrix below with no change here.
-    runs-on: ${{ matrix.os || 'ubuntu-latest' }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        # 22 is the engines floor (active LTS); 24 is the current line.
+        # Windows matters because package-manager binaries are .cmd shims there,
+        # which bare spawn can't exec. 22 is the engines floor (active LTS); 24
+        # is the current line.
+        os: [ubuntu-latest, windows-latest]
         node: [22, 24]
     steps:
       - uses: actions/checkout@v4
@@ -65,6 +66,10 @@ jobs:
       # way to exercise the real forwarding path is to pack both packages and
       # co-install the tarballs into a throwaway project.
       - name: Smoke-test create-unbranded launcher
+        # Bash-only harness (mktemp, $GITHUB_WORKSPACE). The launcher itself is
+        # cross-platform, and its forwarding is exercised by the Windows install
+        # and e2e legs above, so running it once on Linux is enough.
+        if: runner.os != 'Windows'
         run: |
           # --ignore-scripts keeps the prepare hook (simple-git-hooks) from
           # printing to the stdout we capture the tarball name from. dist/ is

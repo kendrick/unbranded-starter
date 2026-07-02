@@ -6,6 +6,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { spinner } from '@clack/prompts';
 import { mergePackageJson } from '../fs/merge-json';
+import { spawnOptions } from './spawn';
 
 export interface WriteAndInstallOpts {
 	targetDir: string;
@@ -84,7 +85,7 @@ interface InstallResult {
 
 function runInstall(cwd: string, pm: Pm): Promise<InstallResult> {
 	return new Promise((resolve) => {
-		const child = spawn(pm, ['install'], { cwd, stdio: 'inherit' });
+		const child = spawn(pm, ['install'], spawnOptions(cwd));
 		let cancelled = false;
 
 		// Catch Ctrl-C while install is running. Send SIGTERM first for a clean
