@@ -14,6 +14,14 @@ Each entry follows this shape:
 **Alternatives considered:** What was rejected, and why.
 ```
 
+## 2026-07-02: `--latest` writes the `latest` dist-tag (not caret ranges)
+
+**Source:** commit 1133581; issue #3
+
+**Context:** The README and a manifest comment advertised `--latest` as the escape hatch from pinned versions, but the flag was never implemented (parseArgs threw). The open question was what "latest" should write into package.json.
+**Decision:** Rewrite every dependency spec to the bare `latest` dist-tag. It's the most faithful reading of the flag (opt out of pinning, take bleeding edge), threads a single boolean from the CLI to `writeAndInstall`, and keeps single-run reproducibility via the lockfile. A `versions: "pinned" | "latest"` recipe field gives config mode parity; the flag wins when both are set.
+**Alternatives considered:** Resolving to caret ranges via `pm add pkg@latest`, rejected as a bigger change (per-PM add semantics, no-PM path) that quietly re-pins after one run, which contradicts the opt-out intent.
+
 ## 2026-07-02: Lower the Node floor to 22 (supersedes the Node 24 decision)
 
 **Source:** commit 88f1ae3; issue #5
