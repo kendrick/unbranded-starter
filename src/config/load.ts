@@ -64,7 +64,7 @@ export function validate(raw: unknown, knownUnits: Set<UnitId>): Config {
 		u => typeof u !== 'string' || !knownUnits.has(u as UnitId),
 	);
 	if (unknownUnits.length > 0) {
-		throw new Error(`config.units contains unknown ids: ${unknownUnits.join(', ')}`);
+		throw new Error(`config.units contains unknown ids: ${unknownUnits.join(', ')}. Run 'unbranded list' to see valid ids.`);
 	}
 
 	if (obj.pm !== null && (typeof obj.pm !== 'string' || !VALID_PMS.has(obj.pm))) {

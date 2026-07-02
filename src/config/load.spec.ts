@@ -72,6 +72,11 @@ describe('validate (in-memory)', () => {
 			.toThrow(/unknown ids: made-up-unit/);
 	});
 
+	it('points unknown-unit errors at `unbranded list`', () => {
+		expect(() => validate({ ...baseValid, units: ['made-up-unit'] }, KNOWN_UNITS))
+			.toThrow(/unbranded list/);
+	});
+
 	it('rejects non-array units', () => {
 		expect(() => validate({ ...baseValid, units: 'core-eslint' }, KNOWN_UNITS))
 			.toThrow(/units must be an array/);

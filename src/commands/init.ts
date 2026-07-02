@@ -1,6 +1,6 @@
 import type { Pm } from '../detect/pm';
 import type { CopyResult } from '../fs/copy';
-import type { Category, Unit, UnitId } from '../manifest/types';
+import type { Unit, UnitId } from '../manifest/types';
 import { existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { cancel, confirm, groupMultiselect, intro, isCancel, log, note, outro } from '@clack/prompts';
@@ -11,27 +11,11 @@ import { copyFileOp } from '../fs/copy';
 import { maybeInitGit } from '../install/git';
 import { runPostInstalls } from '../install/post';
 import { writeAndInstall } from '../install/run';
+import { CATEGORY_LABELS } from '../manifest/categories';
 import { UNITS } from '../manifest/index';
 import { resolveSelection } from '../manifest/resolve';
 import { cancelAndExit } from '../util/cancel';
 import { PKG_ROOT } from '../util/paths';
-
-// Human-readable group headers for the multiselect. Falls back to the raw
-// category key if a future category lands here without an explicit label.
-// Display order is the object's insertion order, since we read it that way
-// when building the multiselect groups. Foundation first because those are
-// the universal basics; monorepo last because it's the most niche.
-const CATEGORY_LABELS: Record<Category, string> = {
-	foundation: 'Foundation',
-	lint: 'Linting',
-	types: 'TypeScript',
-	style: 'Styles',
-	test: 'Testing',
-	e2e: 'End-to-end',
-	ui: 'UI',
-	git: 'Git hooks',
-	monorepo: 'Monorepo',
-};
 
 export interface RunInitOpts {
 	configPath?: string;
