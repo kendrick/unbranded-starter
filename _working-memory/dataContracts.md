@@ -16,4 +16,21 @@
 <!--      payloads from external systems, naming conventions.                -->
 <!-- Mix and match per contract; not every contract needs the same format.  -->
 
-_No contracts defined yet._
+This is a typed project, so the code IS the contract. Consume these through the TypeScript types rather than duplicating shapes here.
+
+## Manifest (the core contract)
+
+`src/manifest/types.ts` — `UnitId`, `Category`, `FileOp`, `PostInstall`, `Unit`. Every installable unit is a `Unit`; the registry `UNITS` lives in `src/manifest/index.ts`. Adding a unit means adding a `Unit` there and (usually) a `UnitId` member. `FileOp.src` is `PKG_ROOT`-relative posix; `FileOp.dest` is target-cwd-relative and supports `{projectName}` interpolation.
+
+## Selection resolution
+
+`src/manifest/resolve.ts` — `ResolveResult` is a tagged union: `{ kind: 'ok', ids, auto }` | `{ kind: 'missing-required', unit, needs }` | `{ kind: 'conflict', pair }`. `resolveSelection()` is pure: it closes the seed under `implies` (fixed-point), then validates `requires` and (symmetric) `excludes`.
+
+## `--config` recipe (external contract)
+
+`src/config/load.ts` — `Config` = `{ units: UnitId[]; pm: Pm | null; onConflict: 'overwrite' | 'skip'; postInstall: 'all' | 'none'; projectName?: string }`. `validate()` is the source of truth for what a recipe JSON may contain; unknown `units` ids fail immediately. `projectName` is required only in new-project mode. This is also documented as a table in `README.md`. v1 is JSON-only.
+
+## Detection results
+
+- `src/detect/pm.ts` — `Pm` (`'npm' | 'pnpm' | 'yarn' | 'bun'`), `PmSource`, and `PmInspection` (tagged union: `detected` | `needs-prompt` | `no-pkg` | `workspace-leaf`).
+- `src/detect/target.ts` — `TargetMode` (`'augment' | 'new'`), `TargetContext`, `Inspection`.

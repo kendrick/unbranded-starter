@@ -14,4 +14,50 @@ Each entry follows this shape:
 **Alternatives considered:** What was rejected, and why.
 ```
 
-_No decisions logged yet._
+## 2026-07-01: Disable `pnpm/yaml-enforce-settings`
+
+**Source:** commit 10777d7
+
+**Context:** `eslint-plugin-pnpm` auto-enables when a `pnpm-workspace.yaml` is present. On every `--fix` it injects `trustPolicy: no-downgrade` into the workspace file, which makes pnpm reject the lockfile.
+**Decision:** Turn the rule off in `eslint.config.mjs` so monorepos scaffolded from this starter stay clean.
+**Alternatives considered:** Leaving it on and documenting a manual cleanup step — rejected as a footgun the CLI would inflict on every generated monorepo.
+
+## 2026-07-01: Adopt a two-tier working memory kit
+
+**Source:** commit b21b077
+
+**Context:** No durable place for agents to read project shape, decisions, and negative knowledge across sessions.
+**Decision:** Scaffold `_working-memory/` with an always-read `activeContext.md` (local, gitignored, ≤20 lines) plus on-demand slower-moving files. `AGENTS.md` holds the canonical on-demand table.
+**Alternatives considered:** Stuffing everything into `CLAUDE.md`/`AGENTS.md` — rejected because it doesn't scale and offers no eviction discipline.
+
+## 2026-05-12: Non-interactive `--config` mode, JSON only in v1
+
+**Source:** commit aa823d3; `src/config/load.ts`
+
+**Context:** CI and reproducible recipes need a way to run without prompts.
+**Decision:** Add `--config <file>` taking a JSON recipe (`units`, `pm`, `onConflict`, `postInstall`, `projectName`); skip the Apply confirmation in this mode.
+**Alternatives considered:** YAML support — deferred. Easy to add later (key off extension, pull in `yaml`) but not load-bearing for the E2E suite that motivated the mode.
+
+## 2026-05-12: Bump minimum Node to 24
+
+**Source:** commit ac18ab4
+
+**Context:** `src/util/paths.ts` uses `import.meta.dirname` to anchor `PKG_ROOT`.
+**Decision:** Set `engines.node` to `>=24` and target `node24` in tsup; `import.meta.dirname` is then guaranteed.
+**Alternatives considered:** Polyfilling the dirname resolution for older Node — rejected as needless complexity for a greenfield tool.
+
+## 2026-05-12: Bundle `@antfu` peer deps explicitly in the eslint unit
+
+**Source:** commit fff58b4; `src/manifest/index.ts` (core-eslint)
+
+**Context:** The shipped `eslint.config.mjs` opts into `react: true` / `nextjs: true`. Without those optional peers installed, ESLint fails to load, and CI has no TTY for antfu's auto-install prompt.
+**Decision:** List the peers (`@eslint-react/eslint-plugin`, `@next/eslint-plugin-next`, `eslint-plugin-format`, `eslint-plugin-jsx-a11y`, `eslint-plugin-react-refresh`) explicitly in the `core-eslint` unit's `devDependencies`.
+**Alternatives considered:** Relying on antfu's interactive auto-install — rejected (see antipatterns).
+
+## 2026-05-12: Markdown formatting is Prettier-in-editor, not ESLint/CI
+
+**Source:** commit 9ee2639; `README.md` Philosophy
+
+**Context:** `@antfu/eslint-config` bundles dprint for non-code formatting, but dprint and Prettier disagree on prose wrap / list reflow, and loading the full antfu chain on every `.md` save hangs the editor.
+**Decision:** `markdown` is omitted from `.vscode` `eslint.validate`; a per-language override delegates `.md` formatting to Prettier. Code formatting stays with ESLint, which is the only thing `pnpm lint` runs. Markdown is editor-only, not in CI.
+**Alternatives considered:** Running both Prettier and dprint on code — rejected (see antipatterns).
