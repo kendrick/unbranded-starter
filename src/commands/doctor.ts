@@ -62,17 +62,15 @@ export function auditRepo(opts: { cwd: string }): AuditResult {
 		findings.push(missingFile(catalog, '.editorconfig', 'No .editorconfig, so editors won\'t agree on whitespace.', 'missing-editorconfig'));
 	}
 	if (!existsSync(join(cwd, '.gitattributes'))) {
-		findings.push({
-			id: 'missing-gitattributes',
-			message: 'No .gitattributes, so line endings can differ across platforms.',
-			fix: 'Add a .gitattributes with `* text=auto` to normalize line endings.',
-		});
+		findings.push(missingFile(catalog, '.gitattributes', 'No .gitattributes, so line endings can differ across platforms.', 'missing-gitattributes'));
 	}
 	if (!hasCiWorkflow(cwd)) {
+		const unit = unitForDest(catalog, '.github/workflows/ci.yml');
 		findings.push({
 			id: 'no-ci-workflow',
 			message: 'No CI workflow found (.github/workflows or .gitlab-ci.yml).',
-			fix: 'Add a CI workflow, e.g. .github/workflows/ci.yml, to run lint and tests on push.',
+			fix: fixForUnit(unit, 'Add a CI workflow, e.g. .github/workflows/ci.yml, to run lint and tests on push.'),
+			unit,
 		});
 	}
 
@@ -112,12 +110,15 @@ export function auditRepo(opts: { cwd: string }): AuditResult {
 	// --- package.json-derived checks (only meaningful with a manifest) ---
 	if (hasPkg) {
 		if (!hasNodeVersionPin(cwd, pkg)) {
-			findings.push(missingFile(
-				catalog,
-				'.nvmrc',
-				'No Node version pin (engines.node, .nvmrc, or packageManager all absent).',
-				'no-node-version',
-			));
+			// core-node-version computes .nvmrc at write time rather than shipping it
+			// as a template, so unitForDest can't see it — name the unit directly.
+			const unit = unitForId(catalog, 'core-node-version');
+			findings.push({
+				id: 'no-node-version',
+				message: 'No Node version pin (engines.node, .nvmrc, or packageManager all absent).',
+				fix: fixForUnit(unit, 'Add a .nvmrc and engines.node to pin the Node version.'),
+				unit,
+			});
 		}
 		if (!hasScript(pkg, 'test')) {
 			findings.push(missingScript(catalog, 'test', 'no-test-script', 'No test script in package.json.'));
@@ -218,6 +219,13 @@ function unitForDest(catalog: ReturnType<typeof buildCatalog>, dest: string): Un
 
 function unitForScript(catalog: ReturnType<typeof buildCatalog>, script: string): UnitId | undefined {
 	return catalog.units.find(u => u.packageJsonPatch?.scripts && script in u.packageJsonPatch.scripts)?.id;
+}
+
+// For units whose fix isn't discoverable by a destination file — core-node-version
+// computes its output instead of shipping a template, so it has no catalog dest.
+// Verifies the id is really in the catalog rather than trusting a bare string.
+function unitForId(catalog: ReturnType<typeof buildCatalog>, id: UnitId): UnitId | undefined {
+	return catalog.units.find(u => u.id === id)?.id;
 }
 
 // `rename` swaps the basename while keeping dest's directory, so the file that

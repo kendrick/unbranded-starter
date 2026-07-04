@@ -34,8 +34,8 @@ describe('classify', () => {
 
 describe('computeDiff', () => {
 	let tmp: string;
-	// core-editorconfig ships two plain-copy files with no interpolation, so the
-	// template bytes are exactly what a clean scaffold would have written.
+	// core-editorconfig ships .editorconfig as a plain copy with no interpolation,
+	// so the template bytes are exactly what a clean scaffold would have written.
 	const templatePath = join(PKG_ROOT, '.editorconfig');
 	const template = readFileSync(templatePath);
 

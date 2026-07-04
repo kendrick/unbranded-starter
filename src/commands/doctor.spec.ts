@@ -59,12 +59,31 @@ describe('auditRepo', () => {
 		expect(finding?.fix).toContain('core-editorconfig');
 	});
 
-	it('flags a missing .gitattributes with a command remedy (no unit ships it)', () => {
+	it('names the core-gitattributes unit when .gitattributes is missing', () => {
 		cleanRepo(tmp);
 		rmSync(join(tmp, '.gitattributes'));
 		const finding = auditRepo({ cwd: tmp }).findings.find(f => f.id === 'missing-gitattributes');
-		expect(finding).toBeDefined();
-		expect(finding?.unit).toBeUndefined();
+		expect(finding?.unit).toBe('core-gitattributes');
+		expect(finding?.fix).toContain('core-gitattributes');
+	});
+
+	it('names the core-node-version unit when no Node pin exists', () => {
+		// core-node-version computes .nvmrc rather than shipping it, so the fix-it
+		// unit can't be found by destination — doctor has to name it directly.
+		cleanRepo(tmp);
+		rmSync(join(tmp, '.nvmrc'));
+		writeJson(join(tmp, 'package.json'), { name: 'clean', scripts: { test: 'vitest run', lint: 'eslint .' }, devDependencies: { typescript: '5.9.3' } });
+		const finding = auditRepo({ cwd: tmp }).findings.find(f => f.id === 'no-node-version');
+		expect(finding?.unit).toBe('core-node-version');
+		expect(finding?.fix).toContain('core-node-version');
+	});
+
+	it('names the opt-ci-github unit when no CI workflow exists', () => {
+		cleanRepo(tmp);
+		rmSync(join(tmp, '.github'), { recursive: true });
+		const finding = auditRepo({ cwd: tmp }).findings.find(f => f.id === 'no-ci-workflow');
+		expect(finding?.unit).toBe('opt-ci-github');
+		expect(finding?.fix).toContain('opt-ci-github');
 	});
 
 	it('reports coexisting lockfiles and which one detection would pick', () => {

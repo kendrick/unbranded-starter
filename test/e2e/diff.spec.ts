@@ -11,8 +11,8 @@ function writeJson(path: string, obj: unknown): void {
 	writeFileSync(path, JSON.stringify(obj, null, 2));
 }
 
-// Scaffold core-editorconfig (two plain-copy files, no deps, no install) into an
-// augment-mode project so a .unbranded.json lands for `diff` to read.
+// Scaffold core-editorconfig (a single plain-copy file, no deps, no install) into
+// an augment-mode project so a .unbranded.json lands for `diff` to read.
 function scaffold(tmp: string): void {
 	writeJson(join(tmp, 'package.json'), { name: 'drift-project', version: '0.0.0' });
 	writeJson(join(tmp, 'recipe.json'), {
@@ -45,7 +45,7 @@ describe('unbranded diff', () => {
 		expect(state.schema).toBe(1);
 		expect(state.units).toContain('core-editorconfig');
 		// One hash per written file, keys sorted for a clean VCS diff.
-		expect(Object.keys(state.files)).toEqual(['.editorconfig', '.nvmrc']);
+		expect(Object.keys(state.files)).toEqual(['.editorconfig']);
 		expect(state.files['.editorconfig']).toMatch(/^[0-9a-f]{64}$/);
 		// Top-level keys serialize in sorted order: files, schema, units, version.
 		expect([...raw.matchAll(/^ {2}"(\w+)":/gm)].map(m => m[1])).toEqual(['files', 'schema', 'units', 'version']);
