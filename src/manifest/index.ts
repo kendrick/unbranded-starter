@@ -9,12 +9,23 @@ export const UNITS: Unit[] = [
 	{
 		id: 'core-editorconfig',
 		category: 'foundation',
-		label: 'EditorConfig + .nvmrc',
-		description: 'Cross-editor whitespace rules and a Node version pin.',
+		label: 'EditorConfig',
+		description: 'Cross-editor whitespace and charset rules.',
 		files: [
 			{ src: '.editorconfig', dest: '.editorconfig' },
-			{ src: '.nvmrc', dest: '.nvmrc' },
 		],
+	},
+	{
+		id: 'core-node-version',
+		category: 'foundation',
+		label: 'Node version pin',
+		description: 'Pins .nvmrc, engines.node, and the Corepack packageManager to your current toolchain.',
+		// No static files. .nvmrc and the two package.json pins are computed at
+		// write time from the running node major and the detected package manager
+		// (see install/run.ts), so they track the environment rather than a value
+		// frozen when this CLI was published. That's also why it owns .nvmrc alone
+		// — a static copy from core-editorconfig could only ever be a stale guess.
+		files: [],
 	},
 	{
 		id: 'core-eslint',

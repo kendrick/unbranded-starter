@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -26,18 +26,23 @@ describe('cli inline flags (non-interactive)', () => {
 		// Augment mode (pre-seeded package.json) skips the project-name prompt,
 		// --pm skips detection, --yes skips the Apply confirm. No stdin is piped,
 		// so a lingering prompt would block until the suite timeout and fail here.
-		// core-editorconfig has no deps, so the npm install is a no-op and offline.
+		// Neither unit has deps, so the npm install is a no-op and offline.
 		writeJson(join(tmp, 'package.json'), { name: 'inline-app', version: '0.0.0' });
 
 		const result = spawnSync(
 			'node',
-			[CLI, '--units', 'core-editorconfig', '--pm', 'npm', '--on-conflict', 'overwrite', '--post-install', 'none', '--yes'],
+			[CLI, '--units', 'core-editorconfig,core-node-version', '--pm', 'npm', '--on-conflict', 'overwrite', '--post-install', 'none', '--yes'],
 			{ cwd: tmp, encoding: 'utf-8' },
 		);
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		expect(existsSync(join(tmp, '.editorconfig'))).toBe(true);
+		// core-node-version computes .nvmrc and the package.json pins from the
+		// running toolchain, so a real `npm --version` lands in packageManager.
 		expect(existsSync(join(tmp, '.nvmrc'))).toBe(true);
+		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8'));
+		expect(pkg.engines?.node).toMatch(/^>=\d+$/);
+		expect(pkg.packageManager).toMatch(/^npm@/);
 	});
 
 	it('lets inline --units override the recipe field while inheriting the rest', () => {

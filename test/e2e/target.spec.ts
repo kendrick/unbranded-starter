@@ -40,9 +40,8 @@ describe('cli --target', () => {
 		});
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
-		// core-editorconfig ships these two files; they must land in app/.
+		// core-editorconfig ships this file into the --target dir, not the cwd.
 		expect(existsSync(join(work, 'app', '.editorconfig'))).toBe(true);
-		expect(existsSync(join(work, 'app', '.nvmrc'))).toBe(true);
 		// And nothing should have been scaffolded into the invocation cwd.
 		expect(existsSync(join(work, '.editorconfig'))).toBe(false);
 	});

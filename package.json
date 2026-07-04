@@ -18,7 +18,6 @@
 	},
 	"files": [
 		".editorconfig",
-		".nvmrc",
 		"dist",
 		"eslint.config.mjs",
 		"opt-in",

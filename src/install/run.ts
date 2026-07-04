@@ -6,6 +6,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { spinner } from '@clack/prompts';
 import { mergePackageJson } from '../fs/merge-json';
+import { computeNodeVersion, NODE_VERSION_UNIT_ID, queryPmVersion } from './node-version';
 import { spawnOptions } from './spawn';
 
 export interface WriteAndInstallOpts {
@@ -42,7 +43,24 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 		devDependencies: opts.latest ? toLatest(u.devDependencies) : u.devDependencies,
 		scripts: u.packageJsonPatch?.scripts,
 		engines: u.packageJsonPatch?.engines,
+		packageManager: u.packageJsonPatch?.packageManager,
 	}));
+
+	// core-node-version can't ship its output as a static template: .nvmrc,
+	// engines, and packageManager all have to reflect the running environment.
+	// Materialize it here, appending a computed patch and writing .nvmrc, so a
+	// single source drives all three and existing user pins still win the merge.
+	if (opts.units.some(u => u.id === NODE_VERSION_UNIT_ID)) {
+		const pins = computeNodeVersion({
+			nodeVersion: process.versions.node,
+			pm: opts.pm,
+			pmVersion: await queryPmVersion(opts.pm, opts.targetDir),
+		});
+		patches.push({ engines: pins.engines, packageManager: pins.packageManager });
+		const nvmrcPath = join(opts.targetDir, '.nvmrc');
+		if (!existsSync(nvmrcPath))
+			writeFileSync(nvmrcPath, pins.nvmrc);
+	}
 
 	const merged = mergePackageJson(existing, patches);
 	writeFileSync(pkgPath, `${JSON.stringify(merged, null, indent)}\n`);

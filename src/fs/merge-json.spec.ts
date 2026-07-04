@@ -44,6 +44,32 @@ describe('mergePackageJson', () => {
 		expect(result.engines).toEqual({ node: '>=22', pnpm: '>=10' });
 	});
 
+	it('adds packageManager when the target has none', () => {
+		const result = mergePackageJson(
+			{ name: 'foo' },
+			[{ packageManager: 'pnpm@10.0.0' }],
+		);
+		expect(result.packageManager).toBe('pnpm@10.0.0');
+	});
+
+	it('keeps an existing packageManager rather than clobbering the user pin', () => {
+		// Corepack treats this field as authoritative; if the user already pinned
+		// a version we must not silently swap it for the ambient one.
+		const result = mergePackageJson(
+			{ packageManager: 'yarn@4.1.0' },
+			[{ packageManager: 'pnpm@10.0.0' }],
+		);
+		expect(result.packageManager).toBe('yarn@4.1.0');
+	});
+
+	it('sorts packageManager between engines and scripts', () => {
+		const result = mergePackageJson(
+			{ name: 'foo', scripts: { build: 'tsc' }, engines: { node: '>=22' } },
+			[{ packageManager: 'pnpm@10.0.0' }],
+		);
+		expect(Object.keys(result)).toEqual(['name', 'engines', 'packageManager', 'scripts']);
+	});
+
 	it('alphabetizes dependencies', () => {
 		const result = mergePackageJson(
 			{},

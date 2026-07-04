@@ -3,6 +3,9 @@ export interface MergeInput {
 	devDependencies?: Record<string, string>;
 	scripts?: Record<string, string>;
 	engines?: Record<string, string>;
+	// Corepack's pin, e.g. 'pnpm@10.0.0'. A top-level scalar rather than a map,
+	// so it gets its own existing-wins merge instead of the dep/script treatment.
+	packageManager?: string;
 }
 
 // Top-level keys in conventional order. Anything not listed here is appended
@@ -74,6 +77,11 @@ export function mergePackageJson(
 			// Same treatment: existing constraints win. If the user has pinned
 			// node 22 and a unit wants >=20, we leave 22 in place.
 			merged.engines = mergeAdditive(merged.engines, patch.engines);
+		}
+		if (patch.packageManager && !merged.packageManager) {
+			// Existing wins: a user who pinned yarn keeps it even if we detected
+			// pnpm running. We only fill the field in when it's genuinely absent.
+			merged.packageManager = patch.packageManager;
 		}
 	}
 

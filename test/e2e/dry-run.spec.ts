@@ -92,8 +92,8 @@ describe('cli --dry-run (config mode)', () => {
 		const result = spawnSync('node', [CLI, '--config', 'recipe.json', '--dry-run'], { cwd: tmp, encoding: 'utf-8' });
 
 		expect(result.status).toBe(0);
-		// EditorConfig writes .editorconfig + .nvmrc into a bare project: two creates.
-		expect(result.stdout).toMatch(/Would: 2 written, 0 merged, 0 appended, 0 skipped, 0 conflicts\./);
+		// EditorConfig writes just .editorconfig into a bare project: one create.
+		expect(result.stdout).toMatch(/Would: 1 written, 0 merged, 0 appended, 0 skipped, 0 conflicts\./);
 	});
 
 	it('reports a conflict regardless of the recipe onConflict (plan is resolution-independent)', () => {

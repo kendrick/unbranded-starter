@@ -15,7 +15,6 @@ describe('buildCatalog', () => {
 		const editorconfig = catalog.units.find(u => u.id === 'core-editorconfig');
 		expect(editorconfig?.files).toEqual([
 			{ dest: '.editorconfig' },
-			{ dest: '.nvmrc' },
 		]);
 		// src anchors a path under PKG_ROOT — meaningless to any consumer and a
 		// leak of our internal layout. It must not appear on any file entry.
