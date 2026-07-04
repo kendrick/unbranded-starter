@@ -6,7 +6,23 @@
 
 ## Build / Test / Lint
 
-<!-- Copy exact commands so agents don't guess. -->
+- Install: `pnpm install`
+- Build: `pnpm build`
+- Unit tests: `pnpm test`
+- E2E tests: `pnpm test:e2e` (builds first)
+- Everything: `pnpm test:all`
+- Typecheck: `pnpm typecheck`
+- Lint: `pnpm lint` (CI parity: `CI=true pnpm lint`)
+
+## Machine-readable surface
+
+The CLI describes itself. Prefer these over reading the manifest by hand:
+
+- `unbranded list --json` — the full unit catalog: ids, categories, descriptions, and the paths each unit writes.
+- `unbranded doctor --json` — audits the current repo and names the unit that fixes each gap.
+- `unbranded diff --json` — drift of scaffolded files against the recorded `.unbranded.json`.
+
+A scaffolded repo carries `.unbranded.json` at its root (units plus one content hash per file); `diff` and `doctor` read it, and its `_tool` field says as much.
 
 <!-- working-memory:start -->
 
