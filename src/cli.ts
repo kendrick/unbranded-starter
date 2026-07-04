@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { log } from '@clack/prompts';
+import { runDiff } from './commands/diff';
 import { runInit } from './commands/init';
 import { runList } from './commands/list';
 import { nodeVersionError } from './util/node-version';
@@ -20,6 +21,7 @@ const HELP = `Usage: unbranded [command] [options]
 
 Commands:
   list                  Print the unit catalog; add --json for machine-readable output
+  diff                  Compare tracked files against .unbranded.json; exits non-zero on drift
 
 Options:
   --config, -c <file>            Run non-interactively with a JSON recipe
@@ -31,8 +33,8 @@ Options:
   --yes                          Apply without the confirmation prompt; needs --units (or --config)
   --latest                       Install the latest dependency versions, not the pinned defaults (recipe field: versions)
   --dry-run                      Report what each file would do, then exit without writing or installing
-  --diff                         With --dry-run, print the unified diff for every file that would change
-  --json                         With \`list\`, emit the catalog as JSON
+  --diff                         With --dry-run (or \`diff\`), print the unified patch for every changed file
+  --json                         With \`list\` or \`diff\`, emit machine-readable output
   --help, -h                     Show this help
   --version, -v                  Show the version
 
@@ -42,6 +44,8 @@ Examples:
   unbranded                                            # interactive prompt flow
   unbranded list                                       # print the unit catalog
   unbranded list --json                                # machine-readable catalog for tooling
+  unbranded diff                                       # report drift of tracked files vs. the recorded state
+  unbranded diff --json                                # CI drift check: non-zero exit when files have drifted
   unbranded --config recipe.json                       # reproducible, scriptable run
   unbranded --units core-eslint,core-vitest --pm pnpm --yes   # fully non-interactive, no recipe file
   unbranded --latest                                   # take the newest versions, not the pins
@@ -89,6 +93,12 @@ const command = positionals[0];
 if (command === 'list') {
 	runList({ json: values.json });
 	process.exit(0);
+}
+
+// Read-only drift check against .unbranded.json. No target, no TTY; exit code
+// carries the verdict (non-zero on drift) so CI can gate on it directly.
+if (command === 'diff') {
+	process.exit(runDiff({ json: values.json, diff: values.diff }));
 }
 
 // A stray positional is almost always a typo (`unbranded lst`). Failing loudly

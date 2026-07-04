@@ -1,0 +1,109 @@
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { PKG_ROOT } from '../../src/util/paths';
+
+const CLI = join(PKG_ROOT, 'dist/cli.js');
+
+function writeJson(path: string, obj: unknown): void {
+	writeFileSync(path, JSON.stringify(obj, null, 2));
+}
+
+// Scaffold core-editorconfig (two plain-copy files, no deps, no install) into an
+// augment-mode project so a .unbranded.json lands for `diff` to read.
+function scaffold(tmp: string): void {
+	writeJson(join(tmp, 'package.json'), { name: 'drift-project', version: '0.0.0' });
+	writeJson(join(tmp, 'recipe.json'), {
+		units: ['core-editorconfig'],
+		pm: null,
+		onConflict: 'overwrite',
+		postInstall: 'none',
+	});
+	const applied = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+	expect(applied.status, `scaffold stderr: ${applied.stderr}`).toBe(0);
+}
+
+describe('unbranded diff', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-diff-'));
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	it('writes a deterministic, sorted, schema-versioned state file on apply', () => {
+		scaffold(tmp);
+
+		const raw = readFileSync(join(tmp, '.unbranded.json'), 'utf-8');
+		const state = JSON.parse(raw) as { schema: number; version: string; units: string[]; files: Record<string, string> };
+
+		expect(state.schema).toBe(1);
+		expect(state.units).toContain('core-editorconfig');
+		// One hash per written file, keys sorted for a clean VCS diff.
+		expect(Object.keys(state.files)).toEqual(['.editorconfig', '.nvmrc']);
+		expect(state.files['.editorconfig']).toMatch(/^[0-9a-f]{64}$/);
+		// Top-level keys serialize in sorted order: files, schema, units, version.
+		expect([...raw.matchAll(/^ {2}"(\w+)":/gm)].map(m => m[1])).toEqual(['files', 'schema', 'units', 'version']);
+	});
+
+	it('reports no drift and exits 0 right after a clean scaffold', () => {
+		scaffold(tmp);
+
+		const result = spawnSync('node', [CLI, 'diff'], { cwd: tmp, encoding: 'utf-8' });
+		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
+		expect(result.stdout).toMatch(/unchanged\s+\.editorconfig/);
+		expect(result.stdout).toContain('No drift.');
+	});
+
+	it('classifies a user edit and exits non-zero so CI catches drift', () => {
+		scaffold(tmp);
+		writeFileSync(join(tmp, '.editorconfig'), `${readFileSync(join(tmp, '.editorconfig'), 'utf-8')}\n# my override\n`);
+
+		const result = spawnSync('node', [CLI, 'diff'], { cwd: tmp, encoding: 'utf-8' });
+		expect(result.status).toBe(1);
+		expect(result.stdout).toMatch(/user-modified\s+\.editorconfig/);
+		expect(result.stdout).toContain('Drift detected.');
+	});
+
+	it('--diff prints the unified patch for a drifted file', () => {
+		scaffold(tmp);
+		writeFileSync(join(tmp, '.editorconfig'), `${readFileSync(join(tmp, '.editorconfig'), 'utf-8')}\n# my override\n`);
+
+		const plain = spawnSync('node', [CLI, 'diff'], { cwd: tmp, encoding: 'utf-8' });
+		const withDiff = spawnSync('node', [CLI, 'diff', '--diff'], { cwd: tmp, encoding: 'utf-8' });
+		expect(withDiff.status).toBe(1);
+		expect(withDiff.stdout).toContain('my override');
+		expect(withDiff.stdout.length).toBeGreaterThan(plain.stdout.length);
+	});
+
+	it('--json emits a stable machine-readable report and the drift flag', () => {
+		scaffold(tmp);
+		writeFileSync(join(tmp, '.editorconfig'), `${readFileSync(join(tmp, '.editorconfig'), 'utf-8')}\n# edit\n`);
+
+		const result = spawnSync('node', [CLI, 'diff', '--json'], { cwd: tmp, encoding: 'utf-8' });
+		expect(result.status).toBe(1);
+		const parsed = JSON.parse(result.stdout) as { drift: boolean; files: { path: string; status: string }[] };
+		expect(parsed.drift).toBe(true);
+		expect(parsed.files.find(f => f.path === '.editorconfig')?.status).toBe('user-modified');
+	});
+
+	it('gives a friendly nudge (exit 0) when the project was never tracked', () => {
+		// A bare dir with no .unbranded.json must not error or stack-trace.
+		const result = spawnSync('node', [CLI, 'diff'], { cwd: tmp, encoding: 'utf-8' });
+		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
+		expect(result.stdout).toMatch(/Run `unbranded`/);
+		expect(existsSync(join(tmp, '.unbranded.json'))).toBe(false);
+	});
+
+	it('documents `unbranded diff` distinctly from the --dry-run preview in --help', () => {
+		const result = spawnSync('node', [CLI, '--help'], { encoding: 'utf-8' });
+		expect(result.status).toBe(0);
+		expect(result.stdout).toContain('unbranded diff');
+		expect(result.stdout).toMatch(/Compare tracked files against \.unbranded\.json/);
+	});
+});
