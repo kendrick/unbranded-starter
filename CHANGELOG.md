@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0](https://github.com/kendrick/unbranded-starter/compare/v0.3.0...v0.4.0) (2026-07-04)
+
+
+### Features
+
+* add core-node-version unit and packageManager merge support ([dc34bff](https://github.com/kendrick/unbranded-starter/commit/dc34bff555d8b95909f063f081788859b1ba64d4)), closes [#21](https://github.com/kendrick/unbranded-starter/issues/21)
+* add unbranded doctor read-only repo audit ([f08bbaa](https://github.com/kendrick/unbranded-starter/commit/f08bbaa37dd9f60c5be8aa48460a7cef0179aa30)), closes [#20](https://github.com/kendrick/unbranded-starter/issues/20)
+* make .unbranded.json self-describing for agents ([b114bf6](https://github.com/kendrick/unbranded-starter/commit/b114bf624d9d8983cb7680c8683662f8e06ee4ed))
+* offer to save an interactive run as a recipe ([2069194](https://github.com/kendrick/unbranded-starter/commit/2069194d931514feaf8e0107405e39db72474557)), closes [#23](https://github.com/kendrick/unbranded-starter/issues/23)
+* ship gitattributes, vscode, and CI scaffold units ([b088376](https://github.com/kendrick/unbranded-starter/commit/b08837602353fc46756edd2deee0ae9554fd06de)), closes [#22](https://github.com/kendrick/unbranded-starter/issues/22)
+* track scaffolded files and add unbranded diff ([f7adbc6](https://github.com/kendrick/unbranded-starter/commit/f7adbc6b6de99e3be1a321e2093509afcddacbe7)), closes [#18](https://github.com/kendrick/unbranded-starter/issues/18)
+* warn on a dirty git tree before writing ([19de002](https://github.com/kendrick/unbranded-starter/commit/19de002e9db0ab26cb9933c6903d2ac335c8daf8)), closes [#19](https://github.com/kendrick/unbranded-starter/issues/19)
+
+
+### Bug Fixes
+
+* realign doctor and diff with v0.4's unit changes ([ff9912a](https://github.com/kendrick/unbranded-starter/commit/ff9912ade51553b56026e89af85fb4b9586b175d))
+
 ## [0.3.0](https://github.com/kendrick/unbranded-starter/compare/v0.2.0...v0.3.0) (2026-07-02)
 
 
