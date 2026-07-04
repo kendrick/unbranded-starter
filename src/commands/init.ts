@@ -2,10 +2,11 @@ import type { InlineFlags } from '../config/load';
 import type { Pm } from '../detect/pm';
 import type { CopyResult, FilePlan, PlanOutcome } from '../fs/copy';
 import type { Unit, UnitId } from '../manifest/types';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { cancel, confirm, groupMultiselect, intro, isCancel, log, note, outro } from '@clack/prompts';
 import { assertValidPm, loadConfig, resolveConfig } from '../config/load';
+import { buildRecipe, serializeRecipe } from '../config/recipe';
 import { detectPm } from '../detect/pm';
 import { detectTarget } from '../detect/target';
 import { copyFileOp, planFileOp, renderPlanDiff } from '../fs/copy';
@@ -216,6 +217,24 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 			units: selectedUnits,
 			auto: config?.postInstall,
 		});
+	}
+
+	// Explore interactively once, then replay everywhere: offer to freeze this run
+	// as a recipe. Only on a fully interactive run — a config or inline-flag run
+	// already has its source of truth, so re-emitting one is circular. Defaults to
+	// No so nobody who doesn't care pays more than one Enter.
+	const usedInlineFlags = inline.units !== undefined || inline.pm !== undefined
+		|| inline.onConflict !== undefined || inline.postInstall !== undefined || Boolean(inline.yes);
+	if (config === null && !usedInlineFlags) {
+		const save = await confirm({ message: 'Save this configuration as a recipe? (recipe.json)', initialValue: false });
+		if (isCancel(save))
+			return cancelAndExit();
+		if (save) {
+			const version = (JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf-8')) as { version: string }).version;
+			const dest = join(target.dir, 'recipe.json');
+			writeFileSync(dest, serializeRecipe(buildRecipe({ ids: resolution.ids, pm, latest, projectName, version })));
+			log.success(`Saved ${dest}. Replay it with \`unbranded --config recipe.json\`.`);
+		}
 	}
 
 	outro('Done.');
