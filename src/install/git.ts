@@ -69,3 +69,38 @@ function runGit(cwd: string, args: string[]): Promise<boolean> {
 		child.on('error', () => resolve(false));
 	});
 }
+
+// The stdout-capturing sibling of runGit. runGit inherits stdio so it can only
+// hand back a boolean; reading `git status --porcelain` needs the output itself,
+// so this pipes stdout while keeping spawnOptions' win32 shell handling. Resolves
+// null on a non-zero exit or a missing binary — same warn-and-continue posture as
+// runGit's false, so a broken git can never mask itself as a clean tree.
+export function gitCapture(cwd: string, args: string[]): Promise<string | null> {
+	return new Promise((resolve) => {
+		const child = spawn('git', args, { ...spawnOptions(cwd), stdio: 'pipe' });
+		let out = '';
+		child.stdout?.on('data', (chunk: Buffer) => {
+			out += chunk.toString();
+		});
+		child.on('exit', code => resolve(code === 0 ? out : null));
+		child.on('error', () => resolve(null));
+	});
+}
+
+// Porcelain output is one line per changed path; empty (or whitespace-only) means
+// a clean tree. Pure so the guard's decision is testable without spawning git.
+export function isDirty(porcelain: string): boolean {
+	return porcelain.trim().length > 0;
+}
+
+// True only when `dir` is a git repo carrying uncommitted changes. A non-repo, a
+// clean tree, or a git that won't run all read as false: the dirty-tree guard is
+// a safety net, and a net we can't verify shouldn't fire a false alarm. The `.git`
+// probe short-circuits the common non-repo case before paying for a spawn.
+export async function isDirtyGitTree(dir: string): Promise<boolean> {
+	if (!existsSync(join(dir, '.git'))) {
+		return false;
+	}
+	const status = await gitCapture(dir, ['status', '--porcelain']);
+	return status !== null && isDirty(status);
+}

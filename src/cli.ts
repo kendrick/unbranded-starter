@@ -33,6 +33,7 @@ Options:
   --on-conflict <overwrite|skip> How to treat existing files (recipe field: onConflict)
   --post-install <all|none>      Run post-install steps or skip them (recipe field: postInstall)
   --yes                          Apply without the confirmation prompt; needs --units (or --config)
+  --force                        Skip the dirty-tree guard even if the target repo has uncommitted changes (recipe field: force)
   --latest                       Install the latest dependency versions, not the pinned defaults (recipe field: versions)
   --dry-run                      Report what each file would do, then exit without writing or installing
   --diff                         With --dry-run (or \`diff\`), print the unified patch for every changed file
@@ -66,6 +67,7 @@ const { values, positionals } = parseArgs({
 		'on-conflict': { type: 'string' },
 		'post-install': { type: 'string' },
 		'yes': { type: 'boolean' },
+		'force': { type: 'boolean' },
 		'latest': { type: 'boolean' },
 		'dry-run': { type: 'boolean' },
 		'diff': { type: 'boolean' },
@@ -126,6 +128,7 @@ runInit({
 	// dir is stable even though a relative --config path is still read from here.
 	targetDir: values.target ? resolve(values.target) : undefined,
 	latest: values.latest,
+	force: values.force,
 	dryRun: values['dry-run'],
 	diff: values.diff,
 	inline: {

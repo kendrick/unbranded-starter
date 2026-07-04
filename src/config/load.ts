@@ -20,6 +20,10 @@ export interface Config {
 	// never creates a repo it wasn't asked to; the interactive flow prompts
 	// instead (and defaults that prompt to yes).
 	git: 'init' | 'init-commit' | 'none';
+	// Skips the dirty-tree guard. A recipe committed to a repo that's clean by
+	// construction (CI) sets this to drop the warning entirely; the --force flag
+	// is the per-run equivalent. Optional so an ordinary recipe still gets the net.
+	force?: boolean;
 }
 
 const VALID_PMS = new Set<string>(['npm', 'pnpm', 'yarn', 'bun']);
@@ -91,6 +95,9 @@ export function resolveConfig(fileConfig: Config | null, inline: InlineFlags, kn
 		// Not an inline flag — there's no --git yet, so it only ever comes from the
 		// recipe. Passing it through keeps `git: "init"` alive after the merge.
 		git: fileConfig?.git,
+		// Like git, force has no inline mirror: the --force flag rides its own
+		// RunInitOpts channel, so the merge only has to keep the recipe field alive.
+		force: fileConfig?.force,
 	}, knownUnits);
 }
 
@@ -132,6 +139,10 @@ export function validate(raw: unknown, knownUnits: Set<UnitId>): Config {
 		throw new Error('config.git must be "init", "init-commit", or "none" when present.');
 	}
 
+	if (obj.force !== undefined && typeof obj.force !== 'boolean') {
+		throw new TypeError('config.force must be a boolean when present.');
+	}
+
 	return {
 		units: obj.units as UnitId[],
 		pm: obj.pm as Pm | null,
@@ -140,5 +151,6 @@ export function validate(raw: unknown, knownUnits: Set<UnitId>): Config {
 		versions: (obj.versions as 'pinned' | 'latest') ?? 'pinned',
 		projectName: obj.projectName as string | undefined,
 		git: (obj.git as 'init' | 'init-commit' | 'none') ?? 'none',
+		force: obj.force as boolean | undefined,
 	};
 }

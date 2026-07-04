@@ -101,6 +101,16 @@ describe('validate (in-memory)', () => {
 		expect(() => validate({ ...baseValid, projectName: 42 }, KNOWN_UNITS))
 			.toThrow(/projectName must be a string/);
 	});
+
+	it('accepts a boolean force flag and leaves it undefined when omitted', () => {
+		expect(validate({ ...baseValid, force: true }, KNOWN_UNITS).force).toBe(true);
+		expect(validate(baseValid, KNOWN_UNITS).force).toBeUndefined();
+	});
+
+	it('rejects a non-boolean force', () => {
+		expect(() => validate({ ...baseValid, force: 'yes' }, KNOWN_UNITS))
+			.toThrow(/force must be a boolean/);
+	});
 });
 
 describe('loadConfig (file IO)', () => {
@@ -185,6 +195,13 @@ describe('resolveConfig (inline flags)', () => {
 	it('reuses the recipe validator for a bad inline pm', () => {
 		expect(() => resolveConfig(null, { units: 'core-eslint', pm: 'cargo' }, KNOWN_UNITS))
 			.toThrow(/pm must be one of/);
+	});
+
+	it('carries the recipe force flag through the merge', () => {
+		// force has no inline mirror (it rides the --force flag), so the only way it
+		// reaches the resolved config is by surviving resolveConfig untouched.
+		const file = validate({ ...{ units: ['core-eslint'], pm: null, onConflict: 'overwrite', postInstall: 'none' }, force: true }, KNOWN_UNITS);
+		expect(resolveConfig(file, {}, KNOWN_UNITS).force).toBe(true);
 	});
 });
 

@@ -9,7 +9,7 @@ import { assertValidPm, loadConfig, resolveConfig } from '../config/load';
 import { detectPm } from '../detect/pm';
 import { detectTarget } from '../detect/target';
 import { copyFileOp, planFileOp, renderPlanDiff } from '../fs/copy';
-import { maybeInitGit } from '../install/git';
+import { isDirtyGitTree, maybeInitGit } from '../install/git';
 import { runPostInstalls } from '../install/post';
 import { writeAndInstall } from '../install/run';
 import { CATEGORY_LABELS } from '../manifest/categories';
@@ -36,6 +36,9 @@ export interface RunInitOpts {
 	// still resolve against the invocation cwd, since loadConfig runs before this
 	// is threaded into detection and no process.chdir happens.
 	targetDir?: string;
+	// `--force`: skip the dirty-tree guard. Rides its own channel (like --latest)
+	// rather than InlineFlags; a recipe's `force` field is the config-mode twin.
+	force?: boolean;
 }
 
 export async function runInit(opts: RunInitOpts = {}): Promise<void> {
@@ -79,6 +82,26 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 
 	const target = await detectTarget({ projectName: config?.projectName, cwd: opts.targetDir });
 	log.info(`Target: ${target.dir} (${target.mode})`);
+
+	// On a clean tree `git checkout .` is a full undo of everything this run
+	// writes — the safety net augment users lean on. A dirty tree has no such
+	// net, so warn before the first write, never after. Only augment mode has a
+	// pre-existing repo; new mode's dir isn't a repo yet. --force (or a recipe
+	// `force`) opts out. Non-interactive runs (skipApply) only warn so CI can't
+	// hang on a prompt; interactive runs confirm, and a cancel exits 130.
+	const forced = Boolean(opts.force) || Boolean(config?.force);
+	if (!forced && target.mode === 'augment' && await isDirtyGitTree(target.dir)) {
+		log.warn('Uncommitted changes in the git working tree — a clean tree is your undo button (`git checkout .`) if this scaffold goes sideways.');
+		if (!skipApply) {
+			const proceed = await confirm({ message: 'Write into a dirty tree anyway?', initialValue: false });
+			if (isCancel(proceed))
+				return cancelAndExit();
+			if (!proceed) {
+				cancel('Cancelled.');
+				return;
+			}
+		}
+	}
 
 	// --pm rides the existing detectPm override channel, so it skips the PM
 	// prompt in interactive runs too, not just config mode. Inline --pm wins
