@@ -1,0 +1,45 @@
+# Normalize line endings to LF in the working tree on every platform, so a repo
+# cloned on Windows doesn't churn diffs or trip formatters that see CRLF as a
+# change. text=auto still lets git detect and leave real binaries untouched;
+# the patterns below just make that explicit for the common ones.
+* text=auto eol=lf
+
+# Images
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.avif binary
+
+# Fonts
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+
+# Archives
+*.zip binary
+*.gz binary
+*.tgz binary
+*.tar binary
+*.7z binary
+*.rar binary
+
+# Audio / video
+*.mp3 binary
+*.mp4 binary
+*.webm binary
+*.mov binary
+
+# Documents
+*.pdf binary
+
+# Lockfiles are generated and huge: keep them versioned but out of diffs so a
+# review isn't drowned in resolver noise.
+package-lock.json -diff
+pnpm-lock.yaml -diff
+yarn.lock -diff
+bun.lockb binary -diff

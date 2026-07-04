@@ -14,6 +14,18 @@ export const UNITS: Unit[] = [
 		files: [
 			{ src: '.editorconfig', dest: '.editorconfig' },
 		],
+		recommendedExtensions: ['editorconfig.editorconfig'],
+	},
+	{
+		id: 'core-gitattributes',
+		category: 'foundation',
+		label: 'Git attributes',
+		description: 'Normalizes line endings to LF and marks common binaries so diffs and merges stay clean.',
+		files: [
+			// Shipped as templates/gitattributes (no leading dot) so npm keeps it in
+			// the tarball; it lands as .gitattributes in the target.
+			{ src: 'templates/gitattributes', dest: '.gitattributes' },
+		],
 	},
 	{
 		id: 'core-node-version',
@@ -55,6 +67,7 @@ export const UNITS: Unit[] = [
 				'lint:fix': 'eslint . --fix',
 			},
 		},
+		recommendedExtensions: ['dbaeumer.vscode-eslint'],
 		// The eslint config sets `typescript: true`, which makes the antfu
 		// preset attempt to load typescript. Without TS installed the config
 		// itself fails to load — pull it in automatically.
@@ -100,6 +113,7 @@ export const UNITS: Unit[] = [
 				'lint:css:fix': 'stylelint "**/*.css" --fix --allow-empty-input',
 			},
 		},
+		recommendedExtensions: ['stylelint.vscode-stylelint'],
 	},
 	{
 		id: 'core-tailwind',
@@ -112,6 +126,7 @@ export const UNITS: Unit[] = [
 			'tailwindcss': '4.3.0',
 			'@tailwindcss/postcss': '4.3.0',
 		},
+		recommendedExtensions: ['bradlc.vscode-tailwindcss'],
 	},
 	{
 		id: 'core-postcss',
@@ -143,6 +158,7 @@ export const UNITS: Unit[] = [
 				'test:watch': 'vitest',
 			},
 		},
+		recommendedExtensions: ['vitest.explorer'],
 	},
 	{
 		id: 'opt-playwright',
@@ -169,6 +185,7 @@ export const UNITS: Unit[] = [
 				default: true,
 			},
 		],
+		recommendedExtensions: ['ms-playwright.playwright'],
 	},
 	{
 		id: 'opt-shadcn',
@@ -219,6 +236,38 @@ export const UNITS: Unit[] = [
 			},
 		],
 	},
+	{
+		id: 'opt-vscode',
+		category: 'editor',
+		label: 'VS Code workspace',
+		description: 'Shared settings.json (merged, not clobbered) plus an extensions.json generated from the units you picked.',
+		files: [
+			{ src: 'opt-in/vscode/settings.json', dest: '.vscode/settings.json', mode: 'merge-json' },
+			// No extensions.json here — it's generated at write time from the union
+			// of recommendedExtensions across the selected units (see
+			// install/vscode-extensions.ts), so it tracks the real selection instead
+			// of a static blob. opt-vscode adds none of its own, so with nothing else
+			// picked it degrades to an empty recommendation set rather than looping
+			// back on itself.
+		],
+	},
+	{
+		id: 'opt-ci-github',
+		category: 'ci',
+		label: 'GitHub Actions CI',
+		description: 'Runs install, lint, typecheck, and test on push and PR via GitHub Actions (pnpm).',
+		files: [
+			{ src: 'opt-in/ci-github/ci.yml', dest: '.github/workflows/ci.yml' },
+		],
+		// The shipped workflow calls pnpm lint / typecheck / test by name, so it
+		// only passes on a fresh scaffold if those scripts exist — pull in the units
+		// that define them (eslint drags in typescript via its own implies).
+		// core-node-version writes the packageManager field pnpm/action-setup reads.
+		implies: ['core-eslint', 'core-vitest', 'core-node-version'],
+	},
+	// opt-agents and opt-renovate from the original write-up are deferred (see
+	// issue #22): opt-agents would push a whole working-memory framework, and
+	// opt-renovate has no in-repo source yet. Each deserves its own issue.
 	{
 		id: 'opt-monorepo',
 		category: 'monorepo',

@@ -1,9 +1,11 @@
 export type UnitId
 	= | 'core-eslint' | 'core-stylelint' | 'core-typescript' | 'core-tailwind'
 		| 'core-vitest' | 'core-postcss' | 'core-editorconfig' | 'core-node-version'
-		| 'opt-monorepo' | 'opt-husky' | 'opt-playwright' | 'opt-shadcn';
+		| 'core-gitattributes'
+		| 'opt-monorepo' | 'opt-husky' | 'opt-playwright' | 'opt-shadcn'
+		| 'opt-vscode' | 'opt-ci-github';
 
-export type Category = 'foundation' | 'lint' | 'style' | 'types' | 'test' | 'e2e' | 'monorepo' | 'ui' | 'git';
+export type Category = 'foundation' | 'lint' | 'style' | 'types' | 'test' | 'e2e' | 'monorepo' | 'ui' | 'git' | 'editor' | 'ci';
 
 export interface FileOp {
 	// Path relative to PKG_ROOT, written posix-style. Manifest authors don't
@@ -48,6 +50,13 @@ export interface Unit {
 	dependencies?: Record<string, string>;
 	devDependencies?: Record<string, string>;
 	files: FileOp[];
+
+	// Marketplace ids (publisher.name) this unit wants recommended in VS Code.
+	// opt-vscode reads these across the *selected* units to generate
+	// .vscode/extensions.json, so the recommendation set tracks what the user
+	// actually installed rather than a frozen blob. Internal — never surfaced in
+	// the public catalog.
+	recommendedExtensions?: string[];
 
 	// Resolver semantics during selection:
 	//   implies  — auto-select these too

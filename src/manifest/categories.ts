@@ -15,6 +15,8 @@ export const CATEGORY_LABELS: Record<Category, string> = {
 	e2e: 'End-to-end',
 	ui: 'UI',
 	git: 'Git hooks',
+	editor: 'Editor',
+	ci: 'CI',
 	monorepo: 'Monorepo',
 };
 

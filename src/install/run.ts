@@ -2,12 +2,13 @@ import type { Pm } from '../detect/pm';
 import type { MergeInput } from '../fs/merge-json';
 import type { Unit } from '../manifest/types';
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { spinner } from '@clack/prompts';
 import { mergePackageJson } from '../fs/merge-json';
 import { computeNodeVersion, NODE_VERSION_UNIT_ID, queryPmVersion } from './node-version';
 import { spawnOptions } from './spawn';
+import { buildRecommendations, VSCODE_UNIT_ID } from './vscode-extensions';
 
 export interface WriteAndInstallOpts {
 	targetDir: string;
@@ -62,6 +63,13 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 			writeFileSync(nvmrcPath, pins.nvmrc);
 	}
 
+	// opt-vscode's extensions.json is computed for the same reason .nvmrc is: the
+	// recommendation set only makes sense relative to the units actually picked,
+	// so it can't be a static template. Generate it here and union it into any
+	// file the user already has.
+	if (opts.units.some(u => u.id === VSCODE_UNIT_ID))
+		writeVscodeExtensions(opts.targetDir, opts.units);
+
 	const merged = mergePackageJson(existing, patches);
 	writeFileSync(pkgPath, `${JSON.stringify(merged, null, indent)}\n`);
 
@@ -104,6 +112,33 @@ function detectIndent(content: string): string {
 			return match[1];
 	}
 	return '  ';
+}
+
+// Materialize .vscode/extensions.json from the selected units. A fresh file
+// defaults to tab indent so it matches the settings.json opt-vscode ships;
+// when the user already has one we detect their indent, keep their existing
+// `recommendations` (and any sibling keys like unwantedRecommendations), and
+// only fold our additions in.
+function writeVscodeExtensions(targetDir: string, units: Unit[]): void {
+	const dir = join(targetDir, '.vscode');
+	const path = join(dir, 'extensions.json');
+
+	let base: Record<string, unknown> = {};
+	let existing: string[] = [];
+	let indent = '\t';
+	if (existsSync(path)) {
+		const raw = readFileSync(path, 'utf-8');
+		base = JSON.parse(raw) as Record<string, unknown>;
+		if (Array.isArray(base.recommendations))
+			existing = base.recommendations.filter((v): v is string => typeof v === 'string');
+		indent = detectIndent(raw);
+	}
+
+	// Spread base first so a user's sibling keys survive; `recommendations` then
+	// overwrites in place (or appends if the file never had it).
+	const out = { ...base, recommendations: buildRecommendations(units, existing) };
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(path, `${JSON.stringify(out, null, indent)}\n`);
 }
 
 interface InstallResult {
