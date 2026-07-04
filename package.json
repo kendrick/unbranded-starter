@@ -6,10 +6,28 @@
 	"description": "Interactive CLI to scaffold your preferred project tooling into any project, using your existing package manager.",
 	"author": "Kendrick Arnett",
 	"license": "MIT",
+	"homepage": "https://github.com/kendrick/unbranded-starter#readme",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/kendrick/unbranded-starter.git"
 	},
+	"bugs": "https://github.com/kendrick/unbranded-starter/issues",
+	"keywords": [
+		"scaffold",
+		"scaffolding",
+		"cli",
+		"generator",
+		"boilerplate",
+		"starter",
+		"project-setup",
+		"developer-tools",
+		"eslint",
+		"typescript",
+		"tailwindcss",
+		"vitest",
+		"stylelint",
+		"package-manager"
+	],
 	"exports": {
 		".": "./dist/cli.js"
 	},
