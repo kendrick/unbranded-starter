@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { log } from '@clack/prompts';
 import { runDiff } from './commands/diff';
+import { runDoctor } from './commands/doctor';
 import { runInit } from './commands/init';
 import { runList } from './commands/list';
 import { nodeVersionError } from './util/node-version';
@@ -22,6 +23,7 @@ const HELP = `Usage: unbranded [command] [options]
 Commands:
   list                  Print the unit catalog; add --json for machine-readable output
   diff                  Compare tracked files against .unbranded.json; exits non-zero on drift
+  doctor                Read-only repo audit; maps findings to fix-it units. --strict exits non-zero
 
 Options:
   --config, -c <file>            Run non-interactively with a JSON recipe
@@ -34,7 +36,8 @@ Options:
   --latest                       Install the latest dependency versions, not the pinned defaults (recipe field: versions)
   --dry-run                      Report what each file would do, then exit without writing or installing
   --diff                         With --dry-run (or \`diff\`), print the unified patch for every changed file
-  --json                         With \`list\` or \`diff\`, emit machine-readable output
+  --json                         With \`list\`, \`diff\`, or \`doctor\`, emit machine-readable output
+  --strict                       With \`doctor\`, exit non-zero when the audit finds anything
   --help, -h                     Show this help
   --version, -v                  Show the version
 
@@ -46,6 +49,8 @@ Examples:
   unbranded list --json                                # machine-readable catalog for tooling
   unbranded diff                                       # report drift of tracked files vs. the recorded state
   unbranded diff --json                                # CI drift check: non-zero exit when files have drifted
+  unbranded doctor                                     # audit the current repo and map gaps to fix-it units
+  unbranded doctor --strict --json                     # repo-hygiene CI gate: non-zero exit on any finding
   unbranded --config recipe.json                       # reproducible, scriptable run
   unbranded --units core-eslint,core-vitest --pm pnpm --yes   # fully non-interactive, no recipe file
   unbranded --latest                                   # take the newest versions, not the pins
@@ -65,6 +70,7 @@ const { values, positionals } = parseArgs({
 		'dry-run': { type: 'boolean' },
 		'diff': { type: 'boolean' },
 		'json': { type: 'boolean' },
+		'strict': { type: 'boolean' },
 		'help': { type: 'boolean', short: 'h' },
 		'version': { type: 'boolean', short: 'v' },
 	},
@@ -99,6 +105,12 @@ if (command === 'list') {
 // carries the verdict (non-zero on drift) so CI can gate on it directly.
 if (command === 'diff') {
 	process.exit(runDiff({ json: values.json, diff: values.diff }));
+}
+
+// Read-only repo audit: guaranteed zero writes, cwd only. Default exit is 0 so a
+// report never fails a job; --strict turns findings into a non-zero exit.
+if (command === 'doctor') {
+	process.exit(runDoctor({ json: values.json, strict: values.strict }));
 }
 
 // A stray positional is almost always a typo (`unbranded lst`). Failing loudly
