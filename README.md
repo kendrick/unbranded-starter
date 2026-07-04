@@ -13,7 +13,23 @@
 
 [![npm version](https://img.shields.io/npm/v/unbranded.svg)](https://www.npmjs.com/package/unbranded)
 
-An interactive CLI that adds project tooling to any directory or repo, using whichever package manager you already have. Eleven installable units across a bunch of categories. Pinned versions by default, `--latest` opts out per run.
+Add your preferred tooling to any project, new or existing, using the package manager you already have. Fifteen à la carte units, pinned for reproducibility, that merge into what's already there instead of overwriting it.
+
+## Why unbranded
+
+Most scaffolders are a one-time event. `create-next-app`, `create-t3-app`, and the rest generate a fresh project on day zero and then they're done. The config they leave behind is yours to maintain by hand forever after, and if you're not starting from scratch, they don't help at all.
+
+But most of the repos you touch already exist, and the tooling questions never really stop. unbranded is built for that. It runs on a brand-new directory or a repo with ten thousand commits, adds only the units you pick, and keeps earning its keep long after the first run.
+
+### What sets it apart
+
+- **It works on repos that already exist.** Point it at a live project and it augments in place, folding into your `package.json` and config files rather than clobbering them. A real conflict stops for an overwrite-or-skip prompt with a diff.
+- **It uses your package manager.** npm, pnpm, yarn, or bun, detected from your lockfile. No tool forces its own on you.
+- **À la carte, not a monolith.** Pick the units you want and a resolver pulls in whatever they depend on, showing you the full set before it writes anything. No eject, no all-or-nothing template.
+- **Reproducible by default.** Every version is pinned. `--latest` opts out per run, and you can save any interactive run as a recipe to replay in CI or on the next project.
+- **It stays useful past day one.** Every run records what it wrote, so `unbranded diff` can show how far a project has drifted from its scaffold and `unbranded doctor` can audit any repo and name the exact unit that closes each gap.
+
+The name is the point: no framework lock-in, no house brand.
 
 ## Quickstart
 
@@ -21,7 +37,7 @@ An interactive CLI that adds project tooling to any directory or repo, using whi
 npx unbranded
 ```
 
-Run inside a directory that already has a `package.json` and it augments that project in place. Run anywhere else and it asks for a project name, then creates and enters the new directory. The CLI detects your package manager based on its lockfile (priority: pnpm → bun → yarn → npm) and asks what you'd like to install.
+Run it inside a directory that already has a `package.json` and it augments that project in place. Run it anywhere else and it asks for a project name, then creates and enters the new directory. It detects your package manager from the lockfile (pnpm → bun → yarn → npm), then asks what you'd like to install.
 
 A run looks roughly like this:
 
@@ -32,10 +48,10 @@ A run looks roughly like this:
 ●  Package manager: pnpm
 │
 ◇  What do you want to install?
-│  [Foundation] EditorConfig + .nvmrc
+│  [Foundation] EditorConfig
+│  [Foundation] Node version pin
 │  [Linting]    ESLint
 │  [TypeScript] TypeScript
-│  [Styles]     Tailwind v4
 │  …
 │
 □  Plan
@@ -52,68 +68,99 @@ A run looks roughly like this:
 └  Done.
 ```
 
-## What you can install
+## What You Can Install
 
-**Foundations**
+Fifteen units, grouped by category. Selecting one can pull in others: ESLint implies TypeScript, PostCSS and shadcn/ui imply Tailwind, and the GitHub Actions unit implies the lint and test units its workflow runs. Auto-added units are tagged `(auto)` in the plan.
 
-- EditorConfig + `.nvmrc`. Cross-editor whitespace rules and a Node version pin.
+**Foundation**
+
+- **EditorConfig** — cross-editor whitespace and charset rules.
+- **Git attributes** — normalizes line endings to LF and marks the common binaries so diffs and merges stay clean.
+- **Node version pin** — writes `.nvmrc`, `engines.node`, and the Corepack `packageManager` field from your running toolchain, so all three agree instead of drifting apart.
 
 **Linting**
 
-- ESLint. `@antfu/eslint-config` base with React, Next.js, TypeScript, and a 28-rule jsx-a11y strict block. Tabs and single quotes by default, with arrow parens always. Handles JS/TS/JSON/MD/YAML/CSS/HTML formatting through `eslint-plugin-format`.
+- **ESLint** — `@antfu/eslint-config` with React, Next.js, TypeScript, and a strict jsx-a11y block. Tabs, single quotes, arrow parens. Formats JS/TS/JSON/YAML/CSS/HTML through `eslint-plugin-format`.
 
 **TypeScript**
 
-- TypeScript. The full strict suite plus `noUncheckedIndexedAccess`, `noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax`, `noImplicitReturns`, and `noFallthroughCasesInSwitch`.
+- **TypeScript** — the full strict suite plus `noUncheckedIndexedAccess` and the rest.
 
 **Styles**
 
-- Stylelint. Standard config with a Tailwind-aware preset; Tailwind v4 directives allowed.
-- Tailwind v4. No JS config file; add `@import "tailwindcss";` to your stylesheet.
-- PostCSS. One-line config that loads `@tailwindcss/postcss`.
+- **Stylelint** — standard config with a Tailwind-aware preset.
+- **Tailwind v4** — no JS config; add `@import "tailwindcss";` to your stylesheet.
+- **PostCSS** — a one-line config that loads `@tailwindcss/postcss`.
 
 **Testing**
 
-- Vitest. jsdom environment with common excludes.
+- **Vitest** — jsdom environment with the common excludes.
 
-**End-to-End**
+**End-to-end**
 
-- Playwright + axe. Mobile-first device matrix with `@axe-core/playwright` wired right up.
+- **Playwright + axe** — mobile-first device matrix with `@axe-core/playwright` wired up.
 
 **UI**
 
-- shadcn/ui scaffolding. `components.json` plus the `cn()` utility at `src/lib/utils.ts`.
+- **shadcn/ui** — `components.json` plus the `cn()` utility at `src/lib/utils.ts`.
 
 **Git hooks**
 
-- Husky + lint-staged. Pre-commit hook that runs lint-staged on changed files.
+- **Husky + lint-staged** — a pre-commit hook that runs lint-staged on changed files.
 
-**Monorepo tooling**
+**Editor**
 
-- pnpm workspace + Turbo. Workspace yaml (with `onlyBuiltDependencies` for esbuild/sharp/unrs-resolver) and a turbo.json baseline.
+- **VS Code workspace** — `settings.json` merged into whatever you already have, plus an `extensions.json` generated from the units you picked.
 
-A few units pull others in automatically. Selecting ESLint auto-includes TypeScript; selecting shadcn/ui or PostCSS auto-includes Tailwind. The resolved set is shown in the plan summary before anything gets written.
+**CI**
 
-## How it works
+- **GitHub Actions** — a workflow that runs install, lint, typecheck, and test on push and pull request.
 
-1. **Target detection.** If `cwd` has a `package.json`, the CLI augments that project. Otherwise it asks for a project name and works inside the new directory it creates.
-2. **Package manager detection.** Walks up looking for `pnpm-lock.yaml`, `bun.lock(b)`, `yarn.lock`, or `package-lock.json`. Without a lockfile, the CLI tries the `packageManager` field next, then `npm_config_user_agent`. A select prompt is the last resort. If there's no `package.json` at all, files get written but install is skipped, and a "next steps" block tells you what to run.
-3. **Selection.** A Clack `groupMultiselect` organized by category offers intuitive navigation and selection, with unit descriptions as hints.
-4. **Resolution.** Closes the selection under `implies` (fixed-point iteration), then validates `requires`. Anything that violates an `excludes` rule fails fast. Auto-added units are tagged `(auto)` in the summary.
-5. **Preview.** A note shows the units, file count, dep count, and install command.
-6. **Apply on confirm.** Each file that already exists triggers an overwrite-or-skip prompt; a "show diff" option renders the conflict as a colored unified patch and re-prompts. The merged `package.json` lands with stable key ordering and alphabetized deps.
-7. **Install.** The detected package manager is spawned with a SIGINT trap. Ctrl-C kills the child cleanly and prints a rerun hint instead of leaving the project half-done.
-8. **Post-install hooks.** Per-unit confirms for things like `husky init` (gated on `.git/` existing) and `playwright install`. Each hook gets its own prompt with a sensible default.
+**Monorepo**
 
-## Non-interactive mode
+- **pnpm workspace + Turbo** — workspace yaml (with `onlyBuiltDependencies` for esbuild/sharp/unrs-resolver) and a turbo.json baseline.
 
-For CI and reproducible recipes:
+Run `unbranded list` for the same catalog in your terminal, or `unbranded list --json` to hand it to other tooling.
+
+## Beyond Day One
+
+These are the pieces that make unbranded worth keeping in a repo rather than running once and forgetting:
+
+- **`unbranded diff`** compares your tracked files against `.unbranded.json`, the state file every run records. It labels each file unchanged, user-modified, template-updated, or both, and exits non-zero when anything has drifted, so it drops straight into a CI check. Add `--diff` for the patch, `--json` for tooling.
+- **`unbranded doctor`** audits any repo, whether unbranded scaffolded it or not. It flags missing config, coexisting lockfiles, absent version pins, and more, and names the unit or command that fixes each finding. It writes nothing. `--strict` turns findings into a non-zero exit so it doubles as a repo-hygiene gate.
+
+Both are read-only and need no TTY, so they sit in CI as comfortably as at your prompt.
+
+## Commands and Flags
+
+```
+unbranded            interactive prompt flow (the default)
+unbranded list       print the unit catalog
+unbranded diff       report drift against the recorded state
+unbranded doctor     audit the current repo
+```
+
+The common flags, with `unbranded --help` for the rest:
+
+| Flag                          | Does                                                          |
+| ----------------------------- | ------------------------------------------------------------- |
+| `--config, -c <file>`         | run a JSON recipe non-interactively                           |
+| `--target <dir>`              | scaffold against `<dir>` instead of the current directory     |
+| `--units <a,b,c>`             | pick units inline, no recipe file                             |
+| `--pm <npm\|pnpm\|yarn\|bun>` | set the package manager and skip detection                    |
+| `--yes`                       | apply without the confirm prompt (needs `--units`/`--config`) |
+| `--latest`                    | take the newest versions, not the pins                        |
+| `--dry-run`                   | resolve and report, write nothing                             |
+| `--force`                     | skip the dirty-tree guard                                     |
+| `--json`                      | machine-readable output for `list`, `diff`, and `doctor`      |
+
+## Non-Interactive Runs
+
+For CI and reproducible setups, drive the whole flow from a recipe:
 
 ```bash
 unbranded --config recipe.json
 ```
-
-Recipe shape:
 
 ```json
 {
@@ -125,43 +172,41 @@ Recipe shape:
 }
 ```
 
-| Field         | Description                                                             |
-| ------------- | ----------------------------------------------------------------------- |
-| `units`       | Array of `UnitId` strings. Unknown ids fail validation immediately.     |
-| `pm`          | One of `"npm"`, `"pnpm"`, `"yarn"`, `"bun"`, or `null` to skip install. |
-| `onConflict`  | `"overwrite"` or `"skip"` for every file collision.                     |
-| `postInstall` | `"all"` or `"none"` for every per-unit hook.                            |
-| `projectName` | Required only when `cwd` has no `package.json` (new-project mode).      |
+| Field         | Description                                                     |
+| ------------- | --------------------------------------------------------------- |
+| `units`       | array of unit ids; an unknown id fails validation immediately   |
+| `pm`          | `"npm"`, `"pnpm"`, `"yarn"`, `"bun"`, or `null` to skip install |
+| `onConflict`  | `"overwrite"` or `"skip"` for every file collision              |
+| `postInstall` | `"all"` or `"none"` for every per-unit hook                     |
+| `projectName` | required only in new-project mode                               |
 
-Config mode skips the "Apply" confirmation.
+Config mode skips the Apply confirmation. Don't want to hand-write the JSON? Finish an interactive run and it offers to save your choices as `recipe.json`, so you can explore once and replay everywhere. Inline flags like `--units` and `--pm` work without a recipe too, and override the matching recipe field when both are set.
 
-### Exit codes
+### Exit Codes
 
-- `0` — finished (also when you answer No at the Apply prompt)
+- `0` — finished, including when you answer No at the Apply prompt
 - `1` — an error: a bad recipe, an unresolvable selection, or failed detection
 - `130` — cancelled with Ctrl-C at a prompt
 
-## Preview a run
+## Preview a Run
 
 `--dry-run` resolves the whole plan and prints what each file would do, then stops before writing a byte or touching the package manager. It works with or without `--config`.
 
 ```bash
 unbranded --dry-run
-unbranded --config recipe.json --dry-run
+unbranded --dry-run --diff   # add the unified patch for every file that would change
 ```
 
-Every file gets one verdict:
+Every file gets one verdict: `would create`, `would merge`, `would append`, `identical`, or `conflict`. The closing summary mirrors a real run's `Files:` line, reworded as `Would:`.
 
-- `would create`, when the file isn't there yet
-- `would merge` or `would append`, when the merge-json or append-if-missing mode would fold the template into a file you already have
-- `identical`, when the source already matches and there's nothing to do
-- `conflict`, when the file exists and differs, so a real run would stop to ask you which side wins
+## How It Works
 
-The closing summary mirrors the real run's `Files:` line, reworded as `Would:`. Add `--diff` to print the unified patch for every file that would change, so you can read the exact edit before you commit to it:
-
-```bash
-unbranded --dry-run --diff
-```
+1. **Target detection.** A `package.json` in the current directory means augment mode; otherwise the CLI asks for a name and works in the new directory it creates.
+2. **Package manager detection.** It walks up for a lockfile, then falls back to the `packageManager` field, then `npm_config_user_agent`, then a prompt. With no `package.json` at all, files are written and install is skipped, and a next-steps block tells you what to run.
+3. **Selection and resolution.** A category-grouped multiselect feeds a resolver that closes the set under `implies`, validates `requires`, and fails fast on an `excludes` violation.
+4. **Guardrails.** In an existing git repo with a dirty working tree, unbranded warns before it writes anything, since a clean tree is your undo button (`git checkout .`). `--force` skips the check.
+5. **Apply.** Existing files prompt for overwrite or skip with a colored diff. Structured units fold into `package.json`, `settings.json`, and ignore files rather than overwriting, and the run records what landed in `.unbranded.json`.
+6. **Install and hooks.** The detected package manager runs under a Ctrl-C trap, then per-unit post-install steps (like `husky init`, gated on a real `.git/`) prompt with sensible defaults.
 
 ## Requirements
 
@@ -169,15 +214,15 @@ Node 22 or newer.
 
 ## Philosophy
 
-- **`@antfu/eslint-config` over `eslint-config-next`** alone. @antfu gives uniform style + a11y + formatting across many bodies of work, not just Next projects.
-- **Tabs over spaces** because @antfu does tabs and I'm not picking that fight.
-- **`@antfu` does the formatting for code; Prettier is scoped to markdown only.** `@antfu/eslint-config` bundles `eslint-plugin-format` (dprint) for JS/TS/JSON/YAML/CSS/HTML. Prettier and dprint disagree on small persistent things (quote handling, key quoting), and I found that running both on code makes them fight each other. `pnpm lint` is the only thing CI runs for code. Editor format-on-save is wired to ESLint for code, Prettier for markdown only (via `.vscode/settings.json` per-language formatters) because Prettier's prose-wrap and list reflow are noticeably better than dprint's in my opinion. Markdown isn't in CI; it's an editor-only formatter for now. `.editorconfig` covers basics for editors without an ESLint integration.
+- **`@antfu/eslint-config` over `eslint-config-next`** alone. @antfu gives uniform style, a11y, and formatting across every kind of project, not just Next ones.
+- **Tabs over spaces**, because @antfu does tabs and I'm not picking that fight.
+- **@antfu formats the code; Prettier is scoped to markdown only.** `@antfu/eslint-config` bundles `eslint-plugin-format` (dprint) for JS/TS/JSON/YAML/CSS/HTML. Prettier and dprint disagree on small persistent things like quote and key handling, and running both on code just makes them fight. `pnpm lint` is the only thing CI runs for code. Format-on-save is wired to ESLint for code and Prettier for markdown (via per-language formatters in `.vscode/settings.json`), because Prettier's prose-wrap and list reflow read better to me than dprint's. Markdown isn't in CI; it's an editor-only formatter for now. `.editorconfig` covers the basics for editors without an ESLint integration.
 - **Stylelint exists** even on tiny projects. The same config works everywhere.
 - **Strict TypeScript is non-negotiable.** `noUncheckedIndexedAccess` catches the bugs the basic `strict` flag misses.
-- **`.vscode/` is committed.** If you work in VS Code, a clone of the repo should "just work."
-- **Mobile-first when testing.** Opt-in Playwright config defaults to Pixel + iPhone profiles.
+- **`.vscode/` is committed**, and there's a unit for it. If you work in VS Code, a clone should just work.
+- **Mobile-first when testing.** The opt-in Playwright config defaults to Pixel and iPhone profiles.
 
-## Manual clone
+## Manual Clone
 
 The CLI is the recommended path, but the repo itself works as a template if you'd rather hand-pick files:
 
