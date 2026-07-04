@@ -14,6 +14,30 @@ Each entry follows this shape:
 **Alternatives considered:** What was rejected, and why.
 ```
 
+## 2026-07-04: Seeding the roadmap into the GitHub tracker (milestones #4-#8, issues #25-#44)
+
+**Source:** a GitHub-side session that turned `tmp/roadmap.md` (gitignored) into milestones, issues, and labels on the `kendrick/unbranded-starter` repo; no code, no commits
+
+**Context:** The roadmap listed 20 features (F-00–F-19) grouped into five themed sections, each feature carrying an impact/effort quadrant, acceptance criteria, and "split into N issues" decomposition notes. Turning it into a live tracker meant settling several conventions the roadmap doc left open, so the maintainer chose them via a clarifying question — logged here because they govern any future issue-seeding.
+**Decision:**
+
+- Milestones are theme-named, not version-numbered — #4 "Trust & ergonomics — the runway to 1.0" (F-00–F-07), #5 "1.0 — Close the loop" (F-08–F-11 plus F-18, pulled up from the backlog), #6 "After 1.0 — Reach & polish" (F-12–F-13), #7 "2.0 — Unwelding" (F-14–F-16), #8 "Backlog — Community & agents" (F-17, F-19).
+- One issue per feature, 20 total (#25–#44 for F-00–F-19), created in roadmap-priority order so issue numbers ascend with priority. Each body opens with a `**Roadmap:** F-NN` line, then rationale, then the verbatim acceptance-criteria checklist, then any decomposition notes — kept in-body to split later when the work is scheduled, rather than exploding ~30 speculative sub-issues up front.
+- Issue titles are plain descriptive, not `feat(scope):`, to match the 23 existing (closed) issues — even though the roadmap doc's own conventions section suggested `feat(scope):`. Issue titles don't feed release-please; only commit messages do.
+- Type labels: `bug` on the one correctness fix (F-00 / #25); `documentation` on the two doc-first features (F-18 / #37 agent contract, F-14 / #40 unit schema); `enhancement` on the rest.
+- New `q1`–`q4` quadrant labels (color-graded green→red) carry the roadmap's impact/effort quadrants. It's a fresh taxonomy — the 23 pre-existing closed issues predate it and weren't backfilled.
+
+**Alternatives considered:** `feat(scope):` issue titles per the roadmap doc — rejected for consistency with the existing tracker. Exploding every decomposition note into sub-issues now — rejected as premature for speculative 2.0/backlog work; the notes ride in-body and split when scheduled. Version-numbered milestones — rejected; the maintainer groups by theme, not explicit versions.
+
+## 2026-07-04: v0.4 "keep it in the repo" shipped as 0.4.0 (issues #18-#23)
+
+**Source:** the v0.4 batch, built in three parallel worktrees (manifest/command/flow) via TDD then reconciled onto main by cherry-pick; released by release-please (tag v0.4.0, PR #24); issues #18-#23
+
+**Context:** v0.4 added the state file + `unbranded diff` (#18), a git dirty-tree guard with `--force` (#19), `unbranded doctor` (#20), the `core-node-version` unit + `packageManager` merge (#21), the mundane-pain units core-gitattributes/opt-vscode/opt-ci-github (#22), and save-as-recipe (#23). Two of those units can't ship as static templates, which drove the load-bearing design call.
+**Decision:** Node pins (`.nvmrc` + `engines.node` + `packageManager`) and `.vscode/extensions.json` are COMPUTED at write time — the node pins in `install/run.ts` from the running node major plus the detected pm's real version (all from one source, existing user values always win), and extensions.json in `install/vscode-extensions.ts` from each unit's `recommendedExtensions`. Shipped as 0.4.0 with the README rewritten for the feature set and `.unbranded.json` made self-describing for agents (the `_tool` breadcrumb plus the AGENTS.md machine-readable-surface pointer).
+**Known wart (now filed):** both computed writes land in `writeAndInstall` AFTER `writeStateFile`, so they're absent from `.unbranded.json` and `diff`/`doctor` miss their drift. Accepted at ship time; now tracked as issue #25 (F-00), first in the Trust milestone and a prerequisite for the day-2 verbs.
+**Alternatives considered:** Shipping the pins as static template files — rejected; a static `.nvmrc`/`packageManager` would lie about the running toolchain and stomp existing user values. Making opt-ci-github's workflow pm-aware — deferred (copy layer is static-only; would need another computed write). opt-agents and opt-renovate — deferred (no clean generic source yet).
+
 ## 2026-07-02: v0.3 real-repo ergonomics (issues #11-#17)
 
 **Source:** the v0.3 batch, built in three parallel worktrees then reconciled onto main; issues #11-#17
