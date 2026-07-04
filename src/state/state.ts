@@ -14,7 +14,16 @@ export const STATE_SCHEMA = 1;
 // leading dot keeps it out of the way while staying obviously ours.
 export const STATE_FILENAME = '.unbranded.json';
 
+// A self-describing breadcrumb. This file lands in every scaffolded repo, so an
+// agent or person who stumbles on it should learn what wrote it and which
+// commands read it without leaving the file. It sorts first in the envelope
+// (leading underscore) so it's the first thing you see.
+export const STATE_TOOL_HINT = 'unbranded manages the files below. Run `unbranded diff` to see your local drift or `unbranded doctor` to audit the repo; https://github.com/kendrick/unbranded-starter';
+
 export interface StateFile {
+	// A `_`-prefixed metadata key, mirroring the $schema/_comment convention in
+	// tool-written JSON. Sorts first, so it reads as the file's own header.
+	_tool: string;
 	schema: number;
 	// The CLI version that scaffolded this project. Recorded so a later diff/update
 	// can reason about which template generation the hashes below came from.
@@ -34,6 +43,7 @@ export function hashBuffer(buf: Buffer): string {
 // but sorting here keeps the in-memory value honest for tests too.
 export function buildStateFile(input: { version: string; units: UnitId[]; files: Record<string, string> }): StateFile {
 	return {
+		_tool: STATE_TOOL_HINT,
 		schema: STATE_SCHEMA,
 		version: input.version,
 		units: [...input.units].sort(),

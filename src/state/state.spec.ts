@@ -21,6 +21,12 @@ describe('buildStateFile', () => {
 		expect(state.units).toEqual(['core-eslint', 'core-typescript']);
 		expect(Object.keys(state.files)).toEqual(['a.txt', 'z.txt']);
 	});
+
+	it('carries a self-describing hint so an agent that finds the file knows what reads it', () => {
+		const state = buildStateFile({ version: '1.0.0', units: ['core-eslint'], files: {} });
+		expect(state._tool).toMatch(/unbranded diff/);
+		expect(state._tool).toMatch(/unbranded doctor/);
+	});
 });
 
 describe('serializeState', () => {
@@ -30,9 +36,9 @@ describe('serializeState', () => {
 		const b = serializeState(buildStateFile({ version: '1.0.0', units: ['core-eslint'], files: { a: '1', b: '2' } }));
 		expect(a).toBe(b);
 		expect(a.endsWith('\n')).toBe(true);
-		// Top-level keys alphabetical: files, schema, units, version.
+		// Top-level keys alphabetical; the _tool hint sorts first (underscore).
 		const order = [...a.matchAll(/^ {2}"(\w+)":/gm)].map(m => m[1]);
-		expect(order).toEqual(['files', 'schema', 'units', 'version']);
+		expect(order).toEqual(['_tool', 'files', 'schema', 'units', 'version']);
 	});
 });
 
