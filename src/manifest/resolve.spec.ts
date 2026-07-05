@@ -21,6 +21,7 @@ describe('resolveSelection', () => {
 			kind: 'ok',
 			ids: ['core-eslint'],
 			auto: [],
+			requiredBy: {},
 		});
 	});
 
@@ -48,6 +49,54 @@ describe('resolveSelection', () => {
 		if (result.kind !== 'ok')
 			return;
 		expect(result.auto).toEqual([]);
+		// A unit the user picked explicitly is never "required by" anything, even
+		// when another selection also implies it — the plan shouldn't annotate it.
+		expect(result.requiredBy).toEqual({});
+	});
+
+	it('records the direct requirer of an auto-added unit', () => {
+		const units = [
+			unit('core-eslint', { implies: ['core-typescript'] }),
+			unit('core-typescript'),
+		];
+		const result = resolveSelection(['core-eslint'], units);
+		expect(result).toMatchObject({ kind: 'ok' });
+		if (result.kind !== 'ok')
+			return;
+		expect(result.requiredBy).toEqual({ 'core-typescript': 'core-eslint' });
+	});
+
+	it('attributes a transitively-implied unit to its nearest requirer, not the seed', () => {
+		// A → B → C: C is pulled in by B, so the plan should read "required by B",
+		// not "required by A". Recording the nearest requirer is the whole point.
+		const units = [
+			unit('core-eslint', { implies: ['core-typescript'] }),
+			unit('core-typescript', { implies: ['core-tailwind'] }),
+			unit('core-tailwind'),
+		];
+		const result = resolveSelection(['core-eslint'], units);
+		expect(result).toMatchObject({ kind: 'ok' });
+		if (result.kind !== 'ok')
+			return;
+		expect(result.requiredBy).toEqual({
+			'core-typescript': 'core-eslint',
+			'core-tailwind': 'core-typescript',
+		});
+	});
+
+	it('credits the first requirer when two selected units imply the same unit', () => {
+		// Diamond: both seeds imply core-typescript. First-writer-wins keeps the
+		// attribution stable at the earlier seed instead of flip-flopping.
+		const units = [
+			unit('core-eslint', { implies: ['core-typescript'] }),
+			unit('core-stylelint', { implies: ['core-typescript'] }),
+			unit('core-typescript'),
+		];
+		const result = resolveSelection(['core-eslint', 'core-stylelint'], units);
+		expect(result).toMatchObject({ kind: 'ok' });
+		if (result.kind !== 'ok')
+			return;
+		expect(result.requiredBy).toEqual({ 'core-typescript': 'core-eslint' });
 	});
 
 	it('flags missing-required when a hard precondition is absent', () => {
