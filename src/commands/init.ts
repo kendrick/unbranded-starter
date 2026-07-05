@@ -4,9 +4,11 @@ import type { CopyResult, FilePlan, PlanOutcome } from '../fs/copy';
 import type { Unit, UnitId, UnitOption } from '../manifest/types';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
+import { styleText } from 'node:util';
 import { cancel, confirm, groupMultiselect, intro, isCancel, log, note, outro, select } from '@clack/prompts';
 import { assertValidPm, loadConfig, resolveConfig } from '../config/load';
 import { buildRecipe, serializeRecipe } from '../config/recipe';
+import { detectInstalledUnits } from '../detect/installed';
 import { detectPm } from '../detect/pm';
 import { detectTarget } from '../detect/target';
 import { copyFileOp, planFileOp, renderPlanDiff } from '../fs/copy';
@@ -117,7 +119,13 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 	const pm = await detectPm(target.dir, { override: pmOverride ?? fileConfig?.pm, mode: target.mode });
 	log.info(pm ? `Package manager: ${pm}` : 'No package.json — files will be written; install will be skipped.');
 
-	const selection = config ? config.units : await promptSelection(UNITS);
+	// Badge already-installed units, but only in an interactive augment run: a new
+	// project has nothing pre-existing to badge, and non-interactive paths never
+	// prompt, so detecting there would be wasted work that changes no output.
+	const installed = config === null && target.mode === 'augment'
+		? detectInstalledUnits({ cwd: target.dir, units: UNITS })
+		: new Set<UnitId>();
+	const selection = config ? config.units : await promptSelection(UNITS, installed);
 	if (selection.length === 0) {
 		outro('Nothing selected.');
 		return;
@@ -316,20 +324,28 @@ function targetDependencyNames(targetDir: string): string[] {
 	return [...Object.keys(read.pkg.dependencies ?? {}), ...Object.keys(read.pkg.devDependencies ?? {})];
 }
 
-async function promptSelection(units: Unit[]): Promise<UnitId[]> {
+// Exported for direct testing — pure, no clack. `dim` is injected so a test can pass
+// a visible tag fake and keep snapshots ANSI-free: styleText's output varies with
+// NO_COLOR and whether stdout is a TTY. Installed units get a dim "installed" badge on
+// the label but are never disabled — re-applying a unit is allowed, the badge is a hint.
+export function buildPickerOptions(
+	units: Unit[],
+	installed: Set<UnitId>,
+	dim: (s: string) => string = s => styleText('dim', s),
+): Record<string, { value: UnitId; label: string; hint?: string }[]> {
 	const grouped: Record<string, { value: UnitId; label: string; hint?: string }[]> = {};
 	for (const unit of units) {
 		const header = CATEGORY_LABELS[unit.category] ?? unit.category;
-		(grouped[header] ??= []).push({
-			value: unit.id,
-			label: unit.label,
-			hint: unit.description,
-		});
+		const label = installed.has(unit.id) ? `${unit.label} ${dim('installed')}` : unit.label;
+		(grouped[header] ??= []).push({ value: unit.id, label, hint: unit.description });
 	}
+	return grouped;
+}
 
+async function promptSelection(units: Unit[], installed: Set<UnitId>): Promise<UnitId[]> {
 	const result = await groupMultiselect<UnitId>({
 		message: 'What do you want to install?',
-		options: grouped,
+		options: buildPickerOptions(units, installed),
 		required: false,
 	});
 
