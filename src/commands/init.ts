@@ -4,8 +4,7 @@ import type { CopyResult, FilePlan, PlanOutcome } from '../fs/copy';
 import type { Unit, UnitId, UnitOption } from '../manifest/types';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { styleText } from 'node:util';
-import { cancel, confirm, groupMultiselect, intro, isCancel, log, note, outro, select } from '@clack/prompts';
+import { cancel, confirm, intro, isCancel, log, note, outro, select } from '@clack/prompts';
 import { assertValidPm, loadConfig, resolveConfig } from '../config/load';
 import { buildRecipe, serializeRecipe } from '../config/recipe';
 import { detectInstalledUnits } from '../detect/installed';
@@ -15,11 +14,11 @@ import { copyFileOp, planFileOp, renderPlanDiff } from '../fs/copy';
 import { isDirtyGitTree, maybeInitGit } from '../install/git';
 import { runPostInstalls } from '../install/post';
 import { writeAndInstall } from '../install/run';
-import { CATEGORY_LABELS } from '../manifest/categories';
 import { detectEslintFlavor } from '../manifest/eslint-config';
 import { UNITS } from '../manifest/index';
 import { applyUnitOptions, buildOptionSchema } from '../manifest/options';
 import { resolveSelection } from '../manifest/resolve';
+import { unitPicker } from '../prompts/unit-picker/prompt';
 import { writeStateFile } from '../state/state';
 import { cancelAndExit } from '../util/cancel';
 import { readPackageJson } from '../util/package-json';
@@ -125,7 +124,27 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 	const installed = config === null && target.mode === 'augment'
 		? detectInstalledUnits({ cwd: target.dir, units: UNITS })
 		: new Set<UnitId>();
-	const selection = config ? config.units : await promptSelection(UNITS, installed);
+
+	// The interactive picker returns chosen flavors alongside the ids, so cycling a
+	// flavor inline (←/→) stands in for the old follow-up select prompt. A recipe run
+	// skips the picker entirely and takes its selection from config.
+	let selection: UnitId[];
+	let pickerFlavors: Record<string, string> = {};
+	if (config) {
+		selection = config.units;
+	}
+	else {
+		const picked = await unitPicker({
+			message: 'What do you want to install?',
+			units: UNITS,
+			installed,
+			initialFlavors: pickerInitialFlavors(target.dir),
+		});
+		if (isCancel(picked))
+			return cancelAndExit();
+		selection = picked.ids;
+		pickerFlavors = picked.flavors;
+	}
 	if (selection.length === 0) {
 		outro('Nothing selected.');
 		return;
@@ -146,12 +165,13 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 		.map(id => byId.get(id))
 		.filter((u): u is Unit => u !== undefined);
 
-	// Resolve each selected unit's options (core-eslint's flavor today) to a
-	// concrete value, then bake them in. A recipe/inline value wins; otherwise an
-	// interactive run prompts and a non-interactive one takes the environment
-	// default. skipApply gates the prompt the same way it gates the Apply confirm,
-	// so a --yes/recipe run never blocks on a flavor question in CI.
-	const optionSelections = await resolveUnitOptions(selectedUnits, config?.options, !skipApply, target.dir);
+	// Resolve each selected unit's options (core-eslint's flavor today) to a concrete
+	// value, then bake them in. Precedence: a recipe/inline value wins, then the
+	// flavor cycled in the picker, then the environment default. Because the picker
+	// already seeds every option-bearing unit's flavor, the interactive select branch
+	// inside resolveUnitOptions no longer fires — cycling ←/→ replaced it.
+	const seededOptions = { ...pickerFlavors, ...config?.options };
+	const optionSelections = await resolveUnitOptions(selectedUnits, seededOptions, !skipApply, target.dir);
 	const units = selectedUnits.map(unit => applyUnitOptions(unit, optionSelections));
 
 	note(formatPlan(units, resolution.auto, resolution.requiredBy, pm, latest), 'Plan');
@@ -324,35 +344,16 @@ function targetDependencyNames(targetDir: string): string[] {
 	return [...Object.keys(read.pkg.dependencies ?? {}), ...Object.keys(read.pkg.devDependencies ?? {})];
 }
 
-// Exported for direct testing — pure, no clack. `dim` is injected so a test can pass
-// a visible tag fake and keep snapshots ANSI-free: styleText's output varies with
-// NO_COLOR and whether stdout is a TTY. Installed units get a dim "installed" badge on
-// the label but are never disabled — re-applying a unit is allowed, the badge is a hint.
-export function buildPickerOptions(
-	units: Unit[],
-	installed: Set<UnitId>,
-	dim: (s: string) => string = s => styleText('dim', s),
-): Record<string, { value: UnitId; label: string; hint?: string }[]> {
-	const grouped: Record<string, { value: UnitId; label: string; hint?: string }[]> = {};
-	for (const unit of units) {
-		const header = CATEGORY_LABELS[unit.category] ?? unit.category;
-		const label = installed.has(unit.id) ? `${unit.label} ${dim('installed')}` : unit.label;
-		(grouped[header] ??= []).push({ value: unit.id, label, hint: unit.description });
+// Seed the picker's flavor tags with the same environment-sniffed default the
+// follow-up select prompt used to compute, so the row starts on the right flavor (a
+// repo pulling next/react opens on that flavor) before the user cycles it.
+function pickerInitialFlavors(targetDir: string): Record<string, string> {
+	const flavors: Record<string, string> = {};
+	for (const unit of UNITS) {
+		for (const option of unit.options ?? [])
+			flavors[option.key] = optionDefault(option, targetDir);
 	}
-	return grouped;
-}
-
-async function promptSelection(units: Unit[], installed: Set<UnitId>): Promise<UnitId[]> {
-	const result = await groupMultiselect<UnitId>({
-		message: 'What do you want to install?',
-		options: buildPickerOptions(units, installed),
-		required: false,
-	});
-
-	if (isCancel(result)) {
-		return cancelAndExit();
-	}
-	return result;
+	return flavors;
 }
 
 // Exported for direct testing — pure, no clack. `requiredBy` maps each auto-added
