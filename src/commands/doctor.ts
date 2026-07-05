@@ -2,10 +2,10 @@ import type { Pm } from '../detect/pm';
 import type { UnitId } from '../manifest/types';
 import type { StateFile } from '../state/state';
 import type { PackageJson } from '../util/package-json';
-import type { CatalogUnit } from './list';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { inspectPm } from '../detect/pm';
+import { effectiveDest, engines, hasDep, hasNodeVersionPin, hasScript } from '../detect/signals';
 import { readStateFile } from '../state/state';
 import { readPackageJson } from '../util/package-json';
 import { buildCatalog } from './list';
@@ -180,7 +180,7 @@ export function auditRepo(opts: { cwd: string }): AuditResult {
 			findings.push(missingScript(catalog, 'lint', 'no-lint-script', 'No lint script in package.json.'));
 		}
 
-		const hasTsDep = Boolean(dep(pkg, 'typescript'));
+		const hasTsDep = Boolean(hasDep(pkg, 'typescript'));
 		const hasTsconfig = existsSync(join(cwd, 'tsconfig.json'));
 		if (hasTsDep && !hasTsconfig) {
 			findings.push(missingFile(catalog, 'tsconfig.json', 'TypeScript is a dependency but there\'s no tsconfig.json.', 'ts-dep-no-tsconfig'));
@@ -303,15 +303,6 @@ function unitForId(catalog: ReturnType<typeof buildCatalog>, id: UnitId): UnitId
 	return catalog.units.find(u => u.id === id)?.id;
 }
 
-// `rename` swaps the basename while keeping dest's directory, so the file that
-// actually lands is the renamed one.
-function effectiveDest(file: CatalogUnit['files'][number]): string {
-	if (!file.rename)
-		return file.dest;
-	const slash = file.dest.lastIndexOf('/');
-	return slash === -1 ? file.rename : `${file.dest.slice(0, slash)}/${file.rename}`;
-}
-
 function hasCiWorkflow(cwd: string): boolean {
 	if (existsSync(join(cwd, '.gitlab-ci.yml')) || existsSync(join(cwd, '.circleci', 'config.yml')))
 		return true;
@@ -324,23 +315,6 @@ function hasCiWorkflow(cwd: string): boolean {
 	catch {
 		return false;
 	}
-}
-
-function hasNodeVersionPin(cwd: string, pkg: PackageJson): boolean {
-	return Boolean(engines(pkg)?.node) || existsSync(join(cwd, '.nvmrc')) || typeof pkg.packageManager === 'string';
-}
-
-function hasScript(pkg: PackageJson, name: string): boolean {
-	const scripts = record(pkg.scripts);
-	return typeof scripts?.[name] === 'string';
-}
-
-function dep(pkg: PackageJson, name: string): boolean {
-	return Boolean(record(pkg.dependencies)?.[name]) || Boolean(record(pkg.devDependencies)?.[name]);
-}
-
-function engines(pkg: PackageJson): Record<string, unknown> | undefined {
-	return record(pkg.engines);
 }
 
 function parsePackageManagerPm(field: unknown): Pm | undefined {
@@ -368,10 +342,6 @@ function nodeVersionMismatch(cwd: string, pkg: PackageJson): { engines: string; 
 function majorOf(spec: string): number | undefined {
 	const match = /(\d+)/.exec(spec);
 	return match?.[1] ? Number(match[1]) : undefined;
-}
-
-function record(value: unknown): Record<string, unknown> | undefined {
-	return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
 function basename(dest: string): string {
