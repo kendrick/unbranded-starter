@@ -179,16 +179,23 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 		+ `${count('merged')} merged, ${count('appended')} appended, ${count('skipped')} skipped.`,
 	);
 
-	// Record what landed so `unbranded diff` can later tell a user's edits from a
-	// stale template. Written after files hit disk and before install, which only
-	// touches package.json; a --dry-run returns earlier and never records state.
-	writeStateFile({ targetDir: target.dir, units: resolution.ids, results: copyResults });
-
 	const installResult = await writeAndInstall({
 		targetDir: target.dir,
 		pm,
 		units: selectedUnits,
 		latest,
+	});
+
+	// Record what landed so `unbranded diff` can later tell a user's edits from a
+	// stale template. Runs after writeAndInstall so the files it computes outside
+	// the copy loop (.nvmrc, .vscode/extensions.json) get hashed too; those land
+	// before the install spawn, so a cancelled or failed install still leaves a
+	// complete file map. A --dry-run returns earlier and never records state.
+	writeStateFile({
+		targetDir: target.dir,
+		units: resolution.ids,
+		results: copyResults,
+		extraWrites: installResult.computedWrites,
 	});
 
 	if (installResult.cancelled) {

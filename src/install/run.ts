@@ -24,6 +24,11 @@ export interface WriteAndInstallResult {
 	installed: boolean;
 	cancelled: boolean;
 	error?: string;
+	// Absolute paths of files written outside the copy loop: the computed .nvmrc
+	// and .vscode/extensions.json. Threaded back so writeStateFile can hash them
+	// into .unbranded.json; nothing else in the run knows they exist. These land
+	// before the install spawn, so the list is complete even on a cancelled install.
+	computedWrites: string[];
 }
 
 export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteAndInstallResult> {
@@ -38,6 +43,9 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 		: { name: basename(opts.targetDir), version: '0.0.0', type: 'module' };
 
 	const indent = had ? detectIndent(raw) : '  ';
+
+	// Files this run writes outside the copy loop, collected for the state file.
+	const computedWrites: string[] = [];
 
 	const patches: MergeInput[] = opts.units.map(u => ({
 		dependencies: opts.latest ? toLatest(u.dependencies) : u.dependencies,
@@ -59,8 +67,14 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 		});
 		patches.push({ engines: pins.engines, packageManager: pins.packageManager });
 		const nvmrcPath = join(opts.targetDir, '.nvmrc');
-		if (!existsSync(nvmrcPath))
+		// Existing user pins win, so we only write .nvmrc when the user doesn't
+		// already have one, and only track it when we actually wrote it. Recording a
+		// file we didn't write would make diff flag the user's own .nvmrc as drift
+		// against a hash we never laid down.
+		if (!existsSync(nvmrcPath)) {
 			writeFileSync(nvmrcPath, pins.nvmrc);
+			computedWrites.push(nvmrcPath);
+		}
 	}
 
 	// opt-vscode's extensions.json is computed for the same reason .nvmrc is: the
@@ -68,13 +82,13 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 	// so it can't be a static template. Generate it here and union it into any
 	// file the user already has.
 	if (opts.units.some(u => u.id === VSCODE_UNIT_ID))
-		writeVscodeExtensions(opts.targetDir, opts.units);
+		computedWrites.push(writeVscodeExtensions(opts.targetDir, opts.units));
 
 	const merged = mergePackageJson(existing, patches);
 	writeFileSync(pkgPath, `${JSON.stringify(merged, null, indent)}\n`);
 
 	if (!opts.pm) {
-		return { wrote: true, installed: false, cancelled: false };
+		return { wrote: true, installed: false, cancelled: false, computedWrites };
 	}
 
 	const s = spinner();
@@ -83,14 +97,14 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 
 	if (result.cancelled) {
 		s.stop('Install interrupted.');
-		return { wrote: true, installed: false, cancelled: true };
+		return { wrote: true, installed: false, cancelled: true, computedWrites };
 	}
 	if (result.success) {
 		s.stop('Dependencies installed.');
-		return { wrote: true, installed: true, cancelled: false };
+		return { wrote: true, installed: true, cancelled: false, computedWrites };
 	}
 	s.stop(`Install failed (exit ${result.code}).`);
-	return { wrote: true, installed: false, cancelled: false, error: result.error };
+	return { wrote: true, installed: false, cancelled: false, error: result.error, computedWrites };
 }
 
 // The `--latest` escape hatch rewrites every pinned spec to the `latest`
@@ -118,8 +132,8 @@ function detectIndent(content: string): string {
 // defaults to tab indent so it matches the settings.json opt-vscode ships;
 // when the user already has one we detect their indent, keep their existing
 // `recommendations` (and any sibling keys like unwantedRecommendations), and
-// only fold our additions in.
-function writeVscodeExtensions(targetDir: string, units: Unit[]): void {
+// only fold our additions in. Returns the path written so the caller can record it.
+function writeVscodeExtensions(targetDir: string, units: Unit[]): string {
 	const dir = join(targetDir, '.vscode');
 	const path = join(dir, 'extensions.json');
 
@@ -139,6 +153,7 @@ function writeVscodeExtensions(targetDir: string, units: Unit[]): void {
 	const out = { ...base, recommendations: buildRecommendations(units, existing) };
 	mkdirSync(dir, { recursive: true });
 	writeFileSync(path, `${JSON.stringify(out, null, indent)}\n`);
+	return path;
 }
 
 interface InstallResult {
