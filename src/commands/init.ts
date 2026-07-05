@@ -146,7 +146,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 	const optionSelections = await resolveUnitOptions(selectedUnits, config?.options, !skipApply, target.dir);
 	const units = selectedUnits.map(unit => applyUnitOptions(unit, optionSelections));
 
-	note(formatPlan(units, resolution.auto, pm, latest), 'Plan');
+	note(formatPlan(units, resolution.auto, resolution.requiredBy, pm, latest), 'Plan');
 
 	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
 
@@ -339,11 +339,28 @@ async function promptSelection(units: Unit[]): Promise<UnitId[]> {
 	return result;
 }
 
-function formatPlan(units: Unit[], auto: UnitId[], pm: Pm | null, latest: boolean): string {
+// Exported for direct testing — pure, no clack. `requiredBy` maps each auto-added
+// unit to the unit that pulled it in (resolver's nearest-requirer), so the plan can
+// explain a surprise entry rather than just tagging it "(auto)".
+export function formatPlan(
+	units: Unit[],
+	auto: UnitId[],
+	requiredBy: Partial<Record<UnitId, UnitId>>,
+	pm: Pm | null,
+	latest: boolean,
+): string {
 	const lines: string[] = [];
+	const labelById = new Map(units.map(u => [u.id, u.label]));
 
 	for (const u of units) {
-		const autoTag = auto.includes(u.id) ? ' (auto)' : '';
+		const requirer = requiredBy[u.id];
+		const requirerLabel = requirer ? labelById.get(requirer) : undefined;
+		// Bare "(auto)" is a defensive fallback: auto and requiredBy come from the
+		// same resolver call, so a missing attribution shouldn't happen, but printing
+		// "required by undefined" would be worse than saying nothing.
+		const autoTag = auto.includes(u.id)
+			? (requirerLabel ? ` (auto — required by ${requirerLabel})` : ' (auto)')
+			: '';
 		lines.push(`  • ${u.label}${autoTag}`);
 	}
 

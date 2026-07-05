@@ -1,7 +1,7 @@
 import type { Unit, UnitId } from './types';
 
 export type ResolveResult
-	= | { kind: 'ok'; ids: UnitId[]; auto: UnitId[] }
+	= | { kind: 'ok'; ids: UnitId[]; auto: UnitId[]; requiredBy: Partial<Record<UnitId, UnitId>> }
 		| { kind: 'missing-required'; unit: UnitId; needs: UnitId[] }
 		| { kind: 'conflict'; pair: [UnitId, UnitId] };
 
@@ -15,6 +15,9 @@ export function resolveSelection(seed: UnitId[], units: Unit[]): ResolveResult {
 	const seedSet = new Set(seed);
 	const selected = new Set<UnitId>(seed);
 	const auto = new Set<UnitId>();
+	// Who pulled each auto-added unit in, so the plan can explain "(auto — required
+	// by X)". Recorded at the add site, where the implying unit is in scope.
+	const requiredBy: Partial<Record<UnitId, UnitId>> = {};
 
 	// Fixed-point loop: `implies` is transitive (A → B → C), so one pass isn't
 	// enough. Keep going until nothing new gets added.
@@ -28,8 +31,17 @@ export function resolveSelection(seed: UnitId[], units: Unit[]): ResolveResult {
 			for (const implied of unit.implies) {
 				if (!selected.has(implied)) {
 					selected.add(implied);
-					if (!seedSet.has(implied))
+					if (!seedSet.has(implied)) {
 						auto.add(implied);
+						// First writer wins, which resolves to the *nearest* requirer:
+						// a Set visits mid-loop additions in insertion order, so when
+						// A→B→C, C is reached while iterating B (not A) and gets B. The
+						// `undefined` guard keeps that first attribution stable across a
+						// later diamond edge. Seed units are skipped — the user picked
+						// them, nothing "required" them.
+						if (requiredBy[implied] === undefined)
+							requiredBy[implied] = id;
+					}
 					changed = true;
 				}
 			}
@@ -61,5 +73,5 @@ export function resolveSelection(seed: UnitId[], units: Unit[]): ResolveResult {
 		}
 	}
 
-	return { kind: 'ok', ids: [...selected], auto: [...auto] };
+	return { kind: 'ok', ids: [...selected], auto: [...auto], requiredBy };
 }
