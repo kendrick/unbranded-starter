@@ -1,5 +1,5 @@
 import type { CopyResult } from '../fs/copy';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -102,6 +102,29 @@ describe('writeStateFile / readStateFile', () => {
 
 		const state = readStateFile(tmp);
 		expect(Object.keys(state?.files ?? {})).toEqual(['a.txt']);
+	});
+
+	it('omits the doctor block on a fresh scaffold — no empty config nobody asked for', () => {
+		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
+		writeStateFile({ targetDir: tmp, units: ['core-eslint'], results: [result('a.txt')] });
+		expect(readFileSync(join(tmp, STATE_FILENAME), 'utf-8')).not.toContain('"doctor"');
+	});
+
+	it('preserves a user-managed doctor.ignore block across a re-scaffold', () => {
+		// doctor.ignore is hand-edited into the tool-managed state file. Since every
+		// run rewrites the envelope from scratch, writeStateFile has to carry the
+		// block forward or the "durable off switch" evaporates on the next run.
+		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
+		writeStateFile({ targetDir: tmp, units: ['core-eslint'], results: [result('a.txt')] });
+
+		// Simulate the user accepting a finding by editing .unbranded.json.
+		const path = join(tmp, STATE_FILENAME);
+		const edited = { ...JSON.parse(readFileSync(path, 'utf-8')), doctor: { ignore: ['missing-editorconfig'] } };
+		writeFileSync(path, `${JSON.stringify(edited, null, 2)}\n`);
+
+		// A second scaffold must not clobber it.
+		writeStateFile({ targetDir: tmp, units: ['core-eslint'], results: [result('a.txt')] });
+		expect(readStateFile(tmp)?.doctor?.ignore).toEqual(['missing-editorconfig']);
 	});
 
 	it('returns undefined for an untracked directory and never throws on malformed state', () => {

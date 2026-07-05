@@ -20,6 +20,14 @@ export const STATE_FILENAME = '.unbranded.json';
 // (leading underscore) so it's the first thing you see.
 export const STATE_TOOL_HINT = 'unbranded manages the files below. Run `unbranded diff` to see your local drift or `unbranded doctor` to audit the repo; https://github.com/kendrick/unbranded-starter';
 
+// User-managed config that rides in the state file rather than a separate dotfile.
+// `ignore` lists doctor finding ids the repo has accepted; `unbranded doctor` reads
+// it to suppress those findings. Hand-edited, so writeStateFile preserves it across
+// re-scaffolds instead of letting a fresh envelope drop it.
+export interface DoctorConfig {
+	ignore?: string[];
+}
+
 export interface StateFile {
 	// A `_`-prefixed metadata key, mirroring the $schema/_comment convention in
 	// tool-written JSON. Sorts first, so it reads as the file's own header.
@@ -32,6 +40,9 @@ export interface StateFile {
 	// dest path (relative to the project root, posix-normalized) → content hash.
 	// One hash per file keeps the diff a clean one-line-per-change.
 	files: Record<string, string>;
+	// Optional user config. Absent on a fresh scaffold; present once a user opts in
+	// (e.g. adds `doctor.ignore`). Preserved verbatim across re-scaffolds.
+	doctor?: DoctorConfig;
 }
 
 export function hashBuffer(buf: Buffer): string {
@@ -41,13 +52,16 @@ export function hashBuffer(buf: Buffer): string {
 // Pure envelope builder. Sorts units and file keys so the object a caller hands
 // in can't leak its own key order into the output; the serializer sorts again,
 // but sorting here keeps the in-memory value honest for tests too.
-export function buildStateFile(input: { version: string; units: UnitId[]; files: Record<string, string> }): StateFile {
+export function buildStateFile(input: { version: string; units: UnitId[]; files: Record<string, string>; doctor?: DoctorConfig }): StateFile {
 	return {
 		_tool: STATE_TOOL_HINT,
 		schema: STATE_SCHEMA,
 		version: input.version,
 		units: [...input.units].sort(),
 		files: sortRecord(input.files),
+		// Only carry the block when it holds something, so a clean scaffold never
+		// writes an empty `doctor: {}` nobody asked for.
+		...(input.doctor && Object.keys(input.doctor).length > 0 ? { doctor: input.doctor } : {}),
 	};
 }
 
@@ -78,7 +92,13 @@ export function writeStateFile(opts: { targetDir: string; units: UnitId[]; resul
 		files[rel] = hashBuffer(readFileSync(dest));
 	}
 
-	const state = buildStateFile({ version: readCliVersion(), units: opts.units, files });
+	// Preserve any user-managed config (e.g. doctor.ignore) a prior run or a hand
+	// edit left in the file. buildStateFile otherwise emits a fresh envelope that
+	// would silently drop it on every re-scaffold, so the "durable off switch" for
+	// doctor findings wouldn't survive the next `unbranded` run.
+	const prior = readStateFile(opts.targetDir);
+
+	const state = buildStateFile({ version: readCliVersion(), units: opts.units, files, doctor: prior?.doctor });
 	const path = join(opts.targetDir, STATE_FILENAME);
 	writeFileSync(path, serializeState(state));
 	return path;

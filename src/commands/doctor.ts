@@ -1,14 +1,19 @@
 import type { Pm } from '../detect/pm';
 import type { UnitId } from '../manifest/types';
+import type { StateFile } from '../state/state';
 import type { PackageJson } from '../util/package-json';
 import type { CatalogUnit } from './list';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { inspectPm } from '../detect/pm';
+import { readStateFile } from '../state/state';
 import { readPackageJson } from '../util/package-json';
 import { buildCatalog } from './list';
 
-export const DOCTOR_SCHEMA = 1;
+// Version 2 adds the suppression fields (`suppressed`, `ignoredUnknown`) alongside
+// `findings` in the --json output. A reader keying off `schema` can tell the richer
+// shape from the original.
+export const DOCTOR_SCHEMA = 2;
 
 export interface Finding {
 	// Stable machine key so tooling can suppress or track a specific check.
@@ -23,6 +28,54 @@ export interface Finding {
 
 export interface AuditResult {
 	findings: Finding[];
+}
+
+// Every finding id auditRepo can emit. Kept explicit so `doctor.ignore` can tell a
+// typo from a valid id whose check simply passed this run: an unrecognized id earns
+// a warning, a recognized-but-not-firing one stays quiet. Adding a finding means
+// adding its id here, and a spec test cross-checks this set against a live audit.
+export const KNOWN_FINDING_IDS: ReadonlySet<string> = new Set([
+	'malformed-package-json',
+	'missing-editorconfig',
+	'missing-gitattributes',
+	'no-ci-workflow',
+	'multiple-lockfiles',
+	'pm-field-lockfile-mismatch',
+	'workspace-leaf',
+	'no-node-version',
+	'no-test-script',
+	'no-lint-script',
+	'ts-dep-no-tsconfig',
+	'tsconfig-no-ts-dep',
+	'node-version-mismatch',
+]);
+
+export interface SuppressionResult {
+	// Findings still in force after removing the accepted ids.
+	active: Finding[];
+	// Findings hidden by doctor.ignore, kept so --json can still list them.
+	suppressed: Finding[];
+	// ids in doctor.ignore that match no known finding — probably typos.
+	unknownIgnored: string[];
+}
+
+// Pure partition of a finding list against an accept-list. The ignore ids come from
+// readDoctorIgnore, not from here, so this stays a plain data transform to test.
+export function applySuppression(findings: Finding[], ignore: readonly string[]): SuppressionResult {
+	const ignoreSet = new Set(ignore);
+	return {
+		active: findings.filter(f => !ignoreSet.has(f.id)),
+		suppressed: findings.filter(f => ignoreSet.has(f.id)),
+		unknownIgnored: [...new Set(ignore.filter(id => !KNOWN_FINDING_IDS.has(id)))],
+	};
+}
+
+// Defensive read: a hand-edited doctor.ignore might not be an array or might hold
+// junk, and a config typo must degrade to a warning rather than crash the audit.
+// Non-string entries are dropped.
+export function readDoctorIgnore(state: StateFile | undefined): string[] {
+	const raw = state?.doctor?.ignore;
+	return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [];
 }
 
 // Lockfile precedence, copied from pm.ts's lockfileSignal so the "which one would
@@ -162,36 +215,58 @@ export interface RunDoctorOpts {
 	strict?: boolean;
 }
 
-// Thin shell over auditRepo: render, then translate findings into an exit code.
+// Thin shell over auditRepo: read the accept-list, suppress, render, then translate
+// the surviving findings into an exit code. Reading .unbranded.json keeps doctor
+// read-only; an untracked repo has no state file, so nothing is suppressed.
 export function runDoctor(opts: RunDoctorOpts = {}): number {
 	const cwd = opts.cwd ?? process.cwd();
 	const { findings } = auditRepo({ cwd });
+	const { active, suppressed, unknownIgnored } = applySuppression(findings, readDoctorIgnore(readStateFile(cwd)));
 
 	if (opts.json) {
 		process.stdout.write(`${JSON.stringify({
 			schema: DOCTOR_SCHEMA,
-			ok: findings.length === 0,
-			findings,
+			ok: active.length === 0,
+			findings: active,
+			suppressed,
+			ignoredUnknown: unknownIgnored,
 		}, null, 2)}\n`);
 	}
 	else {
-		process.stdout.write(formatDoctor(findings));
+		process.stdout.write(formatDoctor(active, suppressed, unknownIgnored));
 	}
 
-	return opts.strict && findings.length > 0 ? 1 : 0;
+	// Suppressed findings are accepted, so they never fail the gate; only active
+	// ones do. An unknown ignore id is a config warning, not a repo defect.
+	return opts.strict && active.length > 0 ? 1 : 0;
 }
 
-function formatDoctor(findings: Finding[]): string {
-	if (findings.length === 0)
-		return 'unbranded doctor: no issues found.\n';
+function formatDoctor(active: Finding[], suppressed: Finding[], unknownIgnored: string[]): string {
+	const lines: string[] = [];
 
-	const lines: string[] = ['unbranded doctor found:', ''];
-	for (const f of findings) {
-		lines.push(`  • ${f.message}`);
-		lines.push(`    fix: ${f.fix}`);
+	if (active.length === 0) {
+		lines.push('unbranded doctor: no issues found.');
 	}
-	lines.push('');
-	lines.push(`${findings.length} issue${findings.length === 1 ? '' : 's'} found.`);
+	else {
+		lines.push('unbranded doctor found:', '');
+		for (const f of active) {
+			lines.push(`  • ${f.message}`);
+			lines.push(`    fix: ${f.fix}`);
+		}
+		lines.push('');
+		lines.push(`${active.length} issue${active.length === 1 ? '' : 's'} found.`);
+	}
+
+	// A one-line tally keeps accepted findings visible without re-listing them; the
+	// ids themselves live in --json for anyone who needs to audit the accept-list.
+	if (suppressed.length > 0)
+		lines.push(`${suppressed.length} finding${suppressed.length === 1 ? '' : 's'} suppressed (doctor.ignore).`);
+
+	// A typo in doctor.ignore protects nothing, so surface it, but only as a warning
+	// since the repo itself may be perfectly healthy.
+	if (unknownIgnored.length > 0)
+		lines.push(`warning: doctor.ignore lists unknown finding id${unknownIgnored.length === 1 ? '' : 's'}: ${unknownIgnored.map(id => `"${id}"`).join(', ')}. Check for typos.`);
+
 	return `${lines.join('\n')}\n`;
 }
 

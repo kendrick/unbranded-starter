@@ -129,6 +129,18 @@ These are the pieces that make unbranded worth keeping in a repo rather than run
 - **`unbranded diff`** compares your tracked files against `.unbranded.json`, the state file every run records. It labels each file unchanged, user-modified, template-updated, or both, and exits non-zero when anything has drifted, so it drops straight into a CI check. Add `--diff` for the patch, `--json` for tooling.
 - **`unbranded doctor`** audits any repo, whether unbranded scaffolded it or not. It flags missing config, coexisting lockfiles, absent version pins, and more, and names the unit or command that fixes each finding. It writes nothing. `--strict` turns findings into a non-zero exit so it doubles as a repo-hygiene gate.
 
+Doctor's findings are opinions, and not every one is a defect on your repo. To accept a finding, add its id to a `doctor.ignore` array in `.unbranded.json`:
+
+```json
+{
+	"doctor": {
+		"ignore": ["missing-editorconfig", "no-ci-workflow"]
+	}
+}
+```
+
+Every finding id is stable and printed next to the finding, so you can copy it straight from a report. Suppressed findings drop out of both the human and `--json` output (a one-line count keeps them from vanishing silently) and no longer count toward the `--strict` exit code. A typo'd id gets a warning, not an error. `unbranded` preserves the block when it rewrites the state file, so re-running the scaffold won't wipe your accepted findings.
+
 Both are read-only and need no TTY, so they sit in CI as comfortably as at your prompt.
 
 ## Commands and Flags

@@ -1,8 +1,10 @@
+import type { StateFile } from '../state/state';
+import type { Finding } from './doctor';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { auditRepo } from './doctor';
+import { applySuppression, auditRepo, KNOWN_FINDING_IDS, readDoctorIgnore } from './doctor';
 
 function writeJson(path: string, obj: unknown): void {
 	writeFileSync(path, JSON.stringify(obj, null, 2));
@@ -143,5 +145,104 @@ describe('auditRepo', () => {
 		writeFileSync(join(tmp, 'package.json'), '{ "name": ');
 		expect(() => auditRepo({ cwd: tmp })).not.toThrow();
 		expect(ids(tmp)).toContain('malformed-package-json');
+	});
+
+	it('registers every finding id a live audit can emit, so doctor.ignore recognizes it', () => {
+		// applySuppression tells a typo from a valid-but-quiet id by looking it up in
+		// KNOWN_FINDING_IDS. If a new check ships without registering its id, that set
+		// goes stale and every use of the id in doctor.ignore looks like a typo. Trip a
+		// broad slice of the checks and assert each id we see is registered.
+		const emitted = new Set<string>();
+		const scenario = (name: string, build: (dir: string) => void): void => {
+			const dir = join(tmp, name);
+			mkdirSync(dir, { recursive: true });
+			build(dir);
+			for (const f of auditRepo({ cwd: dir }).findings)
+				emitted.add(f.id);
+		};
+
+		scenario('bare', d => writeJson(join(d, 'package.json'), { name: 'bare' }));
+		scenario('malformed', d => writeFileSync(join(d, 'package.json'), '{ "name": '));
+		scenario('lockfiles', (d) => {
+			cleanRepo(d);
+			writeFileSync(join(d, 'yarn.lock'), '');
+			writeFileSync(join(d, 'package-lock.json'), '{}');
+		});
+		scenario('pm-mismatch', (d) => {
+			// pnpm lockfile on disk, but the field claims yarn.
+			writeFileSync(join(d, 'pnpm-lock.yaml'), '');
+			writeJson(join(d, 'package.json'), {
+				name: 'x',
+				packageManager: 'yarn@4.0.0',
+				engines: { node: '>=22' },
+				scripts: { test: 't', lint: 'l' },
+				devDependencies: { typescript: '5.9.3' },
+			});
+		});
+		scenario('node-mismatch', (d) => {
+			cleanRepo(d);
+			writeFileSync(join(d, '.nvmrc'), '18\n');
+		});
+		scenario('tsconfig-no-dep', (d) => {
+			writeJson(join(d, 'package.json'), { name: 'x', scripts: { test: 't', lint: 'l' }, engines: { node: '>=22' } });
+			writeFileSync(join(d, 'tsconfig.json'), '{}\n');
+		});
+		scenario('ts-dep-no-tsconfig', (d) => {
+			cleanRepo(d);
+			rmSync(join(d, 'tsconfig.json'));
+		});
+
+		for (const id of emitted)
+			expect(KNOWN_FINDING_IDS.has(id), `unregistered finding id: ${id}`).toBe(true);
+		// Guard against a no-op test: the scenarios above must exercise a real slice.
+		expect(emitted.size).toBeGreaterThanOrEqual(9);
+	});
+});
+
+describe('applySuppression', () => {
+	const finding = (id: string): Finding => ({ id, message: id, fix: 'x' });
+
+	it('moves ignored findings out of active and into suppressed', () => {
+		const r = applySuppression([finding('missing-editorconfig'), finding('no-test-script')], ['missing-editorconfig']);
+		expect(r.active.map(f => f.id)).toEqual(['no-test-script']);
+		expect(r.suppressed.map(f => f.id)).toEqual(['missing-editorconfig']);
+		expect(r.unknownIgnored).toEqual([]);
+	});
+
+	it('stays quiet about a valid id whose check simply did not fire this run', () => {
+		// no-lint-script is a real finding id, just not among this run's findings.
+		// Suppressing it pre-emptively is legitimate and must not warn.
+		const r = applySuppression([finding('missing-editorconfig')], ['no-lint-script']);
+		expect(r.suppressed).toEqual([]);
+		expect(r.unknownIgnored).toEqual([]);
+	});
+
+	it('flags an unrecognized ignore id as unknown, and suppresses nothing with it', () => {
+		const r = applySuppression([finding('missing-editorconfig')], ['missing-editorconfg']);
+		expect(r.unknownIgnored).toEqual(['missing-editorconfg']);
+		expect(r.active.map(f => f.id)).toEqual(['missing-editorconfig']);
+	});
+
+	it('dedupes repeated unknown ids', () => {
+		expect(applySuppression([], ['nope', 'nope']).unknownIgnored).toEqual(['nope']);
+	});
+});
+
+describe('readDoctorIgnore', () => {
+	it('returns the ignore list from a state file', () => {
+		expect(readDoctorIgnore({ doctor: { ignore: ['a', 'b'] } } as StateFile)).toEqual(['a', 'b']);
+	});
+
+	it('degrades to [] for a missing file or an absent doctor block', () => {
+		expect(readDoctorIgnore(undefined)).toEqual([]);
+		expect(readDoctorIgnore({} as StateFile)).toEqual([]);
+	});
+
+	it('drops non-string junk instead of crashing the audit', () => {
+		expect(readDoctorIgnore({ doctor: { ignore: ['ok', 3, null] } } as unknown as StateFile)).toEqual(['ok']);
+	});
+
+	it('treats a non-array ignore value as empty', () => {
+		expect(readDoctorIgnore({ doctor: { ignore: 'missing-editorconfig' } } as unknown as StateFile)).toEqual([]);
 	});
 });
