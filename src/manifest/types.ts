@@ -50,6 +50,34 @@ export interface PostInstall {
 	requires?: 'git';
 }
 
+// One selectable choice within a UnitOption. The effects (files, deps) are baked
+// into a concrete unit by applyUnitOptions when this choice is picked, so the rest
+// of the pipeline never sees an option — just a resolved Unit.
+export interface UnitOptionChoice {
+	value: string;
+	label: string;
+	hint?: string;
+	// Overlaid onto the unit when chosen: files append, deps merge (choice wins).
+	files?: FileOp[];
+	dependencies?: Record<string, string>;
+	devDependencies?: Record<string, string>;
+}
+
+// A per-unit variant axis (core-eslint's flavor is the first). Declarative on
+// purpose: the choices drive the interactive prompt, the recipe `options` field,
+// and `list` surfacing from one source. F-14 formalizes this into the published
+// unit schema; keep it data.
+export interface UnitOption {
+	// Globally unique across units so a recipe's flat `options` map is unambiguous.
+	key: string;
+	label: string;
+	choices: UnitOptionChoice[];
+	// The value used when nothing else resolves it (no prompt, no recipe field, no
+	// detection). A per-unit detection default (e.g. read the target's deps) lives
+	// in the selection layer, not here, so this stays pure data.
+	default: string;
+}
+
 export interface Unit {
 	id: UnitId;
 	category: Category;
@@ -58,6 +86,10 @@ export interface Unit {
 	dependencies?: Record<string, string>;
 	devDependencies?: Record<string, string>;
 	files: FileOp[];
+
+	// Variant axes for this unit. A unit with options is resolved to a concrete
+	// unit by applyUnitOptions before the plan/copy/install pipeline runs.
+	options?: UnitOption[];
 
 	// Marketplace ids (publisher.name) this unit wants recommended in VS Code.
 	// opt-vscode reads these across the *selected* units to generate
