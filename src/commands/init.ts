@@ -1,10 +1,10 @@
 import type { InlineFlags } from '../config/load';
 import type { Pm } from '../detect/pm';
 import type { CopyResult, FilePlan, PlanOutcome } from '../fs/copy';
-import type { Unit, UnitId } from '../manifest/types';
+import type { Unit, UnitId, UnitOption } from '../manifest/types';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { cancel, confirm, groupMultiselect, intro, isCancel, log, note, outro } from '@clack/prompts';
+import { cancel, confirm, groupMultiselect, intro, isCancel, log, note, outro, select } from '@clack/prompts';
 import { assertValidPm, loadConfig, resolveConfig } from '../config/load';
 import { buildRecipe, serializeRecipe } from '../config/recipe';
 import { detectPm } from '../detect/pm';
@@ -14,10 +14,13 @@ import { isDirtyGitTree, maybeInitGit } from '../install/git';
 import { runPostInstalls } from '../install/post';
 import { writeAndInstall } from '../install/run';
 import { CATEGORY_LABELS } from '../manifest/categories';
+import { detectEslintFlavor } from '../manifest/eslint-config';
 import { UNITS } from '../manifest/index';
+import { applyUnitOptions, buildOptionSchema } from '../manifest/options';
 import { resolveSelection } from '../manifest/resolve';
 import { writeStateFile } from '../state/state';
 import { cancelAndExit } from '../util/cancel';
+import { readPackageJson } from '../util/package-json';
 import { PKG_ROOT } from '../util/paths';
 
 export interface RunInitOpts {
@@ -61,15 +64,18 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 	}
 
 	const known = new Set(UNITS.map(u => u.id));
+	// The option surface (core-eslint's flavor today) so a recipe's `options` map
+	// and the `--units id:value` inline syntax validate against the manifest.
+	const optionSchema = buildOptionSchema(UNITS);
 
 	// Loading config first means we fail with a clear error before prompting,
 	// rather than mid-flow after the user already started picking things.
-	const fileConfig = opts.configPath ? loadConfig(opts.configPath, known) : null;
+	const fileConfig = opts.configPath ? loadConfig(opts.configPath, known, optionSchema) : null;
 
 	// A merged config drives every non-interactive path: a recipe file, inline
 	// --units, or --yes. A bare interactive run leaves it null.
 	const nonInteractive = fileConfig !== null || inline.units !== undefined || Boolean(inline.yes);
-	const config = nonInteractive ? resolveConfig(fileConfig, inline, known) : null;
+	const config = nonInteractive ? resolveConfig(fileConfig, inline, known, optionSchema) : null;
 
 	// The flag wins over the recipe field, so `--config r.json --latest` works.
 	const latest = opts.latest || config?.versions === 'latest';
@@ -132,7 +138,15 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 		.map(id => byId.get(id))
 		.filter((u): u is Unit => u !== undefined);
 
-	note(formatPlan(selectedUnits, resolution.auto, pm, latest), 'Plan');
+	// Resolve each selected unit's options (core-eslint's flavor today) to a
+	// concrete value, then bake them in. A recipe/inline value wins; otherwise an
+	// interactive run prompts and a non-interactive one takes the environment
+	// default. skipApply gates the prompt the same way it gates the Apply confirm,
+	// so a --yes/recipe run never blocks on a flavor question in CI.
+	const optionSelections = await resolveUnitOptions(selectedUnits, config?.options, !skipApply, target.dir);
+	const units = selectedUnits.map(unit => applyUnitOptions(unit, optionSelections));
+
+	note(formatPlan(units, resolution.auto, pm, latest), 'Plan');
 
 	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
 
@@ -140,7 +154,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 	// stops before the first write. It sits ahead of the Apply gate so it works
 	// the same whether the selection came from a prompt or a --config recipe.
 	if (opts.dryRun) {
-		const plans = selectedUnits.flatMap(unit =>
+		const plans = units.flatMap(unit =>
 			unit.files.map(file => planFileOp(file, { pkgRoot: PKG_ROOT, targetDir: target.dir, projectName })),
 		);
 		note(formatDryRun(plans, opts.diff ?? false), 'Dry run (no files written)');
@@ -162,7 +176,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 	}
 
 	const copyResults: CopyResult[] = [];
-	for (const unit of selectedUnits) {
+	for (const unit of units) {
 		for (const file of unit.files) {
 			copyResults.push(await copyFileOp(file, {
 				pkgRoot: PKG_ROOT,
@@ -182,7 +196,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 	const installResult = await writeAndInstall({
 		targetDir: target.dir,
 		pm,
-		units: selectedUnits,
+		units,
 		latest,
 	});
 
@@ -205,7 +219,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 		log.error(installResult.error);
 	}
 	else if (!pm) {
-		log.message(formatNoPmNextSteps(target.dir, selectedUnits));
+		log.message(formatNoPmNextSteps(target.dir, units));
 	}
 
 	// New projects get a git repo before post-installs run: husky's post-install
@@ -221,7 +235,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 		await runPostInstalls({
 			targetDir: target.dir,
 			pm,
-			units: selectedUnits,
+			units,
 			auto: config?.postInstall,
 		});
 	}
@@ -239,12 +253,67 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 		if (save) {
 			const version = (JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf-8')) as { version: string }).version;
 			const dest = join(target.dir, 'recipe.json');
-			writeFileSync(dest, serializeRecipe(buildRecipe({ ids: resolution.ids, pm, latest, projectName, version })));
+			writeFileSync(dest, serializeRecipe(buildRecipe({ ids: resolution.ids, pm, latest, projectName, options: optionSelections, version })));
 			log.success(`Saved ${dest}. Replay it with \`unbranded --config recipe.json\`.`);
 		}
 	}
 
 	outro('Done.');
+}
+
+// Resolve every selected unit's options to a concrete value. Precedence: a value
+// already supplied by the recipe/inline flags wins; otherwise an interactive run
+// prompts (defaulted from the environment), and a non-interactive one takes that
+// same environment default. Returns the full map so applyUnitOptions can bake it
+// in and save-recipe can record exactly what was chosen.
+async function resolveUnitOptions(
+	units: Unit[],
+	fromConfig: Record<string, string> | undefined,
+	interactive: boolean,
+	targetDir: string,
+): Promise<Record<string, string>> {
+	const selections: Record<string, string> = { ...fromConfig };
+
+	for (const unit of units) {
+		for (const option of unit.options ?? []) {
+			if (selections[option.key] !== undefined)
+				continue;
+
+			const fallback = optionDefault(option, targetDir);
+			if (!interactive) {
+				selections[option.key] = fallback;
+				continue;
+			}
+
+			const chosen = await select<string>({
+				message: `${unit.label}: ${option.label}`,
+				options: option.choices.map(c => ({ value: c.value, label: c.label, hint: c.hint })),
+				initialValue: fallback,
+			});
+			if (isCancel(chosen))
+				return cancelAndExit();
+			selections[option.key] = chosen;
+		}
+	}
+
+	return selections;
+}
+
+// The one place an option default is computed from the environment rather than a
+// static value. F-14 will fold this into the option schema; for now the only
+// option is core-eslint's flavor, defaulted by sniffing the target's dependencies
+// (a repo that pulls next/react wants that flavor, everything else gets base).
+function optionDefault(option: UnitOption, targetDir: string): string {
+	if (option.key === 'eslintFlavor')
+		return detectEslintFlavor(targetDependencyNames(targetDir));
+	return option.default;
+}
+
+function targetDependencyNames(targetDir: string): string[] {
+	const read = readPackageJson(targetDir);
+	if (read.kind !== 'ok')
+		return [];
+	return [...Object.keys(read.pkg.dependencies ?? {}), ...Object.keys(read.pkg.devDependencies ?? {})];
 }
 
 async function promptSelection(units: Unit[]): Promise<UnitId[]> {

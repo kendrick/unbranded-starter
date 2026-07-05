@@ -1,4 +1,4 @@
-import type { Category, FileOp, PostInstall, Unit, UnitId } from '../manifest/types';
+import type { Category, FileOp, PostInstall, Unit, UnitId, UnitOption } from '../manifest/types';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '../manifest/categories';
 import { UNITS } from '../manifest/index';
 
@@ -17,6 +17,23 @@ export interface CatalogFile {
 	mode?: FileOp['mode'];
 }
 
+// A UnitOption trimmed for the public catalog: the choice's baked-in `files`
+// (a whole generated config) and `devDependencies` are an internal detail of how
+// the flavor is applied, so only the selectable surface (value, label, hint)
+// crosses the boundary.
+export interface CatalogOptionChoice {
+	value: string;
+	label: string;
+	hint?: string;
+}
+
+export interface CatalogOption {
+	key: string;
+	label: string;
+	default: string;
+	choices: CatalogOptionChoice[];
+}
+
 export interface CatalogUnit {
 	id: UnitId;
 	category: Category;
@@ -25,6 +42,7 @@ export interface CatalogUnit {
 	dependencies?: Record<string, string>;
 	devDependencies?: Record<string, string>;
 	files: CatalogFile[];
+	options?: CatalogOption[];
 	implies?: UnitId[];
 	excludes?: UnitId[];
 	requires?: UnitId[];
@@ -56,6 +74,19 @@ function toCatalogFile(file: FileOp): CatalogFile {
 	return entry;
 }
 
+function toCatalogOption(option: UnitOption): CatalogOption {
+	return {
+		key: option.key,
+		label: option.label,
+		default: option.default,
+		choices: option.choices.map(c => ({
+			value: c.value,
+			label: c.label,
+			...(c.hint ? { hint: c.hint } : {}),
+		})),
+	};
+}
+
 // Explicit allowlist rather than a spread-minus-src, so the public contract is
 // deliberate: a new internal field on Unit can't silently leak into the JSON.
 // Optional keys are emitted only when present, which keeps each entry as terse
@@ -69,6 +100,7 @@ function toCatalogUnit(unit: Unit): CatalogUnit {
 		...(unit.dependencies ? { dependencies: unit.dependencies } : {}),
 		...(unit.devDependencies ? { devDependencies: unit.devDependencies } : {}),
 		files: unit.files.map(toCatalogFile),
+		...(unit.options ? { options: unit.options.map(toCatalogOption) } : {}),
 		...(unit.implies ? { implies: unit.implies } : {}),
 		...(unit.excludes ? { excludes: unit.excludes } : {}),
 		...(unit.requires ? { requires: unit.requires } : {}),
@@ -100,6 +132,12 @@ export function formatCatalog(units: Unit[] = UNITS): string {
 		for (const unit of inCategory) {
 			const implies = unit.implies?.length ? `  (implies → ${unit.implies.join(', ')})` : '';
 			lines.push(`  ${unit.id.padEnd(idWidth)}  ${unit.label} — ${unit.description}${implies}`);
+			// A unit's options (core-eslint's flavor) get their own indented line so
+			// the picker's choices are visible from `list` without running the CLI.
+			for (const option of unit.options ?? []) {
+				const values = option.choices.map(c => c.value).join(' | ');
+				lines.push(`  ${' '.repeat(idWidth)}    ${option.key}: ${values}  (default: ${option.default})`);
+			}
 		}
 		lines.push('');
 	}

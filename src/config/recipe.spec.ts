@@ -46,6 +46,16 @@ describe('buildRecipe', () => {
 		expect(buildRecipe({ ids: unitIds('core-editorconfig'), pm: null, latest: false, version: '1.0.0' }).projectName).toBeUndefined();
 		expect(buildRecipe({ ids: unitIds('core-editorconfig'), pm: null, latest: false, version: '1.0.0', projectName: 'acme' }).projectName).toBe('acme');
 	});
+
+	it('records the chosen unit options so a replay rebuilds the same flavor', () => {
+		const recipe = buildRecipe({ ids: unitIds('core-eslint'), pm: null, latest: false, version: '1.0.0', options: { eslintFlavor: 'react' } });
+		expect(recipe.options).toEqual({ eslintFlavor: 'react' });
+	});
+
+	it('omits options entirely when the run selected none', () => {
+		expect(buildRecipe({ ids: unitIds('core-editorconfig'), pm: null, latest: false, version: '1.0.0' })).not.toHaveProperty('options');
+		expect(buildRecipe({ ids: unitIds('core-editorconfig'), pm: null, latest: false, version: '1.0.0', options: {} })).not.toHaveProperty('options');
+	});
 });
 
 describe('serializeRecipe', () => {

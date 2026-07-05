@@ -1,4 +1,5 @@
 import type { Pm } from '../detect/pm';
+import type { OptionSchema } from '../manifest/options';
 import type { UnitId } from '../manifest/types';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -8,6 +9,10 @@ export interface Config {
 	pm: Pm | null;
 	onConflict: 'overwrite' | 'skip';
 	postInstall: 'all' | 'none';
+	// Unit-option selections keyed by option key (e.g. { eslintFlavor: 'react' }).
+	// Applied by applyUnitOptions to resolve each unit to a concrete variant.
+	// Optional — most units have no options, and an absent map means all defaults.
+	options?: Record<string, string>;
 	// Pinned to the manifest's exact versions by default; 'latest' rewrites
 	// every dependency to the `latest` dist-tag. The `--latest` flag overrides
 	// this per run (flag wins over the recipe field).
@@ -35,7 +40,7 @@ const VALID_GIT = new Set(['init', 'init-commit', 'none']);
 // v1 is JSON-only. YAML support is easy to add (we'd pull in `yaml` and key
 // off the file extension) but isn't load-bearing for the E2E suite, which is
 // what motivated this mode in the first place.
-export function loadConfig(path: string, knownUnits: Set<UnitId>): Config {
+export function loadConfig(path: string, knownUnits: Set<UnitId>, schema?: OptionSchema): Config {
 	const abs = resolve(path);
 	if (!existsSync(abs)) {
 		throw new Error(`--config file not found: ${abs}`);
@@ -52,7 +57,7 @@ export function loadConfig(path: string, knownUnits: Set<UnitId>): Config {
 		throw new Error(`Invalid JSON in ${abs}: ${(err as Error).message}`);
 	}
 
-	return validate(raw, knownUnits);
+	return validate(raw, knownUnits, schema);
 }
 
 // Shared so the recipe validator and the `--pm` flag apply one rule with one
@@ -80,10 +85,42 @@ export interface InlineFlags {
 // `--latest` overrides a recipe's `versions`: a flag beats the matching recipe
 // field. Callers gate on having a units source before calling; if neither the
 // recipe nor `--units` supplies one, validate() reports the missing array.
-export function resolveConfig(fileConfig: Config | null, inline: InlineFlags, knownUnits: Set<UnitId>): Config {
-	const units = inline.units !== undefined
-		? inline.units.split(',').map(u => u.trim()).filter(Boolean)
-		: fileConfig?.units;
+export function resolveConfig(fileConfig: Config | null, inline: InlineFlags, knownUnits: Set<UnitId>, schema?: OptionSchema): Config {
+	// Inline --units accepts an `id:value` suffix (e.g. core-eslint:react) that
+	// picks a unit option inline. The id feeds the units array; the suffix, mapped
+	// to the unit's option key via the schema, feeds the options map (inline
+	// winning over any recipe options, mirroring how every inline flag beats the
+	// recipe). Options given this way get validated by validate() below.
+	const inlineOptions: Record<string, string> = {};
+	let units: string[] | undefined;
+	if (inline.units !== undefined) {
+		units = [];
+		for (const raw of inline.units.split(',')) {
+			const token = raw.trim();
+			if (!token)
+				continue;
+			const colon = token.indexOf(':');
+			if (colon === -1) {
+				units.push(token);
+				continue;
+			}
+			const id = token.slice(0, colon).trim();
+			const value = token.slice(colon + 1).trim();
+			units.push(id);
+			if (schema) {
+				const option = schema.byUnit.get(id as UnitId);
+				if (!option)
+					throw new Error(`--units: ${id} takes no options, but ":${value}" was given.`);
+				inlineOptions[option.key] = value;
+			}
+		}
+	}
+	else {
+		units = fileConfig?.units;
+	}
+
+	const mergedOptions = { ...fileConfig?.options, ...inlineOptions };
+	const options = Object.keys(mergedOptions).length > 0 ? mergedOptions : undefined;
 
 	return validate({
 		units,
@@ -92,16 +129,17 @@ export function resolveConfig(fileConfig: Config | null, inline: InlineFlags, kn
 		postInstall: inline.postInstall ?? fileConfig?.postInstall ?? 'none',
 		versions: fileConfig?.versions ?? 'pinned',
 		projectName: fileConfig?.projectName,
+		options,
 		// Not an inline flag — there's no --git yet, so it only ever comes from the
 		// recipe. Passing it through keeps `git: "init"` alive after the merge.
 		git: fileConfig?.git,
 		// Like git, force has no inline mirror: the --force flag rides its own
 		// RunInitOpts channel, so the merge only has to keep the recipe field alive.
 		force: fileConfig?.force,
-	}, knownUnits);
+	}, knownUnits, schema);
 }
 
-export function validate(raw: unknown, knownUnits: Set<UnitId>): Config {
+export function validate(raw: unknown, knownUnits: Set<UnitId>, schema?: OptionSchema): Config {
 	if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
 		throw new Error('Config must be a JSON object.');
 	}
@@ -143,6 +181,8 @@ export function validate(raw: unknown, knownUnits: Set<UnitId>): Config {
 		throw new TypeError('config.force must be a boolean when present.');
 	}
 
+	const options = validateOptions(obj.options, schema);
+
 	return {
 		units: obj.units as UnitId[],
 		pm: obj.pm as Pm | null,
@@ -152,5 +192,33 @@ export function validate(raw: unknown, knownUnits: Set<UnitId>): Config {
 		projectName: obj.projectName as string | undefined,
 		git: (obj.git as 'init' | 'init-commit' | 'none') ?? 'none',
 		force: obj.force as boolean | undefined,
+		...(options ? { options } : {}),
 	};
+}
+
+// Shape-check the options map (an object of option-key → string), and when a
+// schema is supplied, hold each key/value to the manifest's declared options.
+// Failing loud here keeps a typo'd flavor from silently degrading to the default.
+function validateOptions(raw: unknown, schema?: OptionSchema): Record<string, string> | undefined {
+	if (raw === undefined)
+		return undefined;
+	if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+		throw new Error('config.options must be an object of option-key → value strings.');
+	}
+	const entries = Object.entries(raw as Record<string, unknown>);
+	for (const [key, value] of entries) {
+		if (typeof value !== 'string') {
+			throw new TypeError(`config.options.${key} must be a string.`);
+		}
+		if (schema) {
+			const allowed = schema.values.get(key);
+			if (!allowed) {
+				throw new Error(`config.options has unknown option "${key}". Run 'unbranded list' to see available options.`);
+			}
+			if (!allowed.has(value)) {
+				throw new Error(`config.options.${key} must be one of: ${[...allowed].sort().join(', ')} (got "${value}").`);
+			}
+		}
+	}
+	return entries.length > 0 ? (raw as Record<string, string>) : undefined;
 }

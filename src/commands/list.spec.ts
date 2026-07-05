@@ -41,6 +41,21 @@ describe('buildCatalog', () => {
 		expect(eslint?.implies).toEqual(['core-typescript']);
 	});
 
+	it('surfaces unit options (flavors) without leaking their internal files/deps', () => {
+		const catalog = buildCatalog();
+		const eslint = catalog.units.find(u => u.id === 'core-eslint');
+		const flavor = eslint?.options?.find(o => o.key === 'eslintFlavor');
+		expect(flavor?.default).toBe('base');
+		expect(flavor?.choices.map(c => c.value)).toEqual(['base', 'react', 'next']);
+		expect(flavor?.choices.every(c => typeof c.label === 'string')).toBe(true);
+		// The choice's baked-in config content and devDeps are an internal detail —
+		// the catalog surfaces the choice, not its payload.
+		for (const choice of flavor?.choices ?? []) {
+			expect(choice).not.toHaveProperty('files');
+			expect(choice).not.toHaveProperty('devDependencies');
+		}
+	});
+
 	it('is byte-for-byte stable across calls', () => {
 		expect(JSON.stringify(buildCatalog())).toBe(JSON.stringify(buildCatalog()));
 	});
@@ -53,5 +68,11 @@ describe('formatCatalog', () => {
 		expect(out).toContain('Linting');
 		expect(out).toContain('core-eslint');
 		expect(out).toMatch(/implies → core-typescript/);
+	});
+
+	it('lists a unit\'s option flavors and marks the default', () => {
+		const out = formatCatalog();
+		expect(out).toMatch(/eslintFlavor: base \| react \| next/);
+		expect(out).toMatch(/default: base/);
 	});
 });

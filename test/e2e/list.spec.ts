@@ -9,7 +9,12 @@ const CLI = join(PKG_ROOT, 'dist/cli.js');
 
 interface Catalog {
 	schema: number;
-	units: { id: string; label: string; files: { dest: string }[] }[];
+	units: {
+		id: string;
+		label: string;
+		files: { dest: string }[];
+		options?: { key: string; default: string; choices: { value: string }[] }[];
+	}[];
 }
 
 describe('unbranded list', () => {
@@ -40,9 +45,17 @@ describe('unbranded list', () => {
 		expect(parsed.schema).toBe(1);
 		expect(parsed.units.length).toBeGreaterThan(0);
 		expect(result.stdout).not.toContain('"src"');
+		// The generated config is delivered inline per flavor; that content is an
+		// internal payload and must not swell the catalog.
+		expect(result.stdout).not.toContain('"content"');
 
+		// core-eslint's config now varies by flavor, so it ships no static file —
+		// the eslintFlavor option surfaces the choices instead.
 		const eslint = parsed.units.find(u => u.id === 'core-eslint');
-		expect(eslint?.files).toEqual([{ dest: 'eslint.config.mjs' }]);
+		expect(eslint?.files).toEqual([]);
+		const flavor = eslint?.options?.find(o => o.key === 'eslintFlavor');
+		expect(flavor?.default).toBe('base');
+		expect(flavor?.choices.map(c => c.value)).toEqual(['base', 'react', 'next']);
 
 		// Byte-for-byte determinism is the whole point of the versioned envelope.
 		const again = spawnSync('node', [CLI, 'list', '--json'], { cwd: tmp, encoding: 'utf-8' });

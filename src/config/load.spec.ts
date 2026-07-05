@@ -3,9 +3,27 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { buildOptionSchema } from '../manifest/options';
 import { assertValidPm, loadConfig, resolveConfig, validate } from './load';
 
 const KNOWN_UNITS = new Set<UnitId>(['core-eslint', 'core-typescript', 'opt-shadcn']);
+
+// A minimal option schema mirroring core-eslint's eslintFlavor, so option
+// validation and the `id:value` inline syntax can be exercised without the whole
+// manifest.
+const SCHEMA = buildOptionSchema([{
+	id: 'core-eslint',
+	category: 'lint',
+	label: 'ESLint',
+	description: '',
+	files: [],
+	options: [{
+		key: 'eslintFlavor',
+		label: 'ESLint flavor',
+		default: 'base',
+		choices: [{ value: 'base', label: 'Base' }, { value: 'react', label: 'React' }, { value: 'next', label: 'Next' }],
+	}],
+}]);
 
 describe('validate (in-memory)', () => {
 	const baseValid = {
@@ -202,6 +220,56 @@ describe('resolveConfig (inline flags)', () => {
 		// reaches the resolved config is by surviving resolveConfig untouched.
 		const file = validate({ ...{ units: ['core-eslint'], pm: null, onConflict: 'overwrite', postInstall: 'none' }, force: true }, KNOWN_UNITS);
 		expect(resolveConfig(file, {}, KNOWN_UNITS).force).toBe(true);
+	});
+});
+
+describe('options (unit-option selections)', () => {
+	const baseValid = { units: ['core-eslint'], pm: 'pnpm', onConflict: 'overwrite', postInstall: 'all' };
+
+	it('accepts a valid options map under the schema', () => {
+		const result = validate({ ...baseValid, options: { eslintFlavor: 'react' } }, KNOWN_UNITS, SCHEMA);
+		expect(result.options).toEqual({ eslintFlavor: 'react' });
+	});
+
+	it('leaves options undefined when omitted', () => {
+		expect(validate(baseValid, KNOWN_UNITS, SCHEMA).options).toBeUndefined();
+	});
+
+	it('rejects a non-object options field', () => {
+		expect(() => validate({ ...baseValid, options: 'react' }, KNOWN_UNITS, SCHEMA))
+			.toThrow(/options must be an object/);
+	});
+
+	it('rejects a non-string option value', () => {
+		expect(() => validate({ ...baseValid, options: { eslintFlavor: 2 } }, KNOWN_UNITS, SCHEMA))
+			.toThrow(/eslintFlavor/);
+	});
+
+	it('rejects an unknown option key against the schema', () => {
+		expect(() => validate({ ...baseValid, options: { bogusOption: 'x' } }, KNOWN_UNITS, SCHEMA))
+			.toThrow(/unknown option/);
+	});
+
+	it('rejects an out-of-range option value against the schema', () => {
+		expect(() => validate({ ...baseValid, options: { eslintFlavor: 'svelte' } }, KNOWN_UNITS, SCHEMA))
+			.toThrow(/eslintFlavor must be one of/);
+	});
+
+	it('parses the `id:value` inline --units syntax into options', () => {
+		const config = resolveConfig(null, { units: 'core-eslint:react,core-typescript', yes: true }, KNOWN_UNITS, SCHEMA);
+		expect(config.units).toEqual(['core-eslint', 'core-typescript']);
+		expect(config.options).toEqual({ eslintFlavor: 'react' });
+	});
+
+	it('lets an inline `id:value` option override the recipe options', () => {
+		const file = validate({ ...baseValid, options: { eslintFlavor: 'base' } }, KNOWN_UNITS, SCHEMA);
+		const config = resolveConfig(file, { units: 'core-eslint:next' }, KNOWN_UNITS, SCHEMA);
+		expect(config.options).toEqual({ eslintFlavor: 'next' });
+	});
+
+	it('rejects an invalid inline flavor value', () => {
+		expect(() => resolveConfig(null, { units: 'core-eslint:svelte', yes: true }, KNOWN_UNITS, SCHEMA))
+			.toThrow(/eslintFlavor must be one of/);
 	});
 });
 
