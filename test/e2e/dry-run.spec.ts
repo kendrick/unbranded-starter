@@ -76,6 +76,9 @@ describe('cli --dry-run (config mode)', () => {
 		// clean create. Both should show, and the path is target-relative.
 		expect(result.stdout).toMatch(/conflict\s+eslint\.config\.mjs/);
 		expect(result.stdout).toMatch(/would create\s+tsconfig\.base\.json/);
+		// #30: the plan explains why TypeScript is here. Short substring on purpose —
+		// clack's note() box wraps the full line at narrow CI widths.
+		expect(result.stdout).toContain('required by ESLint');
 		// The plan lists files by their target-relative path, never the absolute one.
 		expect(result.stdout).not.toContain(join(tmp, 'eslint.config.mjs'));
 	});
