@@ -35,7 +35,7 @@ export async function copyFileOp(op: FileOp, opts: CopyOptions): Promise<CopyRes
 	// Read as buffer, not string. Writing through a string round-trips through
 	// the default encoding, which clobbers Windows CRLF inside source files
 	// that were authored with mixed line endings.
-	const srcBuf = readFileSync(srcPath);
+	const srcBuf = readSource(op, srcPath);
 
 	// Nothing to merge or append into yet, so every mode collapses to a plain
 	// write of the source. Keeps first-time scaffolding identical across modes.
@@ -69,10 +69,21 @@ export async function copyFileOp(op: FileOp, opts: CopyOptions): Promise<CopyRes
 	return { src: srcPath, dest: destPath, action: 'skipped', reason: 'user-skip' };
 }
 
+// Buffer of the source, whichever way the FileOp carries it: a computed `content`
+// string, or a `src` file read off disk. One reader so every mode (copy, merge,
+// append, dry-run) treats an inline config the same as a shipped template.
+function readSource(op: FileOp, srcPath: string): Buffer {
+	return op.content !== undefined ? Buffer.from(op.content, 'utf-8') : readFileSync(srcPath);
+}
+
 function resolvePaths(op: FileOp, opts: CopyOptions): { srcPath: string; destPath: string } {
 	// Manifest paths are posix-style for cross-platform authoring. Split on
-	// posix.sep and let node:path build the native form for the host.
-	const srcPath = joinNative(opts.pkgRoot, ...op.src.split(posix.sep));
+	// posix.sep and let node:path build the native form for the host. A
+	// content-mode op has no src file; the path is a label for reporting only,
+	// never read, so we key it off dest to stay recognizable in results.
+	const srcPath = op.src !== undefined
+		? joinNative(opts.pkgRoot, ...op.src.split(posix.sep))
+		: `<computed:${op.dest}>`;
 
 	const interpolatedDest = opts.projectName
 		? op.dest.replace(/\{projectName\}/g, opts.projectName)
@@ -160,7 +171,7 @@ export interface FilePlan {
 export function planFileOp(op: FileOp, opts: CopyOptions): FilePlan {
 	const { srcPath, destPath } = resolvePaths(op, opts);
 	const rel = relative(opts.targetDir, destPath);
-	const srcBuf = readFileSync(srcPath);
+	const srcBuf = readSource(op, srcPath);
 
 	const base = { src: srcPath, dest: destPath, rel };
 

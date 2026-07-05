@@ -17,6 +17,9 @@ export interface RecipeInput {
 	latest: boolean;
 	// New-project mode only; omitted in augment mode, where the dir already exists.
 	projectName?: string;
+	// The resolved unit-option selections (e.g. { eslintFlavor: 'react' }), so a
+	// replay rebuilds the same flavor. Omitted from the recipe when empty.
+	options?: Record<string, string>;
 	// The running CLI version, stamped into `_generatedBy`.
 	version: string;
 }
@@ -40,6 +43,9 @@ export function buildRecipe(input: RecipeInput): Recipe {
 		// (and what augment runs did anyway). Flip it in the recipe to init a repo.
 		git: 'none',
 		...(input.projectName !== undefined ? { projectName: input.projectName } : {}),
+		// Only record options when the run actually chose some, so a recipe for
+		// option-free units stays as terse as before.
+		...(input.options && Object.keys(input.options).length > 0 ? { options: input.options } : {}),
 	};
 }
 

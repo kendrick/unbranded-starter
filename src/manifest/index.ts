@@ -1,4 +1,24 @@
-import type { Unit } from './types';
+import type { EslintFlavor } from './eslint-config';
+import type { Unit, UnitOptionChoice } from './types';
+import { buildEslintConfig, ESLINT_FLAVORS, eslintDevDependencies } from './eslint-config';
+
+// core-eslint's three flavors, built as UnitOption choices. Each choice ships the
+// exact plugins it needs and a generated eslint.config.mjs delivered inline (via
+// FileOp.content) so it flows through the same conflict/dry-run/state pipeline a
+// copied file gets. base pulls zero React packages; react and next layer on.
+const ESLINT_FLAVOR_META: Record<EslintFlavor, { label: string; hint: string }> = {
+	base: { label: 'Base (TypeScript only)', hint: 'No React or Next plugins — for Node libraries and CLIs' },
+	react: { label: 'React', hint: 'React, react-hooks, and strict jsx-a11y' },
+	next: { label: 'Next.js', hint: 'React plus Next.js performance rules' },
+};
+
+const ESLINT_FLAVOR_CHOICES: UnitOptionChoice[] = ESLINT_FLAVORS.map(flavor => ({
+	value: flavor,
+	label: ESLINT_FLAVOR_META[flavor].label,
+	hint: ESLINT_FLAVOR_META[flavor].hint,
+	devDependencies: eslintDevDependencies(flavor),
+	files: [{ content: buildEslintConfig(flavor), dest: 'eslint.config.mjs' }],
+}));
 
 // Versions pinned exactly. `unbranded --latest` is the escape hatch when
 // users want bleeding edge; the default favors reproducibility.
@@ -43,24 +63,18 @@ export const UNITS: Unit[] = [
 		id: 'core-eslint',
 		category: 'lint',
 		label: 'ESLint',
-		description: '@antfu base with react + nextjs + typescript, jsx-a11y strict, dprint formatting for non-code files.',
-		files: [
-			{ src: 'eslint.config.mjs', dest: 'eslint.config.mjs' },
-		],
-		devDependencies: {
-			// eslint.config.mjs imports @antfu/eslint-config and eslint-plugin-jsx-a11y
-			// directly. The rest are optional peers of @antfu/eslint-config that
-			// our config opts into via `react: true` / `nextjs: true` — without
-			// them installed, eslint fails to load (CI has no TTY for antfu's
-			// auto-install prompt).
-			'@antfu/eslint-config': '8.3.0',
-			'@eslint-react/eslint-plugin': '3.0.0',
-			'@next/eslint-plugin-next': '15.5.18',
-			'eslint': '9.39.4',
-			'eslint-plugin-format': '2.0.1',
-			'eslint-plugin-jsx-a11y': '6.10.2',
-			'eslint-plugin-react-refresh': '0.5.2',
-		},
+		description: '@antfu base in a base/react/next flavor; jsx-a11y strict on the React flavors, dprint formatting for non-code files.',
+		// The config and its plugins vary by flavor, so neither is static: the
+		// eslintFlavor option below supplies eslint.config.mjs (as inline content)
+		// and the exact devDependencies for the chosen flavor. A plain Node CLI
+		// (base) then never gets React-ecosystem packages it can't use.
+		files: [],
+		options: [{
+			key: 'eslintFlavor',
+			label: 'ESLint flavor',
+			default: 'base',
+			choices: ESLINT_FLAVOR_CHOICES,
+		}],
 		packageJsonPatch: {
 			scripts: {
 				'lint': 'eslint .',
@@ -70,7 +84,7 @@ export const UNITS: Unit[] = [
 		recommendedExtensions: ['dbaeumer.vscode-eslint'],
 		// The eslint config sets `typescript: true`, which makes the antfu
 		// preset attempt to load typescript. Without TS installed the config
-		// itself fails to load — pull it in automatically.
+		// itself fails to load — pull it in automatically. True in every flavor.
 		implies: ['core-typescript'],
 	},
 	{
