@@ -14,6 +14,20 @@ Each entry follows this shape:
 **Alternatives considered:** What was rejected, and why.
 ```
 
+## 2026-07-05: Milestone-4 "Trust + Ergonomics" underway — F-00 state-file completeness, F-01 doctor.ignore (issues #25-#26)
+
+**Source:** issue #25 (F-00, merged as PR #45, commit acbac90) and issue #26 (F-01, commit 99ccce6 on main, unpushed); the first two of milestone #4, heading toward a 0.5.0
+
+**Context:** Both are prerequisites for the day-2 verbs (doctor --fix / update), which can only act on what the state file records. #25 fixed a shipped-0.4 bug where two computed writes never reached the state map; #26 gives doctor's opinions a durable off switch so `--strict` can gate a real team's CI without arguing over which findings count.
+**Decision:**
+
+- **F-00.** `.nvmrc` (core-node-version) and `.vscode/extensions.json` (opt-vscode) are computed inside `writeAndInstall`, which runs after `writeStateFile`, so neither was ever hashed into `.unbranded.json` and `diff` silently ignored their drift. `writeAndInstall` now returns `computedWrites`; the state write moved to after install and threads them in through a new `extraWrites` param. `.nvmrc` is tracked only when we actually wrote it (existing user pins still win the merge). No STATE_SCHEMA bump — the shape is unchanged, the map is just complete.
+- **F-01.** `unbranded doctor` reads a `doctor.ignore` array of finding ids from `.unbranded.json`. Suppressed findings leave both the human and --json report (a one-line count keeps them visible) and no longer count toward the --strict exit. An unrecognized id warns instead of erroring, told apart from a valid-but-quiet id by a `KNOWN_FINDING_IDS` registry that a spec test cross-checks against a live audit. DOCTOR_SCHEMA → 2 for the new `suppressed` / `ignoredUnknown` json fields.
+- **The config rides in the tool-managed state file, so writeStateFile preserves it.** doctor.ignore is hand-edited into `.unbranded.json`, which every run rewrites from scratch. writeStateFile now reads the prior file and carries the `doctor` block forward; without that the "durable off switch" would evaporate on the next scaffold. This went slightly beyond the issue's acceptance criteria and was flagged for review.
+
+**Alternatives considered:** A separate doctor config dotfile (e.g. `.unbrandedrc`) — rejected; the issue scopes the config to `.unbranded.json`, and one tool-owned file beats two. Bumping STATE_SCHEMA for the additive `doctor` block — rejected; optional additive fields stay forward-tolerable, which is exactly what the schema-bump comment reserves a bump for. Tracking package.json among the computed writes — rejected; it's a merge target the user keeps editing, so diffing it against a scaffold-time hash would be permanent noise.
+**Process note:** #25 shipped as a branch + PR (#45); from #26 on, the maintainer asked for local commits straight to `main` (no auto-push, no PR), reconciling with merged PRs at push time. #26 was rebased onto origin/main after #45 landed; the overlapping `writeStateFile` edits auto-merged cleanly.
+
 ## 2026-07-04: Seeding the roadmap into the GitHub tracker (milestones #4-#8, issues #25-#44)
 
 **Source:** a GitHub-side session that turned `tmp/roadmap.md` (gitignored) into milestones, issues, and labels on the `kendrick/unbranded-starter` repo; no code, no commits
