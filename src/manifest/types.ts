@@ -11,7 +11,15 @@ export interface FileOp {
 	// Path relative to PKG_ROOT, written posix-style. Manifest authors don't
 	// need to think about platform; the runtime joins to native paths via
 	// node:path, and files are copied as buffers so Windows \r\n stays intact.
-	src: string;
+	// Exactly one of `src` or `content` is set.
+	src?: string;
+
+	// Inline payload, an alternative to `src` for content computed at selection
+	// time rather than shipped as a static template. A flavored unit (core-eslint)
+	// bakes its generated config here; it still flows through the same conflict,
+	// dry-run, and state-hashing pipeline a copied file gets. Mutually exclusive
+	// with `src`.
+	content?: string;
 
 	// Path relative to the target cwd. Supports {projectName} interpolation
 	// for new-project flows where the directory name is decided at runtime.

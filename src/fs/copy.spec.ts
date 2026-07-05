@@ -268,6 +268,67 @@ describe('copyFileOp mode: append-if-missing', () => {
 	});
 });
 
+// Computed content: a FileOp can carry its payload inline (`content`) instead of
+// pointing at a `src` on disk. This is how flavored units (e.g. core-eslint) ship
+// a config generated at selection time while still flowing through the same
+// conflict / dry-run / hashing pipeline a copied file gets.
+describe('copyFileOp with computed content (FileOp.content)', () => {
+	let pkgRoot: string;
+	let targetDir: string;
+
+	beforeEach(() => {
+		pkgRoot = mkdtempSync(join(tmpdir(), 'unbranded-content-pkg-'));
+		targetDir = mkdtempSync(join(tmpdir(), 'unbranded-content-target-'));
+	});
+
+	afterEach(() => {
+		rmSync(pkgRoot, { recursive: true, force: true });
+		rmSync(targetDir, { recursive: true, force: true });
+	});
+
+	it('writes the inline content when the destination does not exist, reading no src file', async () => {
+		const result = await copyFileOp(
+			{ content: 'export default { base: true }\n', dest: 'eslint.config.mjs' },
+			{ pkgRoot, targetDir },
+		);
+		expect(result.action).toBe('copied');
+		expect(readFileSync(join(targetDir, 'eslint.config.mjs'), 'utf-8')).toBe('export default { base: true }\n');
+	});
+
+	it('skips when the inline content is byte-identical to the existing file', async () => {
+		writeFileSync(join(targetDir, 'eslint.config.mjs'), 'export default { base: true }\n');
+		const result = await copyFileOp(
+			{ content: 'export default { base: true }\n', dest: 'eslint.config.mjs' },
+			{ pkgRoot, targetDir },
+		);
+		expect(result).toMatchObject({ action: 'skipped', reason: 'identical' });
+	});
+
+	it('overwrites a differing existing file under onConflict:"overwrite"', async () => {
+		writeFileSync(join(targetDir, 'eslint.config.mjs'), 'export default { react: true }\n');
+		const result = await copyFileOp(
+			{ content: 'export default { base: true }\n', dest: 'eslint.config.mjs' },
+			{ pkgRoot, targetDir, onConflict: 'overwrite' },
+		);
+		expect(result.action).toBe('overwrote');
+		expect(readFileSync(join(targetDir, 'eslint.config.mjs'), 'utf-8')).toBe('export default { base: true }\n');
+	});
+
+	it('plans "create" for inline content into a fresh dest, writing nothing', () => {
+		const plan = planFileOp({ content: 'x\n', dest: 'eslint.config.mjs' }, { pkgRoot, targetDir });
+		expect(plan.outcome).toBe('create');
+		expect(existsSync(join(targetDir, 'eslint.config.mjs'))).toBe(false);
+	});
+
+	it('plans "conflict" for inline content that differs, with the content as the proposed side', () => {
+		writeFileSync(join(targetDir, 'eslint.config.mjs'), 'export default { react: true }\n');
+		const plan = planFileOp({ content: 'export default { base: true }\n', dest: 'eslint.config.mjs' }, { pkgRoot, targetDir });
+		expect(plan.outcome).toBe('conflict');
+		expect(plan.diff?.proposed).toBe('export default { base: true }\n');
+		expect(plan.diff?.existing).toBe('export default { react: true }\n');
+	});
+});
+
 describe('planFileOp (dry-run classification)', () => {
 	let pkgRoot: string;
 	let targetDir: string;
