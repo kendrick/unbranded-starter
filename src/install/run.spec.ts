@@ -56,22 +56,29 @@ describe('writeAndInstall version policy', () => {
 	it('pins .nvmrc and engines from the running node major when core-node-version is selected', async () => {
 		// pm:null means no install spawn and no packageManager query, so the pin
 		// is node-only — exactly the "no package.json to detect a pm from" case.
-		await writeAndInstall({ targetDir: tmp, pm: null, units: [NODE_UNIT] });
+		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [NODE_UNIT] });
 		expect(readFileSync(join(tmp, '.nvmrc'), 'utf-8')).toBe(`${NODE_MAJOR}\n`);
 		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8'));
 		expect(pkg.engines).toEqual({ node: `>=${NODE_MAJOR}` });
 		expect(pkg.packageManager).toBeUndefined();
+		// Reported back for the state file: this computed file lands after the copy
+		// loop, so the caller can't know it exists any other way.
+		expect(result.computedWrites).toContain(join(tmp, '.nvmrc'));
 	});
 
-	it('never clobbers an existing .nvmrc', async () => {
+	it('never clobbers an existing .nvmrc — and does not claim to have written it', async () => {
 		writeFileSync(join(tmp, '.nvmrc'), '18\n');
-		await writeAndInstall({ targetDir: tmp, pm: null, units: [NODE_UNIT] });
+		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [NODE_UNIT] });
 		expect(readFileSync(join(tmp, '.nvmrc'), 'utf-8')).toBe('18\n');
+		// We didn't write it, so it must not be tracked, otherwise diff would flag
+		// the user's own .nvmrc as drift against a hash we never laid down.
+		expect(result.computedWrites).not.toContain(join(tmp, '.nvmrc'));
 	});
 
 	it('leaves .nvmrc alone when core-node-version is not selected', async () => {
-		await writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT] });
+		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT] });
 		expect(existsSync(join(tmp, '.nvmrc'))).toBe(false);
+		expect(result.computedWrites).toEqual([]);
 	});
 });
 
@@ -102,11 +109,13 @@ describe('writeAndInstall vscode extensions', () => {
 	}
 
 	it('generates .vscode/extensions.json from the selected units when opt-vscode is chosen', async () => {
-		await writeAndInstall({ targetDir: tmp, pm: null, units: [VSCODE_UNIT, ESLINT_REC, EDITORCONFIG_REC] });
+		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [VSCODE_UNIT, ESLINT_REC, EDITORCONFIG_REC] });
 		expect(readExtensions().recommendations).toEqual([
 			'dbaeumer.vscode-eslint',
 			'editorconfig.editorconfig',
 		]);
+		// The computed extensions.json is reported for the state file too.
+		expect(result.computedWrites).toContain(join(tmp, '.vscode', 'extensions.json'));
 	});
 
 	it('unions into an existing extensions.json without clobbering its entries or sibling keys', async () => {
@@ -123,7 +132,8 @@ describe('writeAndInstall vscode extensions', () => {
 	});
 
 	it('writes nothing when opt-vscode is not selected', async () => {
-		await writeAndInstall({ targetDir: tmp, pm: null, units: [ESLINT_REC] });
+		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [ESLINT_REC] });
 		expect(existsSync(join(tmp, '.vscode', 'extensions.json'))).toBe(false);
+		expect(result.computedWrites).toEqual([]);
 	});
 });

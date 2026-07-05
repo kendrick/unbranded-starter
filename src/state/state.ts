@@ -61,15 +61,21 @@ export function serializeState(state: StateFile): string {
 // Thin IO shell over the pure builder. Reads each landed file to hash it and
 // stamps the running CLI version, then writes the envelope to the project root.
 // Returns the path written for the caller to log.
-export function writeStateFile(opts: { targetDir: string; units: UnitId[]; results: CopyResult[] }): string {
+//
+// `extraWrites` carries absolute paths of files a run produced outside the copy
+// loop: the computed `.nvmrc` and `.vscode/extensions.json`, which can't ship as
+// static templates (see install/run.ts) and so never pass through `results`.
+// Without them the map is incomplete and `diff` silently ignores their drift.
+export function writeStateFile(opts: { targetDir: string; units: UnitId[]; results: CopyResult[]; extraWrites?: string[] }): string {
 	const files: Record<string, string> = {};
-	for (const r of opts.results) {
+	const dests = [...opts.results.map(r => r.dest), ...(opts.extraWrites ?? [])];
+	for (const dest of dests) {
 		// A skipped write can leave a dest that was never created (nothing on our
 		// side to hash), so only track files that actually exist post-apply.
-		if (!existsSync(r.dest))
+		if (!existsSync(dest))
 			continue;
-		const rel = toPosix(relative(opts.targetDir, r.dest));
-		files[rel] = hashBuffer(readFileSync(r.dest));
+		const rel = toPosix(relative(opts.targetDir, dest));
+		files[rel] = hashBuffer(readFileSync(dest));
 	}
 
 	const state = buildStateFile({ version: readCliVersion(), units: opts.units, files });

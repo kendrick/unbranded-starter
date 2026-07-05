@@ -107,3 +107,55 @@ describe('unbranded diff', () => {
 		expect(result.stdout).toMatch(/Compare tracked files against \.unbranded\.json/);
 	});
 });
+
+// F-00 / issue #25: .nvmrc and .vscode/extensions.json are computed inside
+// writeAndInstall, after the copy loop, so they're the files most likely to slip
+// out of .unbranded.json. Scaffold both units and prove the recorded map includes
+// them and that diff catches a hand edit to a computed file.
+describe('unbranded diff — computed writes are tracked (F-00)', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-diff-computed-'));
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	// pm:null skips the install spawn, so this stays a pure file-write test: .nvmrc
+	// pins from the running node major, extensions.json from the picked units.
+	function scaffoldComputed(): void {
+		writeJson(join(tmp, 'package.json'), { name: 'computed-writes', version: '0.0.0' });
+		writeJson(join(tmp, 'recipe.json'), {
+			units: ['core-node-version', 'opt-vscode'],
+			pm: null,
+			onConflict: 'overwrite',
+			postInstall: 'none',
+		});
+		const applied = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+		expect(applied.status, `scaffold stderr: ${applied.stderr}`).toBe(0);
+	}
+
+	it('records the computed .nvmrc and .vscode/extensions.json in .unbranded.json', () => {
+		scaffoldComputed();
+
+		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as { files: Record<string, string> };
+		// Both computed files land alongside the statically-copied settings.json.
+		expect(Object.keys(state.files)).toEqual(
+			expect.arrayContaining(['.nvmrc', '.vscode/extensions.json', '.vscode/settings.json']),
+		);
+		expect(state.files['.nvmrc']).toMatch(/^[0-9a-f]{64}$/);
+		expect(state.files['.vscode/extensions.json']).toMatch(/^[0-9a-f]{64}$/);
+	});
+
+	it('classifies a hand-edited .nvmrc as user-modified and exits non-zero', () => {
+		scaffoldComputed();
+		writeFileSync(join(tmp, '.nvmrc'), '18\n');
+
+		const result = spawnSync('node', [CLI, 'diff'], { cwd: tmp, encoding: 'utf-8' });
+		expect(result.status, `stderr: ${result.stderr}`).toBe(1);
+		expect(result.stdout).toMatch(/user-modified\s+\.nvmrc/);
+		expect(result.stdout).toContain('Drift detected.');
+	});
+});

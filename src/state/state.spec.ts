@@ -76,6 +76,25 @@ describe('writeStateFile / readStateFile', () => {
 		expect(state?.units).toEqual(['core-eslint']);
 	});
 
+	it('hashes computed writes passed via extraWrites, keyed by their relative path', () => {
+		// .nvmrc and .vscode/extensions.json are computed after the copy loop, so
+		// they reach writeStateFile as absolute paths rather than CopyResults. They
+		// must land in the map exactly like a copied file (issue #25 / F-00).
+		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
+		writeFileSync(join(tmp, '.nvmrc'), '24\n');
+
+		writeStateFile({
+			targetDir: tmp,
+			units: ['core-node-version'],
+			results: [result('a.txt')],
+			extraWrites: [join(tmp, '.nvmrc')],
+		});
+
+		const state = readStateFile(tmp);
+		expect(state?.files['.nvmrc']).toBe(hashBuffer(Buffer.from('24\n')));
+		expect(Object.keys(state?.files ?? {})).toEqual(['.nvmrc', 'a.txt']);
+	});
+
 	it('skips results whose destination never landed on disk', () => {
 		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
 		// b.txt was resolved as a CopyResult but does not exist (e.g. a skipped write).
