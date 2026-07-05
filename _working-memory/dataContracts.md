@@ -20,11 +20,11 @@ This is a typed project, so the code IS the contract. Consume these through the 
 
 ## Manifest (the core contract)
 
-`src/manifest/types.ts` — `UnitId`, `Category`, `FileOp`, `PostInstall`, `Unit`. Every installable unit is a `Unit`; the registry `UNITS` lives in `src/manifest/index.ts`. Adding a unit means adding a `Unit` there and (usually) a `UnitId` member. `FileOp.src` is `PKG_ROOT`-relative posix; `FileOp.dest` is target-cwd-relative and supports `{projectName}` interpolation.
+`src/manifest/types.ts` — `UnitId`, `Category`, `FileOp`, `PostInstall`, `Unit`, plus `UnitOption`/`UnitOptionChoice`. Every installable unit is a `Unit`; the registry `UNITS` lives in `src/manifest/index.ts`. Adding a unit means adding a `Unit` there and (usually) a `UnitId` member. `FileOp.dest` is target-cwd-relative and supports `{projectName}` interpolation; a `FileOp` carries exactly one of `src` (`PKG_ROOT`-relative posix, static template) or `content` (inline, computed at selection time — core-eslint's flavored config uses this). A `Unit` may declare `options: UnitOption[]` (variant axes, e.g. core-eslint's base/react/next flavor); a pure `applyUnitOptions` (`src/manifest/options.ts`) bakes the chosen values into a concrete unit before the plan/copy/install pipeline runs, so downstream never sees an option.
 
 ## Selection resolution
 
-`src/manifest/resolve.ts` — `ResolveResult` is a tagged union: `{ kind: 'ok', ids, auto }` | `{ kind: 'missing-required', unit, needs }` | `{ kind: 'conflict', pair }`. `resolveSelection()` is pure: it closes the seed under `implies` (fixed-point), then validates `requires` and (symmetric) `excludes`.
+`src/manifest/resolve.ts` — `ResolveResult` is a tagged union: `{ kind: 'ok', ids, auto, requiredBy }` | `{ kind: 'missing-required', unit, needs }` | `{ kind: 'conflict', pair }`. `requiredBy: Partial<Record<UnitId, UnitId>>` maps each auto-added unit to its nearest requirer (first-writer-wins at the `implies` add site), consumed by `formatPlan` for the `(auto — required by X)` provenance line. `resolveSelection()` is pure: it closes the seed under `implies` (fixed-point), then validates `requires` and (symmetric) `excludes`.
 
 ## `--config` recipe (external contract)
 

@@ -11,12 +11,12 @@
 
 ## File Organization
 
-- Source is grouped by concern under `src/`: `detect/`, `fs/`, `install/`, `manifest/`, `config/`, `commands/`, `util/`.
+- Source is grouped by concern under `src/`: `detect/`, `fs/`, `install/`, `manifest/`, `config/`, `commands/`, `prompts/`, `util/`.
 - Unit tests are co-located as `*.spec.ts` next to the file they cover. End-to-end tests live in `test/e2e/` and run under a separate Vitest config (`vitest.e2e.config.ts`, which builds first).
 
 ## Core Patterns
 
-- **Pure core, async shell.** Detection and resolution split a pure, side-effect-free function (`inspectPm`, `inspectTarget`, `resolveSelection`) from an async wrapper that prompts (`detectPm`, `detectTarget`). Tests exercise the pure half against fixtures without mocking `@clack/prompts`. Follow this split for any new detect/resolve logic.
+- **Pure core, async shell.** Detection and resolution split a pure, side-effect-free function (`inspectPm`, `inspectTarget`, `resolveSelection`) from an async wrapper that prompts (`detectPm`, `detectTarget`). Tests exercise the pure half against fixtures without mocking `@clack/prompts`. Follow this split for any new detect/resolve logic. The unit picker follows it too: pure option/state/render modules plus a `translateKey` table, with only `UnitPickerPrompt` touching `@clack/core`, so the whole prompt is testable without a terminal.
 - **Manifest is data.** Behavior differences between units are expressed as declarative fields (`implies`, `requires`, `excludes`, `files`, `postInstall`, `packageJsonPatch`), not branching code. Prefer adding a field over special-casing a unit in the runtime.
 - **Package-manager spawns go through `spawnOptions()`** (`src/install/spawn.ts`). It sets `shell: true` on Windows so `.cmd` shims execute, since bare `spawn` can't run them. Any new code that spawns a PM must use it.
 - **Comments explain WHY.** This codebase is a strong exemplar — comments cover the constraint that forced the shape, not what the code does. Match that bar.

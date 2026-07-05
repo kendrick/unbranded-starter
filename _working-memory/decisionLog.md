@@ -14,6 +14,33 @@ Each entry follows this shape:
 **Alternatives considered:** What was rejected, and why.
 ```
 
+## 2026-07-05: Milestone-4 TUI batch — plan provenance, installed badges, filterable unit picker (issues #28-#31)
+
+**Source:** PRs #49 (issue #30), #50 (issue #28), #51 (issues #31 + #29), all merged to main; the ergonomics half of the Trust milestone. Closes #28/#29/#30/#31.
+
+**Context:** v0.4 selection was `groupMultiselect` — no way to filter a growing catalog, no signal for what's already installed, no explanation for units that show up in the plan without being picked, and eslint flavor lived in a separate post-selection prompt. These four issues fold selection into one screen.
+**Decision:**
+
+- **Provenance (#30, PR #49).** `resolveSelection` now returns `requiredBy: Partial<Record<UnitId, UnitId>>` next to `auto`, mapping each auto-added unit to its _nearest_ requirer. Nearest is a free consequence of first-writer-wins recorded at the `implies` add site: a `Set` visits mid-iteration additions in insertion order, so for A→B→C, C is reached while iterating B and gets attributed to B, not A. `formatPlan` renders `(auto — required by <label>)`, with a bare `(auto)` defensive fallback for the case where `auto` and `requiredBy` ever disagree.
+- **Installed badges (#28, PR #50).** New `src/detect/installed.ts` `detectInstalledUnits({ cwd, units })`, layered: the `.unbranded.json` state file wins when present (the exact resolved ids a prior run wrote), else filesystem probes. The three file-less units get side channels — core-tailwind→dep, core-node-version→node pin, core-eslint→`eslint.config.mjs` — everything else is `files.every(exists)`. Badges are a hint, never a gate, so every probe under-claims rather than risk a false badge. Doctor's read-only probes were first extracted to `src/detect/signals.ts` (`hasDep`/`hasScript`/`engines`/`hasNodeVersionPin`/`effectiveDest`) and shared, with an untouched `doctor.spec.ts` as the regression net. AC deviation: a dedicated presence module instead of reusing doctor's absence-only findings, which cover only 7/15 units.
+- **Filterable picker (#31 + #29, PR #51).** New `src/prompts/unit-picker/{options,state,render,prompt}.ts` — a custom multi-select on `@clack/core` (added as a direct dep pinned `1.3.1`, the _same instance_ as `@clack/prompts` so the cancel symbol, `isCancel`, and the `settings` singleton are shared). Substring filter (label/id/group), Tab detail expansion, live implies preview (reusing #30's `requiredBy`), inline eslint-flavor cycling with ←/→, live summary footer, styled category headers with counts. `init.ts` calls `unitPicker` instead of `groupMultiselect`; the picker's chosen flavors thread into `resolveUnitOptions`, so the old post-picker flavor `select` is gone, and #50's `buildPickerOptions` was deleted (the badge moved onto the picker's option model). Non-interactive paths (`--config`/`--units`/`--yes`) stay byte-identical. AC deviation: #29's detail is opt-in on Tab, not always-on, to hold one line per unit.
+
+**Two load-bearing implementation choices:**
+
+- **Pure core / thin shell.** Every picker module is a pure function or reducer (`buildUnitPickerOptions`, `createPickerState`/`reducePicker`/`filteredOptions`/`pickerRows`/`pickerSummary`, `renderUnitPicker`, and a pure `translateKey` table); only `UnitPickerPrompt` touches `@clack/core`. Same split as the `inspectPm`/`detectPm` pattern in conventions, so the whole picker is unit-testable without a terminal.
+- **Escape clears then cancels.** `unitPicker()` deletes the `escape` alias from the live `@clack/core` `settings` singleton (restored in `finally`) so escape reaches the prompt's own handler: it clears a live filter first and only cancels an already-empty filter. Ctrl+C keeps its alias and cancels unconditionally.
+
+**Test counts after the batch:** 314 unit + 75 e2e, all green; each new module ships a `.spec.ts`.
+**Alternatives considered:** Reusing doctor's findings for badges — rejected; doctor is absence-only and covers under half the units. An always-on detail line per unit (#29 as first framed) — rejected for the per-unit line budget; Tab makes it opt-in. Building the picker on `@clack/prompts` primitives — not viable; a filterable multi-select isn't expressible in the stock prompts, which is why it drops to `@clack/core` (same instance so isCancel/settings stay shared).
+
+## 2026-07-05: F-02 ESLint flavors — computed config delivered inline, baked by declarative unit options (issue #27, PR #47)
+
+**Source:** issue #27 (F-02), merged as PR #47; the third milestone-4 feature and the base the picker's inline flavor cycling builds on.
+
+**Context:** `core-eslint` shipped one static `eslint.config.mjs` that opted into `react`/`nextjs`, so every scaffold pulled React/Next peers even for a plain Node project. F-02 makes the flavor (base/react/next) a real choice offered everywhere — `--units`, `--config`, and the interactive picker.
+**Decision:** The eslint config now _varies_ by flavor, so it's generated by `buildEslintConfig(flavor)` (`src/manifest/eslint-config.ts`) and delivered inline through a new `FileOp.content` (mutually exclusive with `src`), which still rides the same conflict / dry-run / state-hashing pipeline a copied file gets. A declarative `Unit.options` (`UnitOption`/`UnitOptionChoice` in `types.ts`) plus a pure `applyUnitOptions` (`src/manifest/options.ts`) bake the chosen flavor into a concrete unit before the plan/copy/install pipeline runs, so nothing downstream sees an option. Base flavor pulls zero React packages. F-14 (#40) formalizes `Unit.options` into the published unit schema; until then it stays plain data.
+**Alternatives considered:** Three static config templates (base/react/next) — rejected via a maintainer question for the duplication; computed content keeps one source. Branching the runtime on flavor instead of a declarative option — rejected against the "manifest is data" convention.
+
 ## 2026-07-05: Milestone-4 "Trust + Ergonomics" underway — F-00 state-file completeness, F-01 doctor.ignore (issues #25-#26)
 
 **Source:** issue #25 (F-00, merged as PR #45, commit acbac90) and issue #26 (F-01, commit 99ccce6 on main, unpushed); the first two of milestone #4, heading toward a 0.5.0

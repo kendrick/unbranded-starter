@@ -9,7 +9,7 @@
 ## Stack
 
 - Language: TypeScript, ESM only. Bundled with tsup to a single `dist/cli.js` (target `node24`, shebang banner, no dts).
-- Framework: none — it's a Node CLI. Interactive prompts via `@clack/prompts`; unified-diff conflict rendering via `diff`.
+- Framework: none — it's a Node CLI. Interactive prompts via `@clack/prompts`, plus `@clack/core` (same pinned instance) for the custom filterable unit picker; unified-diff conflict rendering via `diff`.
 - Styling: n/a for the CLI itself. It _ships_ Tailwind v4 / Stylelint / PostCSS configs to user projects.
 - Data layer: none.
 - Deployment: published to npm as `unbranded`; `bin` maps to `dist/cli.js`; entry point is `npx unbranded`.
@@ -25,9 +25,11 @@ src/
   config/load.ts    — --config recipe loader + validate() (JSON only in v1)
   detect/pm.ts      — package-manager detection (lockfile → packageManager field → user-agent → prompt)
   detect/target.ts  — augment-vs-new-project detection
+  detect/installed.ts, detect/signals.ts — installed-unit badges + shared read-only repo probes (signals also feed doctor)
   fs/copy.ts        — per-file copy with conflict handling; merge-json.ts — package.json merge
   install/run.ts    — spawn PM install (SIGINT trap); post.ts — per-unit post-install hooks
-  manifest/         — types.ts (core contracts), index.ts (the UNITS registry), resolve.ts (implies/requires/excludes)
+  manifest/         — types.ts (core contracts), index.ts (the UNITS registry), resolve.ts (implies/requires/excludes), options.ts + eslint-config.ts (declarative unit options + generated eslint flavors)
+  prompts/unit-picker/ — filterable multi-select prompt: pure option/state/render core + a thin @clack/core shell (prompt.ts)
   util/paths.ts     — PKG_ROOT anchor (walk-up to package.json)
   **/*.spec.ts      — unit tests co-located next to source
 templates/          — files needing runtime interpolation/rename before copy (e.g. tsconfig.json)
