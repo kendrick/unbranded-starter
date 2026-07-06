@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { applyRemovalToState, buildStateFile, hashBuffer, readStateFile, serializeState, STATE_FILENAME, STATE_SCHEMA, writeStateFile } from './state';
+import { applyRemovalToState, buildStateFile, hashBuffer, readStateFile, refreshTrackedFiles, serializeState, STATE_FILENAME, STATE_SCHEMA, writeStateFile } from './state';
 
 describe('buildStateFile', () => {
 	it('wraps the tracked files in a schema-versioned envelope', () => {
@@ -327,6 +327,50 @@ describe('applyRemovalToState', () => {
 
 	it('is a no-op without a state file', () => {
 		expect(() => applyRemovalToState({ targetDir: tmp, removeUnits: ['core-eslint'], removeFiles: [] })).not.toThrow();
+		expect(existsSync(join(tmp, STATE_FILENAME))).toBe(false);
+	});
+});
+
+describe('refreshTrackedFiles', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-state-refresh-'));
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	it('updates hashes, rewrites baselines to the given bytes, and stamps the version', () => {
+		writeFileSync(join(tmp, 'a.txt'), 'v1\n');
+		writeStateFile({ targetDir: tmp, units: ['core-eslint'], writes: [{ dest: join(tmp, 'a.txt'), unit: 'core-eslint', mode: 'copy' }] });
+
+		// After an update the on-disk file may be the user's merge, while the
+		// baseline must become the CURRENT template — they legitimately diverge
+		// (keep-mine resolutions), so the caller supplies each separately.
+		refreshTrackedFiles({ targetDir: tmp, entries: { 'a.txt': { hash: 'newhash', baseline: 'template v2\n' } } });
+
+		const state = readStateFile(tmp);
+		expect(state?.files['a.txt']).toBe('newhash');
+		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'a.txt'), 'utf-8')).toBe('template v2\n');
+		// Attribution and units survive untouched.
+		expect(state?.attribution?.['a.txt']).toBe('core-eslint');
+		expect(state?.units).toEqual(['core-eslint']);
+	});
+
+	it('refreshes a hash without touching the baseline when none is supplied', () => {
+		writeFileSync(join(tmp, 'a.txt'), 'v1\n');
+		writeStateFile({ targetDir: tmp, units: ['core-eslint'], writes: [{ dest: join(tmp, 'a.txt'), unit: 'core-eslint', mode: 'copy' }] });
+
+		refreshTrackedFiles({ targetDir: tmp, entries: { 'a.txt': { hash: 'newhash' } } });
+
+		expect(readStateFile(tmp)?.files['a.txt']).toBe('newhash');
+		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'a.txt'), 'utf-8')).toBe('v1\n');
+	});
+
+	it('is a no-op without a state file', () => {
+		expect(() => refreshTrackedFiles({ targetDir: tmp, entries: { 'a.txt': { hash: 'x' } } })).not.toThrow();
 		expect(existsSync(join(tmp, STATE_FILENAME))).toBe(false);
 	});
 });
