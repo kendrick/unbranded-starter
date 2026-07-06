@@ -5,10 +5,15 @@ on:
     branches: [main]
   pull_request:
 
-# Three jobs instead of one so the wall-clock is the slowest job, not the sum.
-# `checks` (fast, full matrix) runs in parallel with `e2e` (slow real installs,
-# trimmed matrix + sharded), so the typecheck/lint/unit time no longer sits on the
-# critical path ahead of the e2e. `launcher-smoke` is a one-off integration check.
+# The e2e is slow because a handful of specs run real package-manager installs, and
+# nearly all of that time was one file: eslint-flavors runs three installs (~55s each
+# on Windows), and scaffold-lint one more. vitest sharding couldn't split them (a
+# file's tests stay together), so instead each heavy install runs in its own parallel
+# job. `e2e-main` runs everything else with the heavy specs skipped, `e2e-flavors`
+# fans the three flavors out, `e2e-scaffold` runs the full-project lint, `checks`
+# carries the fast grid, and `launcher-smoke` is the one-off publish check. Wall-clock
+# is now the slowest single install, not the sum. Only the launcher still upgrades npm
+# (pack/version parse defensively now, so the global upgrade is gone everywhere else).
 jobs:
   checks:
     name: checks (node ${{ matrix.node }}, ${{ matrix.os }})
@@ -17,8 +22,8 @@ jobs:
       fail-fast: false
       matrix:
         # Full grid here because these steps are cheap and node-version behavior
-        # (util.styleText, parseArgs, the npm-pack quirk) is what the two node legs
-        # are really guarding. 22 is the engines floor (active LTS); 24 is current.
+        # (util.styleText, parseArgs) is what the two node legs are really guarding.
+        # 22 is the engines floor (active LTS); 24 is current.
         os: [ubuntu-latest, windows-latest]
         node: [22, 24]
     steps:
@@ -32,12 +37,6 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
-
-      # Node 22 bundles an older npm that runs the prepare hook during
-      # `npm pack --dry-run --json` even with `--ignore-scripts`, corrupting the
-      # JSON the pack/version e2e tests parse. Pin to a current npm (the release
-      # workflow does the same) so both matrix legs behave identically.
-      - run: npm install -g npm@latest
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -59,26 +58,22 @@ jobs:
       - name: Smoke-test built CLI
         run: node dist/cli.js --version
 
-  e2e:
-    name: e2e (node ${{ matrix.node }}, ${{ matrix.os }}, shard ${{ matrix.shard }})
+  e2e-main:
+    name: e2e main (node ${{ matrix.node }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        # The e2e spawns the built CLI in tmp dirs and runs real package-manager
-        # installs, so it's the slow, OS-sensitive leg (PM binaries are .cmd shims
-        # on Windows that bare spawn can't exec; path separators differ). Windows
-        # earns its place here for that; ubuntu also runs node 24 so the color e2e
-        # exercises util.styleText on the current line. The one cell we skip is
-        # windows+24: a Windows-only bug still shows on windows-22, a node-24 bug on
-        # ubuntu-24. Two shards per cell so the real-install suite runs in parallel.
+        # Everything except the heavy-install specs (UB_E2E_LEG=main skips those).
+        # Windows earns its place: PM binaries are .cmd shims there that bare spawn
+        # can't exec, and install.spec/git.spec exercise that here. ubuntu also runs
+        # node 24 so the color e2e hits util.styleText on the current line. windows+24
+        # is the one cell skipped: a Windows bug shows on windows-22, a node-24 bug on
+        # ubuntu-24.
         include:
-          - {os: ubuntu-latest, node: 22, shard: 1}
-          - {os: ubuntu-latest, node: 22, shard: 2}
-          - {os: ubuntu-latest, node: 24, shard: 1}
-          - {os: ubuntu-latest, node: 24, shard: 2}
-          - {os: windows-latest, node: 22, shard: 1}
-          - {os: windows-latest, node: 22, shard: 2}
+          - {os: ubuntu-latest, node: 22}
+          - {os: ubuntu-latest, node: 24}
+          - {os: windows-latest, node: 22}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -86,16 +81,62 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
-      - run: npm install -g npm@latest
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build
         run: pnpm build
-      # vitest --shard splits the test files across jobs; the e2e config already
-      # runs single-fork within a job, so the parallelism is across shards, not
-      # within one (which would trip over shared cwd/tmp state).
-      - name: E2E tests
-        run: pnpm vitest run --config vitest.e2e.config.ts --shard=${{ matrix.shard }}/2
+      - name: E2E tests (non-install specs)
+        run: pnpm vitest run --config vitest.e2e.config.ts
+        env:
+          UB_E2E_LEG: main
+
+  e2e-flavors:
+    name: e2e flavor ${{ matrix.flavor }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # One real install per job so the three run concurrently instead of back to
+        # back. Node 22 (the floor) is enough: flavor resolution isn't node-version
+        # sensitive, and node 24 is covered by e2e-main's color leg.
+        os: [ubuntu-latest, windows-latest]
+        flavor: [base, react, next]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: E2E tests (eslint flavor)
+        run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/eslint-flavors.spec.ts
+        env:
+          UB_FLAVOR: ${{ matrix.flavor }}
+
+  e2e-scaffold:
+    name: e2e scaffold lint (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: E2E tests (fresh-scaffold full lint)
+        run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/scaffold-lint.spec.ts
 
   launcher-smoke:
     name: create-unbranded launcher smoke
@@ -112,6 +153,10 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      # This job captures a tarball name from `npm pack --silent`, which node 22's
+      # bundled npm can pollute with prepare-hook output; a current npm keeps that
+      # capture clean. It's the one place the upgrade still earns its keep, and it's
+      # cheap on Linux.
       - run: npm install -g npm@latest
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

@@ -17,6 +17,15 @@ import { PKG_ROOT } from '../../src/util/paths';
 // anything about flavors.
 const CLI = join(PKG_ROOT, 'dist/cli.js');
 
+// CI fans the three real installs out across parallel jobs so they run concurrently
+// instead of ~55s each back to back: UB_FLAVOR runs just one flavor's test (unset
+// runs all three, e.g. locally), and UB_E2E_LEG=main skips the whole file so the
+// fast non-flavor e2e leg never pays for an install.
+const ONLY_FLAVOR = process.env.UB_FLAVOR;
+function flavorRuns(flavor: 'base' | 'react' | 'next'): boolean {
+	return ONLY_FLAVOR === undefined || ONLY_FLAVOR === flavor;
+}
+
 interface Scaffold {
 	dir: string;
 	pkg: { devDependencies?: Record<string, string> };
@@ -56,7 +65,7 @@ function lintConfig(dir: string): { status: number | null; output: string } {
 	return { status: res.status, output: `${res.stdout}\n${res.stderr}` };
 }
 
-describe('core-eslint flavors (e2e, real install)', () => {
+describe.skipIf(process.env.UB_E2E_LEG === 'main')('core-eslint flavors (e2e, real install)', () => {
 	let tmp: string;
 
 	beforeEach(() => {
@@ -67,7 +76,7 @@ describe('core-eslint flavors (e2e, real install)', () => {
 		rmSync(tmp, { recursive: true, force: true });
 	});
 
-	it('base installs zero React packages and its generated config lints clean', () => {
+	it.runIf(flavorRuns('base'))('base installs zero React packages and its generated config lints clean', () => {
 		const s = scaffoldFlavor(tmp, 'base');
 		const dev = s.pkg.devDependencies ?? {};
 
@@ -83,7 +92,7 @@ describe('core-eslint flavors (e2e, real install)', () => {
 		expect(lint.status, lint.output).toBe(0);
 	});
 
-	it('react adds the react plugins and jsx-a11y, and its config lints clean', () => {
+	it.runIf(flavorRuns('react'))('react adds the react plugins and jsx-a11y, and its config lints clean', () => {
 		const s = scaffoldFlavor(tmp, 'react');
 		const dev = s.pkg.devDependencies ?? {};
 
@@ -99,7 +108,7 @@ describe('core-eslint flavors (e2e, real install)', () => {
 		expect(lint.status, lint.output).toBe(0);
 	});
 
-	it('next adds the next plugin and rules, and its config lints clean', () => {
+	it.runIf(flavorRuns('next'))('next adds the next plugin and rules, and its config lints clean', () => {
 		const s = scaffoldFlavor(tmp, 'next');
 		const dev = s.pkg.devDependencies ?? {};
 

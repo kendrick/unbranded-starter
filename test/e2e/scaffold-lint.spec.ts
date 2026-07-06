@@ -12,7 +12,9 @@ import { PKG_ROOT } from '../../src/util/paths';
 // generated config, then the FULL-project lint.
 const CLI = join(PKG_ROOT, 'dist/cli.js');
 
-describe('a fresh core-eslint scaffold passes full-project lint (e2e, real install)', () => {
+// UB_E2E_LEG=main skips this real-install spec so the fast non-flavor e2e leg
+// doesn't pay for the install; a dedicated CI job runs it by path.
+describe.skipIf(process.env.UB_E2E_LEG === 'main')('a fresh core-eslint scaffold passes full-project lint (e2e, real install)', () => {
 	let tmp: string;
 
 	beforeEach(() => {
