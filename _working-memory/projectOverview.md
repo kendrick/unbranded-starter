@@ -20,7 +20,7 @@
 
 ```
 src/
-  cli.ts            — arg parsing (node:util parseArgs): --config/-c, --help, --version; top-level error catch
+  cli.ts            — arg parsing (node:util parseArgs): --config/-c, --help, --version, --no-color/--color; applyColorPolicy() at startup; top-level error catch
   commands/init.ts  — runInit(): the whole flow (detect → select → resolve → plan → copy → install → post-install)
   config/load.ts    — --config recipe loader + validate() (JSON only in v1)
   detect/pm.ts      — package-manager detection (lockfile → packageManager field → user-agent → prompt)
@@ -30,11 +30,11 @@ src/
   install/run.ts    — spawn PM install (SIGINT trap); post.ts — per-unit post-install hooks
   manifest/         — types.ts (core contracts), index.ts (the UNITS registry), resolve.ts (implies/requires/excludes), options.ts + eslint-config.ts (declarative unit options + generated eslint flavors)
   prompts/unit-picker/ — filterable multi-select prompt: pure option/state/render core + a thin @clack/core shell (prompt.ts)
-  util/paths.ts     — PKG_ROOT anchor (walk-up to package.json)
+  util/paths.ts     — PKG_ROOT anchor (walk-up to package.json); util/color.ts — one shared color policy (NO_COLOR/--color) the diff, picker, and clack all honor
   **/*.spec.ts      — unit tests co-located next to source
 templates/          — files needing runtime interpolation/rename before copy (e.g. tsconfig.json)
 opt-in/             — source payloads for opt-* units (husky, monorepo, playwright, shadcn)
-test/e2e/           — E2E specs + fixtures (expected-pack.txt is the tarball snapshot)
+test/e2e/           — E2E specs + fixtures (expected-pack.txt is the tarball snapshot); npm-pack.ts shares defensive `npm pack --json` parsing
 scripts/            — working-memory-kit session hooks (.sh + .ps1)
 ```
 

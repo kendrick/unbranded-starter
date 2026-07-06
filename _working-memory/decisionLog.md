@@ -14,6 +14,38 @@ Each entry follows this shape:
 **Alternatives considered:** What was rejected, and why.
 ```
 
+## 2026-07-05: CI split into parallel jobs — one heavy install per job (issues #55, #56)
+
+**Source:** commits 7dd2df7 (#55) and b2f5605 (#56) on main; a wall-clock optimization with no product behavior change.
+
+**Context:** `ci.yml` ran typecheck/lint/unit/build then the whole e2e serially across a 2x2 matrix, so the fast checks sat in front of the slow real-install e2e and the run waited on the slowest Windows leg. Profiling the merged split showed the e2e time was almost entirely one file: `eslint-flavors.spec` runs three real installs (~55s each on Windows) and `scaffold-lint.spec` one more, and vitest sharding can't break a single file apart.
+**Decision:** Fan the work into independent jobs. `checks` keeps the full node-{22,24} x {ubuntu,windows} grid (node-version behavior — `styleText`, `parseArgs` — is what those legs guard). `e2e-main` runs every non-heavy spec on a 3-cell matrix (drops windows-24) with the two heavy specs self-skipping via `UB_E2E_LEG=main`. `e2e-flavors` fans base/react/next out, one real install per job, via `UB_FLAVOR`. `e2e-scaffold` runs the full-project lint. `launcher-smoke` runs the pack-and-co-install check once on linux. Wall-clock is now the slowest single install, not the sum.
+**Second change (#56): drop the global `npm install -g npm@latest`** everywhere except launcher-smoke. New shared helper `test/e2e/npm-pack.ts` `packedFilePaths()` parses `npm pack --dry-run --json` defensively — node 22's bundled npm prints prepare-hook output ahead of the JSON, so it slices from the first array-of-objects (`[` then `{`, which `[INFO]`-style hook lines never form) before `JSON.parse`. pack.spec/version.spec consume it, so they no longer need a current npm just to parse pack output; launcher-smoke still upgrades because it captures a tarball name from `npm pack --silent`.
+**Alternatives considered:** vitest `--shard` to split the slow suite — rejected; a file's tests stay together and the cost is one file. Keeping windows-24 in the grid — dropped from e2e-main; a Windows-specific failure shows on windows-22, a node-24 one on ubuntu-24.
+
+## 2026-07-05: A fresh scaffold lints clean under the shipped ESLint config (issue #48, PR #54)
+
+**Source:** commit 1572975 (#54), closing the #48 follow-up filed during the TUI batch; the last loose end of milestone #4.
+
+**Context:** A brand-new scaffold's `package.json` and `.unbranded.json` failed the very ESLint config the tool ships (antfu's `jsonc/sort-keys` and `jsonc/indent`), so `eslint .` wasn't clean until a `--fix` pass — a poor first impression for a tool whose pitch is lint-clean tooling.
+**Decision:**
+
+- **Key order.** `merge-json.ts` `TOP_LEVEL_ORDER` retargeted to antfu's exact `sortPackageJson` order — the quirks that bit us are `type` before `version`, and `packageManager`/`private` before `description` — so `jsonc/sort-keys` accepts our output with no fix pass. Nested keys already matched antfu's asc requirement. Decided with the maintainer: align order for BOTH new and augment mode, since `mergePackageJson` already canonicalized order in both.
+- **Indent.** `install/run.ts` seeds a fresh `package.json` with tab indent (augment mode still detects and respects the user's existing indent, so we never reformat their file). `state/state.ts` `serializeState` writes `.unbranded.json` tab-indented unconditionally — it's entirely unbranded-owned, so there's no user formatting to preserve.
+
+**Test:** `test/e2e/scaffold-lint.spec.ts` — fresh empty dir, real install, drop the invocation recipe, then full `eslint .` over the whole scaffold expects zero problems. Writer-level guards on tab indent and type-before-version point a failure at the serializer, not eslint.
+**Alternatives considered:** Aligning key order only for new-project mode — rejected; the merge already canonicalized both modes, so splitting them would be the odd case out.
+
+## 2026-07-05: F-07 — one shared color policy honoring NO_COLOR and --no-color/--color (issue #32, PR #52)
+
+**Source:** issue #32 (F-07), merged as PR #52 (commit 7f4c8c3); the last milestone-4 feature.
+
+**Context:** The diff colorizer hardcoded red/green ANSI with no opt-out, so `diff --diff` and `--dry-run --diff` spat raw escape codes into a pipe, and nothing honored NO_COLOR. F-07 makes color one decision the whole CLI shares.
+**Decision:** New `src/util/color.ts` centralizes it. A pure `computeColorEnabled({ env, argv, isTTY })` fixes the precedence — an explicit off (`NO_COLOR`/`--no-color`) beats an explicit on (`FORCE_COLOR`/`--color`) beats the stream — and DELIBERATELY drops picocolors' habit of forcing color under CI, so a piped run stays plain enough to redirect into a file or another program. A pure `colorEnvPatch` translates that policy into the `NO_COLOR`/`FORCE_COLOR` env, and `applyColorPolicy()` applies it once at `cli.ts` startup. The diff colorizer (`renderPlanDiff`/`colorizeDiff` in `src/fs/copy.ts`) now gates on `colorEnabled()`; with color off it hands back the plain unified patch, which already carries +/-/@@ prefixes. New `--no-color`/`--color` flags registered in `parseArgs` and documented in `--help`.
+**Load-bearing insight:** clack 1.4.0 colors through node's `util.styleText`, which reads `NO_COLOR`/`FORCE_COLOR` live on every call — NOT picocolors, whose color decision freezes at import. So `applyColorPolicy()` needs no import-order or launcher trick; it only has to run before the first styled write. styleText ignores argv, so the env patch is what bridges `--no-color`/`--color` (and forcing color over a pipe via `FORCE_COLOR=1`) into the two vars it does read.
+**Test:** `test/e2e/no-color.spec.ts` asserts zero escape codes on piped `list`/`diff`/`doctor`/`--dry-run --diff` (the drift and dry-run cases render a real patch first, so the check runs against actual content), and pins the escape hatches — `--color` forces over a pipe, `FORCE_COLOR` keeps it, `--no-color` wins over `FORCE_COLOR`.
+**Alternatives considered:** An import-order or launcher trick to set env before clack loads — unnecessary once clack turned out to use styleText's live read, not picocolors' frozen decision. Keeping picocolors' CI-forces-color heuristic — rejected; it would defeat script-safe piped output, the whole point of the flag.
+
 ## 2026-07-05: Milestone-4 TUI batch — plan provenance, installed badges, filterable unit picker (issues #28-#31)
 
 **Source:** PRs #49 (issue #30), #50 (issue #28), #51 (issues #31 + #29), all merged to main; the ergonomics half of the Trust milestone. Closes #28/#29/#30/#31.
