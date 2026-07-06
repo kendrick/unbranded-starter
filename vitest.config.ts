@@ -6,7 +6,7 @@ export default defineConfig({
 		environment: 'jsdom',
 		globals: true,
 		// Customize per project — these defaults are conservative.
-		include: ['tests/unit/**/*.spec.ts', 'tests/unit/**/*.spec.tsx', 'src/**/*.spec.ts', 'src/**/*.spec.tsx'],
+		include: ['tests/unit/**/*.spec.ts', 'tests/unit/**/*.spec.tsx', 'src/**/*.spec.ts', 'src/**/*.spec.tsx', 'scripts/**/*.spec.mjs'],
 		exclude: ['**/node_modules/**', '**/dist/**', '**/.next/**', '**/build/**', '**/out/**'],
 		// Uncomment if you have a setup file:
 		// setupFiles: ['./tests/setup.ts'],
