@@ -14,6 +14,81 @@ Each entry follows this shape:
 **Alternatives considered:** What was rejected, and why.
 ```
 
+## 2026-07-06: `unbranded update` — baselines advance even on keep-mine, plus the no-baseline ladder (issue #34, PR #63)
+
+**Source:** PR #63 (commits 974b652, 0cef4ce, 180c558), closing #34; parts 1 and 2 of the arc are the schema-2 and merge3 entries below.
+
+**Context:** `unbranded update` re-renders the installed units' templates (the recorded options baked in, so a react-flavor scaffold replays as react) and folds them into the scaffold: copy-mode files three-way merge against the sidecar baseline via `computeUpdate`, merge-json/append files reuse `planFileOp` so update's structured behavior stays in lockstep with the scaffold's, and package.json is re-derived through `mergePackageJson` (existing-wins, so user customizations hold). `planUpdate` follows auditRepo's filesystem-in/plan-out shape; `computed` files point back at a re-scaffold, and `template-gone`/`user-deleted` are report-only. Two calls weren't obvious.
+**Decision:**
+
+- **Baselines ADVANCE to the current template even on keep-mine.** `refreshTrackedFiles` (state.ts) is update's only state door: it refreshes hashes for what's on disk and moves baselines forward — nothing else. If keep-mine left the baseline behind, the next update would re-read the same drift and re-ask, or under `--strategy theirs` silently overturn a choice the user already made. Disk and baseline legitimately diverge.
+- **No-baseline degradations (schema-1 scaffolds, deleted sidecar).** When the recorded hash still matches disk, the disk IS its own merge base and the merge stays exact. When the file was modified, it's `needs-choice` — ours or theirs only, because with no base there are no honest markers to render (`--strategy markers` warns and keeps ours for these).
+- **Conflicts need an explicit answer.** Interactive runs ask per file; `--strategy <ours|theirs|markers>` answers globally for CI; `--yes` without a strategy exits 1 on conflict instead of guessing.
+- **update never spawns installs.** A changed package.json is reported with a "run your PM's install to sync the lockfile" next step.
+
+**Alternatives considered:** Freezing the baseline on keep-mine — rejected; it re-litigates the same drift on every run. Rendering markers for no-base files — rejected; markers without a base misattribute lines. Guessing a conflict answer under `--yes` — rejected; a CI run should fail loudly.
+
+## 2026-07-06: node-diff3 becomes the fourth runtime dependency, behind one swappable wrapper (issue #34, PR #62)
+
+**Source:** PR #62 (commit 79f6ebb); the maintainer approved the new dependency.
+
+**Context:** update's copy-mode path needs a text three-way merge (base = sidecar baseline, mine = disk, theirs = the fresh template render). `diff` (jsdiff) is already a dep, but v9 exposes no three-way merge API.
+**Decision:** `node-diff3@3.2.1`, pinned like every other dep. `src/fs/merge3.ts` is a pure wrapper that owns everything around the region math: a terminator-preserving line split (`split(/(?<=\n)/)`) so CRLF files and a missing trailing newline survive the round trip byte-exact, git-style markers labeled `yours`/`template` (git's orientation from the user's seat), `excludeFalseConflicts` so both sides making the identical change reads as agreement, and the `UpdateStatus` vocabulary `computeUpdate` derives from the three contents (`up-to-date | clean-update | merged | conflict`). Nothing else imports node-diff3, so the dependency stays swappable behind one small surface.
+**Alternatives considered:** jsdiff for the merge — no merge API in v9. Writing the diff3 region math in-repo — rejected; it's a solved problem and the wrapper already isolates the risk.
+
+## 2026-07-06: `unbranded remove` — hash-checked, ref-counted back-out that refuses to strand dependents (issue #36 / F-11, PR #60)
+
+**Source:** PR #60 (commits 044384c, f309f64, 20ccbac, 91aea70, 50702d3).
+
+**Context:** The exit door for the day-2 loop: doctor names what a unit should look like, remove backs one out. The danger axis is user data — edited files and rewritten scripts exist nowhere else — so every default leans conservative.
+**Decision:**
+
+- `planRemoval` follows the auditRepo pattern (filesystem in, plan out), so the whole decision surface tests without prompts.
+- **Deletions are hash-checked.** Files still matching their recorded hash delete outright; modified files prompt per file (default no), and `--yes` KEEPS them — on disk but untracked. merge-json/append files always stay (they carry user content alongside the unit's) and merely stop being tracked.
+- **package.json backs out by reference count.** New `removePackageJsonEntries` (merge-json.ts) drops deps by name only when no remaining unit claims them, and scripts only when the value still matches what the unit shipped — a rewritten script is the user's now, kept and reported. Contributions are computed with the RECORDED options baked in. engines/packageManager are never touched (CI and corepack read them); they're named as manual steps instead.
+- **Dependents block removal.** New `dependentsOf` (resolve.ts) runs the resolver's implies/requires closure in reverse; remove refuses with the list, `--cascade` takes the whole set out.
+- **`applyRemovalToState` is the only way the tracked set shrinks** (writeStateFile only grows). Removing the last unit deletes the envelope and sidecar entirely — a lingering README would advertise management that no longer exists.
+- New `Unit.removeNotes` carries un-undoable side effects into next steps; opt-husky's `core.hooksPath` detach note is the first.
+
+**Alternatives considered:** Deleting modified files under `--yes` — rejected; a non-interactive run should never destroy edits that exist nowhere else. Auto-cascading dependents without a flag — rejected; the refusal keeps the blast radius explicit. Unpinning engines/packageManager automatically — rejected; silently unpinning node is exactly the surprise remove exists to avoid.
+
+## 2026-07-06: State schema 2 — sibling maps, baseline sidecar, and merge-not-replace (issue #34, PR #59; shipped as 0.7.0)
+
+**Source:** PR #59 (commit 13fde33), released immediately as 0.7.0 (#58).
+
+**Context:** update and remove need what schema 1 never recorded: which unit wrote each file, how it was produced, which options were live, and the original bytes to merge against.
+**Decision:**
+
+- `STATE_SCHEMA` 2 adds optional sibling maps next to `files` — `options` (the run's resolved unit options), `attribution` (rel → owning unit, recorded at write time because manifest dests drift across versions and a replay would misattribute), `modes` (rel → `copy | merge-json | append-if-missing | computed`). The `files` hash map stays byte-compatible with v1, so a schema-1 reader still parses what it knows; consumers key off `schema`, not field-sniffing.
+- **Baseline sidecar.** `.unbranded/baseline/` keeps byte-exact copies of copy-mode files — update's merge base — plus a README telling a human what the directory is and why to commit it. Only copy-mode files get baselines; structured/append/computed files refresh structurally, and a wrong merge base is worse than none (strays are pruned).
+- **`writeStateFile` now MERGES with the prior envelope** instead of last-run-wins: remove's ref-counting reasons over the whole scaffold history, so a run that adds one unit must not forget the earlier ones. Only remove shrinks the set.
+- `computedWrites` carry their unit (`TrackedWrite { dest, unit, mode }`), so attribution covers the computed files too.
+- **Released as 0.7.0 straight away** so real scaffolds start accumulating baselines before `update` ships.
+
+**Alternatives considered:** (settled in the maintainer Q&A, see the milestone entry below) Embedding baselines in the envelope — rejected; it bloats a hand-readable JSON with file bodies. Re-fetching the old template from the registry at update time — rejected; it needs the network and the exact old package version. Breaking the `files` shape — rejected for v1 byte-compat.
+
+## 2026-07-06: doctor --fix repairs through the existing apply pipeline, not a second one (issue #33 / F-08, PR #57)
+
+**Source:** PR #57 (commit 7262b2b), the first milestone-5 PR.
+
+**Context:** doctor already names the unit that closes each finding; F-08 closes the audit→repair loop without inventing a parallel installer.
+**Decision:** `runDoctorFix` collects the unit-fixable findings POST-suppression (so `doctor.ignore` holds) and hands their units to `runInit` — resolver, plan, guardrails, and prompts all still apply. Interactive runs open the unit picker preselected but editable via a new `initialSelected` seam in `createPickerState` (unknown ids are dropped so a caller can't park an invisible selection with no row to untoggle); presets (#38) will reuse the same seam. `--fix --yes` applies non-interactively; `--fix --json` is refused (the audit report and the apply flow are different animals). Manual findings are listed as next steps and never executed — their remedies delete or edit things, and --fix's contract is install-only. `runInit` now returns `{ ok }` so --fix can exit 1 on apply failure; a declined prompt or an interrupted install stays ok, only an install that ran and errored reads as failure.
+**Alternatives considered:** A dedicated repair executor — rejected; runInit already owns the resolver/plan/guardrail chain and a second path would drift. Executing manual remedies behind a confirmation — rejected; --fix stays install-only.
+
+## 2026-07-06: Milestone-5 shape settled with the maintainer before the build (issues #33-#38)
+
+**Source:** an AskUserQuestion round at milestone-5 planning time, before PR #57; no code.
+
+**Context:** The "1.0 — Close the loop" milestone crosses several one-way doors (a new dependency, an on-disk format, release timing), so they went to the maintainer up front rather than getting decided mid-PR.
+**Decision:**
+
+- Sidecar baselines (`.unbranded/baseline/` + README) are update's merge base — chosen over embedding bytes in the envelope or re-fetching old templates from the registry.
+- `node-diff3` powers the three-way merge (jsdiff v9 has no merge API).
+- Pin-bump automation (#35) runs as a scheduled workflow in this repo, not Renovate.
+- **1.0.0 waits for #38 presets.** The Release-As 1.0.0 commit lands after presets, not after #37's agent contract.
+
+**Alternatives considered:** Renovate for the pinned manifest versions — rejected in favor of a scheduled workflow the repo owns. Cutting 1.0.0 once the day-2 verbs (#33-#36) close — rejected; the maintainer wants presets in the 1.0 story.
+
 ## 2026-07-05: CI split into parallel jobs — one heavy install per job (issues #55, #56)
 
 **Source:** commits 7dd2df7 (#55) and b2f5605 (#56) on main; a wall-clock optimization with no product behavior change.
