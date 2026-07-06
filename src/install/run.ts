@@ -129,8 +129,9 @@ function toLatest(deps: Record<string, string> | undefined): Record<string, stri
 
 // Match the existing file's indentation so we don't reformat what the user
 // (or a prior tool) chose. Defaults to two spaces, which is what `npm init`
-// emits and what most package.json files in the wild use.
-function detectIndent(content: string): string {
+// emits and what most package.json files in the wild use. Exported because
+// remove's package.json rewrite has the same don't-reformat obligation.
+export function detectIndent(content: string): string {
 	for (const line of content.split('\n')) {
 		const match = /^([ \t]+)\S/.exec(line);
 		if (match?.[1])
