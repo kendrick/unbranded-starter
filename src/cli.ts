@@ -4,7 +4,7 @@ import { parseArgs } from 'node:util';
 import { log } from '@clack/prompts';
 import { runDiff } from './commands/diff';
 import { runDoctor, runDoctorFix } from './commands/doctor';
-import { runInit } from './commands/init';
+import { runInit, runPlanJson } from './commands/init';
 import { runList } from './commands/list';
 import { runOutdated } from './commands/outdated';
 import { runRemove } from './commands/remove';
@@ -49,7 +49,7 @@ Options:
   --latest                       Install the latest dependency versions, not the pinned defaults (recipe field: versions)
   --dry-run                      Report what each file would do, then exit without writing or installing
   --diff                         With --dry-run (or \`diff\`), print the unified patch for every changed file
-  --json                         With \`list\`, \`diff\`, or \`doctor\`, emit machine-readable output
+  --json                         With \`list\`, \`diff\`, \`doctor\`, \`outdated\`, or \`--dry-run\`, emit machine-readable output
   --strict                       With \`doctor\`, exit non-zero when the audit finds anything
   --fix                          With \`doctor\`, hand the fixable findings to the apply pipeline (no --json; composes with --yes, --dry-run, --pm)
   --cascade                      With \`remove\`, also remove the units that depend on the target
@@ -79,6 +79,7 @@ Examples:
   unbranded --units core-eslint,core-vitest --pm pnpm --yes   # fully non-interactive, no recipe file
   unbranded --latest                                   # take the newest versions, not the pins
   unbranded --dry-run --diff                           # preview every change, including diffs, write nothing
+  unbranded --dry-run --json --units core-eslint --pm pnpm    # the same preview as data, for tooling
 `;
 
 const { values, positionals } = parseArgs({
@@ -226,6 +227,25 @@ if (command === 'update') {
 if (command !== undefined) {
 	process.stderr.write(`Unknown command: ${command}. Run \`unbranded --help\` for usage.\n`);
 	process.exit(EXIT_ERROR);
+}
+
+// The machine half of --dry-run: pure JSON on stdout, no clack chrome. Routed
+// ahead of runInit because that flow starts narrating from its first line.
+if (values['dry-run'] && values.json) {
+	process.exit(await runPlanJson({
+		configPath: values.config,
+		targetDir: values.target ? resolve(values.target) : undefined,
+		inline: {
+			units: values.units,
+			pm: values.pm,
+			onConflict: values['on-conflict'],
+			postInstall: values['post-install'],
+			yes: values.yes,
+		},
+	}).catch((err: unknown) => {
+		process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+		return EXIT_ERROR;
+	}));
 }
 
 runInit({
