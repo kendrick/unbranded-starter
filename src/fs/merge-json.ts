@@ -107,6 +107,59 @@ export function mergePackageJson(
 	return sortPackageJson(merged);
 }
 
+// What `unbranded remove` strips from package.json after reference-counting.
+// Dependencies are identified by name alone — version drift (renovate, a user
+// bump) doesn't change what the entry is. Scripts carry the value the unit
+// contributed, and are only removed while they still say exactly that: a script
+// the user rewrote is their work now, so it stays and gets reported.
+export interface PackageJsonRemoval {
+	dependencies?: string[];
+	devDependencies?: string[];
+	scripts?: Record<string, string>;
+}
+
+export function removePackageJsonEntries(
+	existing: Record<string, unknown>,
+	removal: PackageJsonRemoval,
+): { pkg: Record<string, unknown>; keptScripts: string[] } {
+	const pkg: Record<string, unknown> = { ...existing };
+	const keptScripts: string[] = [];
+
+	for (const section of ['dependencies', 'devDependencies'] as const) {
+		const names = removal[section];
+		if (!names || !isStringRecord(pkg[section]))
+			continue;
+		const map = { ...pkg[section] as Record<string, string> };
+		for (const name of names)
+			delete map[name];
+		setOrDrop(pkg, section, map);
+	}
+
+	if (removal.scripts && isStringRecord(pkg.scripts)) {
+		const map = { ...pkg.scripts };
+		for (const [name, expected] of Object.entries(removal.scripts)) {
+			if (!(name in map))
+				continue;
+			if (map[name] === expected)
+				delete map[name];
+			else
+				keptScripts.push(name);
+		}
+		setOrDrop(pkg, 'scripts', map);
+	}
+
+	return { pkg: sortPackageJson(pkg), keptScripts };
+}
+
+// A section we emptied disappears entirely — a dangling `"devDependencies": {}`
+// is exactly the kind of residue remove exists to not leave behind.
+function setOrDrop(pkg: Record<string, unknown>, key: string, map: Record<string, string>): void {
+	if (Object.keys(map).length === 0)
+		delete pkg[key];
+	else
+		pkg[key] = map;
+}
+
 function mergeDepLike(
 	existing: unknown,
 	addition: Record<string, string>,
