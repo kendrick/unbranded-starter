@@ -4,6 +4,7 @@ import { dirname, join as joinNative, posix, relative, resolve as resolveNative 
 import { isCancel, log, select } from '@clack/prompts';
 import { createPatch } from 'diff';
 import { cancelAndExit } from '../util/cancel';
+import { colorEnabled } from '../util/color';
 
 // 'merged' and 'appended' are the non-clobbering outcomes the two structured
 // modes produce: a merge-json write that folded new keys in, or an
@@ -205,12 +206,14 @@ export function planFileOp(op: FileOp, opts: CopyOptions): FilePlan {
 	return { ...base, outcome: 'conflict', diff: { existing: destBuf.toString('utf-8'), proposed: srcBuf.toString('utf-8') } };
 }
 
-// Colorized unified patch for a plan that would change an existing file, or
-// null when there's nothing to diff (a fresh create or an identical skip).
-export function renderPlanDiff(plan: FilePlan): string | null {
+// Unified patch for a plan that would change an existing file, or null when
+// there's nothing to diff (a fresh create or an identical skip). `enabled`
+// defaults to the shared color policy so a piped or NO_COLOR run degrades to the
+// bare +/- prefixes; callers pass it explicitly only in tests.
+export function renderPlanDiff(plan: FilePlan, enabled = colorEnabled()): string | null {
 	if (!plan.diff)
 		return null;
-	return colorizeDiff(createPatch(plan.rel, plan.diff.existing, plan.diff.proposed, 'existing', 'proposed'));
+	return colorizeDiff(createPatch(plan.rel, plan.diff.existing, plan.diff.proposed, 'existing', 'proposed'), enabled);
 }
 
 function writeBuffer(path: string, buf: Buffer): void {
@@ -239,7 +242,7 @@ async function promptConflict(destPath: string, src: Buffer, dest: Buffer): Prom
 	// the standard hunk format; we colorize the prefix characters for the
 	// terminal. After showing it, re-prompt without the diff option so the
 	// user doesn't loop back to it from itself.
-	log.message(colorizeDiff(createPatch(destPath, dest.toString('utf-8'), src.toString('utf-8'), 'existing', 'proposed')));
+	log.message(colorizeDiff(createPatch(destPath, dest.toString('utf-8'), src.toString('utf-8'), 'existing', 'proposed'), colorEnabled()));
 
 	const secondChoice = await select<'overwrite' | 'skip'>({
 		message: 'Now what?',
@@ -352,7 +355,11 @@ function appendMissingLines(existing: Buffer, incoming: Buffer): AppendResult {
 	return { content: Buffer.from(`${base}${missing.join('\n')}\n`, 'utf-8'), changed: true };
 }
 
-function colorizeDiff(patch: string): string {
+// The plain patch already carries +/-/@@ prefixes, so "no color" just means
+// handing it back untouched — the prefixes are the fallback the audit asks for.
+function colorizeDiff(patch: string, enabled: boolean): string {
+	if (!enabled)
+		return patch;
 	return patch.split('\n').map((line) => {
 		// Skip the file headers (`+++`, `---`) when coloring; they're metadata
 		// rather than content changes.

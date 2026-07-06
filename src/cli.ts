@@ -6,6 +6,7 @@ import { runDiff } from './commands/diff';
 import { runDoctor } from './commands/doctor';
 import { runInit } from './commands/init';
 import { runList } from './commands/list';
+import { applyColorPolicy } from './util/color';
 import { nodeVersionError } from './util/node-version';
 import { PKG_ROOT } from './util/paths';
 
@@ -39,6 +40,8 @@ Options:
   --diff                         With --dry-run (or \`diff\`), print the unified patch for every changed file
   --json                         With \`list\`, \`diff\`, or \`doctor\`, emit machine-readable output
   --strict                       With \`doctor\`, exit non-zero when the audit finds anything
+  --no-color                     Disable ANSI color everywhere (also honors the NO_COLOR env var)
+  --color                        Force ANSI color even when output is piped
   --help, -h                     Show this help
   --version, -v                  Show the version
 
@@ -73,6 +76,8 @@ const { values, positionals } = parseArgs({
 		'diff': { type: 'boolean' },
 		'json': { type: 'boolean' },
 		'strict': { type: 'boolean' },
+		'no-color': { type: 'boolean' },
+		'color': { type: 'boolean' },
 		'help': { type: 'boolean', short: 'h' },
 		'version': { type: 'boolean', short: 'v' },
 	},
@@ -80,6 +85,12 @@ const { values, positionals } = parseArgs({
 	// with no positional still routes to the interactive init below.
 	allowPositionals: true,
 });
+
+// Settle the color policy before anything writes. clack and the picker color via
+// node's styleText, which reads NO_COLOR/FORCE_COLOR live but ignores the
+// --no-color/--color flags on their own, so this bridges the flags into the env
+// those calls do read.
+applyColorPolicy();
 
 if (values.help) {
 	process.stdout.write(HELP);

@@ -1,9 +1,10 @@
+import type { FilePlan } from './copy';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { select } from '@clack/prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { copyFileOp, planFileOp } from './copy';
+import { copyFileOp, planFileOp, renderPlanDiff } from './copy';
 
 // The merge-json conflict fallback re-uses the raw-copy `select` prompt. Stub
 // just that export so we can assert the interactive path fires without a TTY;
@@ -398,5 +399,34 @@ describe('planFileOp (dry-run classification)', () => {
 
 		writeFileSync(join(targetDir, '.gitignore'), 'node_modules\ndist\n');
 		expect(planFileOp({ src: '.gitignore', dest: '.gitignore', mode: 'append-if-missing' }, { pkgRoot, targetDir }).outcome).toBe('skip');
+	});
+});
+
+describe('renderPlanDiff color gating', () => {
+	const plan: FilePlan = {
+		src: 'x',
+		dest: '/tmp/x.txt',
+		rel: 'x.txt',
+		outcome: 'conflict',
+		diff: { existing: 'old\n', proposed: 'new\n' },
+	};
+
+	it('wraps changed lines in ANSI when color is enabled', () => {
+		const patch = renderPlanDiff(plan, true);
+		expect(patch).toContain('\x1B[32m'); // added line, green
+		expect(patch).toContain('\x1B[31m'); // removed line, red
+	});
+
+	it('falls back to bare +/- prefixes with no escape codes when color is disabled', () => {
+		const patch = renderPlanDiff(plan, false);
+		expect(patch).not.toContain('\x1B');
+		// The unified-diff prefixes are the fallback signal, so they must survive.
+		expect(patch).toMatch(/^\+new$/m);
+		expect(patch).toMatch(/^-old$/m);
+	});
+
+	it('still returns null when there is nothing to diff, regardless of color', () => {
+		expect(renderPlanDiff({ ...plan, diff: undefined }, true)).toBeNull();
+		expect(renderPlanDiff({ ...plan, diff: undefined }, false)).toBeNull();
 	});
 });
