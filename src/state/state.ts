@@ -203,6 +203,42 @@ function dropKeys<V extends string>(record: Record<string, V>, gone: ReadonlySet
 	return Object.fromEntries(Object.entries(record).filter(([k]) => !gone.has(k))) as Record<string, V>;
 }
 
+// `unbranded update`'s state door: refresh hashes for what's now on disk and
+// move baselines to the CURRENT template. The two legitimately diverge — a
+// keep-mine resolution leaves the user's bytes on disk while the merge base
+// still has to advance, or the next update would misread the same drift again
+// (or worse, silently take the template over a file the user chose to keep).
+// Touches nothing else: no growth, no shrinking, no attribution changes.
+export function refreshTrackedFiles(opts: {
+	targetDir: string;
+	entries: Record<string, { hash: string; baseline?: string }>;
+}): void {
+	const prior = readStateFile(opts.targetDir);
+	if (!prior)
+		return;
+
+	const files = { ...prior.files };
+	for (const [rel, entry] of Object.entries(opts.entries)) {
+		files[rel] = entry.hash;
+		if (entry.baseline !== undefined) {
+			const dest = join(opts.targetDir, SIDECAR_DIR, 'baseline', rel);
+			mkdirSync(dirname(dest), { recursive: true });
+			writeFileSync(dest, entry.baseline);
+		}
+	}
+
+	const state = buildStateFile({
+		version: readCliVersion(),
+		units: prior.units,
+		files,
+		options: prior.options,
+		attribution: prior.attribution,
+		modes: prior.modes,
+		doctor: prior.doctor,
+	});
+	writeFileSync(join(opts.targetDir, STATE_FILENAME), serializeState(state));
+}
+
 // Returns undefined for both "no state" and "unreadable state". `diff` treats an
 // untracked project as a normal, clean exit, so a malformed file must degrade to
 // the same friendly path rather than throwing a stack trace at a CI job.

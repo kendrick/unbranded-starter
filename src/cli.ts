@@ -7,6 +7,7 @@ import { runDoctor, runDoctorFix } from './commands/doctor';
 import { runInit } from './commands/init';
 import { runList } from './commands/list';
 import { runRemove } from './commands/remove';
+import { runUpdate } from './commands/update';
 import { applyColorPolicy } from './util/color';
 import { nodeVersionError } from './util/node-version';
 import { PKG_ROOT } from './util/paths';
@@ -29,6 +30,8 @@ Commands:
                         Add --fix to install the units that close the fixable findings
   remove <unit>         Back a tracked unit out: delete its unmodified files, drop its sole-owned
                         package.json entries, and update .unbranded.json
+  update                Pull newer templates into tracked files via three-way merge against the
+                        recorded baselines; conflicts prompt per file (or use --strategy)
 
 Options:
   --config, -c <file>            Run non-interactively with a JSON recipe
@@ -46,6 +49,7 @@ Options:
   --strict                       With \`doctor\`, exit non-zero when the audit finds anything
   --fix                          With \`doctor\`, hand the fixable findings to the apply pipeline (no --json; composes with --yes, --dry-run, --pm)
   --cascade                      With \`remove\`, also remove the units that depend on the target
+  --strategy <ours|theirs|markers>  With \`update\`, answer every conflict the same way (required for --yes runs that hit one)
   --no-color                     Disable ANSI color everywhere (also honors the NO_COLOR env var)
   --color                        Force ANSI color even when output is piped
   --help, -h                     Show this help
@@ -63,6 +67,8 @@ Examples:
   unbranded doctor --strict --json                     # repo-hygiene CI gate: non-zero exit on any finding
   unbranded doctor --fix --yes                         # audit, then install every fixable finding's unit
   unbranded remove opt-husky --dry-run                 # preview backing a unit out, change nothing
+  unbranded update --dry-run --diff                    # preview template updates with patches
+  unbranded update --yes --strategy theirs             # CI-safe update, template wins conflicts
   unbranded --config recipe.json                       # reproducible, scriptable run
   unbranded --units core-eslint,core-vitest --pm pnpm --yes   # fully non-interactive, no recipe file
   unbranded --latest                                   # take the newest versions, not the pins
@@ -86,6 +92,7 @@ const { values, positionals } = parseArgs({
 		'strict': { type: 'boolean' },
 		'fix': { type: 'boolean' },
 		'cascade': { type: 'boolean' },
+		'strategy': { type: 'string' },
 		'no-color': { type: 'boolean' },
 		'color': { type: 'boolean' },
 		'help': { type: 'boolean', short: 'h' },
@@ -167,6 +174,26 @@ if (command === 'remove') {
 		dryRun: values['dry-run'],
 		force: values.force,
 		cascade: values.cascade,
+	}).catch((err: unknown) => {
+		log.error(err instanceof Error ? err.message : String(err));
+		return 1;
+	}));
+}
+
+// Template refresh over the recorded baselines. Validating --strategy here keeps
+// a typo'd value a one-line error instead of a half-applied update.
+if (command === 'update') {
+	const strategy = values.strategy;
+	if (strategy !== undefined && strategy !== 'ours' && strategy !== 'theirs' && strategy !== 'markers') {
+		process.stderr.write(`--strategy must be ours, theirs, or markers (got "${strategy}").\n`);
+		process.exit(1);
+	}
+	process.exit(await runUpdate({
+		yes: values.yes,
+		dryRun: values['dry-run'],
+		diff: values.diff,
+		force: values.force,
+		strategy,
 	}).catch((err: unknown) => {
 		log.error(err instanceof Error ? err.message : String(err));
 		return 1;
