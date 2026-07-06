@@ -6,6 +6,7 @@ import { runDiff } from './commands/diff';
 import { runDoctor, runDoctorFix } from './commands/doctor';
 import { runInit } from './commands/init';
 import { runList } from './commands/list';
+import { runOutdated } from './commands/outdated';
 import { runRemove } from './commands/remove';
 import { runUpdate } from './commands/update';
 import { applyColorPolicy } from './util/color';
@@ -32,6 +33,8 @@ Commands:
                         package.json entries, and update .unbranded.json
   update                Pull newer templates into tracked files via three-way merge against the
                         recorded baselines; conflicts prompt per file (or use --strategy)
+  outdated              Check every manifest pin against the npm registry; --strict exits non-zero
+                        when majors are behind
 
 Options:
   --config, -c <file>            Run non-interactively with a JSON recipe
@@ -50,6 +53,7 @@ Options:
   --fix                          With \`doctor\`, hand the fixable findings to the apply pipeline (no --json; composes with --yes, --dry-run, --pm)
   --cascade                      With \`remove\`, also remove the units that depend on the target
   --strategy <ours|theirs|markers>  With \`update\`, answer every conflict the same way (required for --yes runs that hit one)
+  --registry <url>               With \`outdated\`, check against this registry instead of npmjs (or set npm_config_registry)
   --no-color                     Disable ANSI color everywhere (also honors the NO_COLOR env var)
   --color                        Force ANSI color even when output is piped
   --help, -h                     Show this help
@@ -69,6 +73,7 @@ Examples:
   unbranded remove opt-husky --dry-run                 # preview backing a unit out, change nothing
   unbranded update --dry-run --diff                    # preview template updates with patches
   unbranded update --yes --strategy theirs             # CI-safe update, template wins conflicts
+  unbranded outdated --strict                          # freshness gate: non-zero exit on major-behind pins
   unbranded --config recipe.json                       # reproducible, scriptable run
   unbranded --units core-eslint,core-vitest --pm pnpm --yes   # fully non-interactive, no recipe file
   unbranded --latest                                   # take the newest versions, not the pins
@@ -93,6 +98,7 @@ const { values, positionals } = parseArgs({
 		'fix': { type: 'boolean' },
 		'cascade': { type: 'boolean' },
 		'strategy': { type: 'string' },
+		'registry': { type: 'string' },
 		'no-color': { type: 'boolean' },
 		'color': { type: 'boolean' },
 		'help': { type: 'boolean', short: 'h' },
@@ -174,6 +180,20 @@ if (command === 'remove') {
 		dryRun: values['dry-run'],
 		force: values.force,
 		cascade: values.cascade,
+	}).catch((err: unknown) => {
+		log.error(err instanceof Error ? err.message : String(err));
+		return 1;
+	}));
+}
+
+// Read-only freshness report: manifest pins vs the registry's latest. Like
+// doctor, the default exit is 0 so a report never fails a job; --strict is the
+// opt-in gate, and it trips on majors only.
+if (command === 'outdated') {
+	process.exit(await runOutdated({
+		json: values.json,
+		strict: values.strict,
+		registry: values.registry,
 	}).catch((err: unknown) => {
 		log.error(err instanceof Error ? err.message : String(err));
 		return 1;
