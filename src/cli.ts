@@ -4,12 +4,13 @@ import { parseArgs } from 'node:util';
 import { log } from '@clack/prompts';
 import { runDiff } from './commands/diff';
 import { runDoctor, runDoctorFix } from './commands/doctor';
-import { runInit } from './commands/init';
+import { runInit, runPlanJson } from './commands/init';
 import { runList } from './commands/list';
 import { runOutdated } from './commands/outdated';
 import { runRemove } from './commands/remove';
 import { runUpdate } from './commands/update';
 import { applyColorPolicy } from './util/color';
+import { EXIT_ERROR, EXIT_OK } from './util/exit-codes';
 import { nodeVersionError } from './util/node-version';
 import { PKG_ROOT } from './util/paths';
 
@@ -19,7 +20,7 @@ const NODE_FLOOR = 22;
 const versionError = nodeVersionError(process.versions.node, NODE_FLOOR);
 if (versionError) {
 	process.stderr.write(`${versionError}\n`);
-	process.exit(1);
+	process.exit(EXIT_ERROR);
 }
 
 const HELP = `Usage: unbranded [command] [options]
@@ -48,7 +49,7 @@ Options:
   --latest                       Install the latest dependency versions, not the pinned defaults (recipe field: versions)
   --dry-run                      Report what each file would do, then exit without writing or installing
   --diff                         With --dry-run (or \`diff\`), print the unified patch for every changed file
-  --json                         With \`list\`, \`diff\`, or \`doctor\`, emit machine-readable output
+  --json                         With \`list\`, \`diff\`, \`doctor\`, \`outdated\`, or \`--dry-run\`, emit machine-readable output
   --strict                       With \`doctor\`, exit non-zero when the audit finds anything
   --fix                          With \`doctor\`, hand the fixable findings to the apply pipeline (no --json; composes with --yes, --dry-run, --pm)
   --cascade                      With \`remove\`, also remove the units that depend on the target
@@ -78,6 +79,7 @@ Examples:
   unbranded --units core-eslint,core-vitest --pm pnpm --yes   # fully non-interactive, no recipe file
   unbranded --latest                                   # take the newest versions, not the pins
   unbranded --dry-run --diff                           # preview every change, including diffs, write nothing
+  unbranded --dry-run --json --units core-eslint --pm pnpm    # the same preview as data, for tooling
 `;
 
 const { values, positionals } = parseArgs({
@@ -117,7 +119,7 @@ applyColorPolicy();
 
 if (values.help) {
 	process.stdout.write(HELP);
-	process.exit(0);
+	process.exit(EXIT_OK);
 }
 
 if (values.version) {
@@ -125,7 +127,7 @@ if (values.version) {
 	// rebuilding. The cost is one filesystem read per invocation.
 	const pkg = JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf-8')) as { version: string };
 	process.stdout.write(`${pkg.version}\n`);
-	process.exit(0);
+	process.exit(EXIT_OK);
 }
 
 const command = positionals[0];
@@ -134,7 +136,7 @@ const command = positionals[0];
 // of the init flow's detection kicks in.
 if (command === 'list') {
 	runList({ json: values.json });
-	process.exit(0);
+	process.exit(EXIT_OK);
 }
 
 // Read-only drift check against .unbranded.json. No target, no TTY; exit code
@@ -151,7 +153,7 @@ if (command === 'doctor') {
 	if (values.fix) {
 		if (values.json) {
 			process.stderr.write('doctor --fix has no --json output. Run the audit with `doctor --json`, or drop --json to apply fixes.\n');
-			process.exit(1);
+			process.exit(EXIT_ERROR);
 		}
 		process.exit(await runDoctorFix({
 			yes: values.yes,
@@ -173,7 +175,7 @@ if (command === 'remove') {
 	const unitId = positionals[1];
 	if (unitId === undefined) {
 		process.stderr.write('Usage: unbranded remove <unit-id>. Run `unbranded list` for the ids.\n');
-		process.exit(1);
+		process.exit(EXIT_ERROR);
 	}
 	process.exit(await runRemove(unitId, {
 		yes: values.yes,
@@ -182,7 +184,7 @@ if (command === 'remove') {
 		cascade: values.cascade,
 	}).catch((err: unknown) => {
 		log.error(err instanceof Error ? err.message : String(err));
-		return 1;
+		return EXIT_ERROR;
 	}));
 }
 
@@ -196,7 +198,7 @@ if (command === 'outdated') {
 		registry: values.registry,
 	}).catch((err: unknown) => {
 		log.error(err instanceof Error ? err.message : String(err));
-		return 1;
+		return EXIT_ERROR;
 	}));
 }
 
@@ -206,7 +208,7 @@ if (command === 'update') {
 	const strategy = values.strategy;
 	if (strategy !== undefined && strategy !== 'ours' && strategy !== 'theirs' && strategy !== 'markers') {
 		process.stderr.write(`--strategy must be ours, theirs, or markers (got "${strategy}").\n`);
-		process.exit(1);
+		process.exit(EXIT_ERROR);
 	}
 	process.exit(await runUpdate({
 		yes: values.yes,
@@ -216,7 +218,7 @@ if (command === 'update') {
 		strategy,
 	}).catch((err: unknown) => {
 		log.error(err instanceof Error ? err.message : String(err));
-		return 1;
+		return EXIT_ERROR;
 	}));
 }
 
@@ -224,7 +226,26 @@ if (command === 'update') {
 // beats silently dropping it and running the interactive flow the user didn't ask for.
 if (command !== undefined) {
 	process.stderr.write(`Unknown command: ${command}. Run \`unbranded --help\` for usage.\n`);
-	process.exit(1);
+	process.exit(EXIT_ERROR);
+}
+
+// The machine half of --dry-run: pure JSON on stdout, no clack chrome. Routed
+// ahead of runInit because that flow starts narrating from its first line.
+if (values['dry-run'] && values.json) {
+	process.exit(await runPlanJson({
+		configPath: values.config,
+		targetDir: values.target ? resolve(values.target) : undefined,
+		inline: {
+			units: values.units,
+			pm: values.pm,
+			onConflict: values['on-conflict'],
+			postInstall: values['post-install'],
+			yes: values.yes,
+		},
+	}).catch((err: unknown) => {
+		process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+		return EXIT_ERROR;
+	}));
 }
 
 runInit({
@@ -248,5 +269,5 @@ runInit({
 	// instead of a raw stack trace. detectPm throws for workspace-leaf and
 	// malformed package.json; config validation throws for bad recipes.
 	log.error(err instanceof Error ? err.message : String(err));
-	process.exit(1);
+	process.exit(EXIT_ERROR);
 });

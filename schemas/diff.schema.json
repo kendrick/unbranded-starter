@@ -1,0 +1,26 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://github.com/kendrick/unbranded-starter/schemas/diff.schema.json",
+	"title": "unbranded diff --json",
+	"description": "Drift of tracked files against .unbranded.json. tracked=false means no state file was found.",
+	"type": "object",
+	"required": ["schema", "tracked", "drift", "files"],
+	"additionalProperties": false,
+	"properties": {
+		"schema": { "type": "integer" },
+		"tracked": { "type": "boolean" },
+		"drift": { "type": "boolean" },
+		"files": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"required": ["path", "status"],
+				"additionalProperties": false,
+				"properties": {
+					"path": { "type": "string" },
+					"status": { "enum": ["unchanged", "user-modified", "template-updated", "both"] }
+				}
+			}
+		}
+	}
+}

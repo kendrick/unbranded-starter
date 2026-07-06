@@ -1,0 +1,89 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://github.com/kendrick/unbranded-starter/schemas/catalog.schema.json",
+	"title": "unbranded list --json",
+	"description": "The unit catalog envelope. The schema integer bumps on breaking shape changes.",
+	"type": "object",
+	"required": ["schema", "units"],
+	"additionalProperties": false,
+	"properties": {
+		"schema": { "type": "integer" },
+		"units": { "type": "array", "items": { "$ref": "#/$defs/unit" } }
+	},
+	"$defs": {
+		"stringMap": { "type": "object", "additionalProperties": { "type": "string" } },
+		"unit": {
+			"type": "object",
+			"required": ["id", "category", "label", "description", "files"],
+			"additionalProperties": false,
+			"properties": {
+				"id": { "type": "string" },
+				"category": { "type": "string" },
+				"label": { "type": "string" },
+				"description": { "type": "string" },
+				"dependencies": { "$ref": "#/$defs/stringMap" },
+				"devDependencies": { "$ref": "#/$defs/stringMap" },
+				"files": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+				"options": { "type": "array", "items": { "$ref": "#/$defs/option" } },
+				"implies": { "type": "array", "items": { "type": "string" } },
+				"excludes": { "type": "array", "items": { "type": "string" } },
+				"requires": { "type": "array", "items": { "type": "string" } },
+				"postInstall": { "type": "array", "items": { "$ref": "#/$defs/postInstall" } },
+				"packageJsonPatch": {
+					"type": "object",
+					"additionalProperties": false,
+					"properties": {
+						"scripts": { "$ref": "#/$defs/stringMap" },
+						"engines": { "$ref": "#/$defs/stringMap" },
+						"packageManager": { "type": "string" }
+					}
+				}
+			}
+		},
+		"file": {
+			"type": "object",
+			"required": ["dest"],
+			"additionalProperties": false,
+			"properties": {
+				"dest": { "type": "string" },
+				"rename": { "type": "string" },
+				"mode": { "enum": ["copy", "merge-json", "append-if-missing"] }
+			}
+		},
+		"option": {
+			"type": "object",
+			"required": ["key", "label", "default", "choices"],
+			"additionalProperties": false,
+			"properties": {
+				"key": { "type": "string" },
+				"label": { "type": "string" },
+				"default": { "type": "string" },
+				"choices": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["value", "label"],
+						"additionalProperties": false,
+						"properties": {
+							"value": { "type": "string" },
+							"label": { "type": "string" },
+							"hint": { "type": "string" }
+						}
+					}
+				}
+			}
+		},
+		"postInstall": {
+			"type": "object",
+			"required": ["id", "command", "prompt", "default"],
+			"additionalProperties": false,
+			"properties": {
+				"id": { "type": "string" },
+				"command": { "type": "array", "items": { "type": "string" } },
+				"prompt": { "type": "string" },
+				"default": { "type": "boolean" },
+				"requires": { "enum": ["git"] }
+			}
+		}
+	}
+}

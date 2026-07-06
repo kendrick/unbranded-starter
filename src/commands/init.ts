@@ -4,7 +4,7 @@ import type { CopyResult, FilePlan, PlanOutcome } from '../fs/copy';
 import type { Unit, UnitId, UnitOption } from '../manifest/types';
 import type { TrackedWrite } from '../state/state';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, join, sep } from 'node:path';
 import { cancel, confirm, intro, isCancel, log, note, outro, select } from '@clack/prompts';
 import { assertValidPm, loadConfig, resolveConfig } from '../config/load';
 import { buildRecipe, serializeRecipe } from '../config/recipe';
@@ -57,6 +57,67 @@ export interface RunInitResult {
 	// doctor --fix maps this flag to its exit code, and a declined prompt exiting 1
 	// would read as a broken repair.
 	ok: boolean;
+}
+
+// The --dry-run --json envelope: what a run WOULD do, as data. Bumped when the
+// shape changes in a way a consumer can't tolerate, like every other surface.
+export const PLAN_SCHEMA = 1;
+
+// The machine half of --dry-run. Deliberately a separate path from runInit:
+// that flow narrates through clack from its first line, and one stray chrome
+// line on stdout breaks a JSON consumer. Requires a selection (--units or
+// --config) because there is no picker to drive without a TTY story.
+export async function runPlanJson(opts: { configPath?: string; inline?: InlineFlags; targetDir?: string }): Promise<number> {
+	const inline = opts.inline ?? {};
+	if (inline.pm !== undefined)
+		assertValidPm(inline.pm);
+
+	const known = new Set(UNITS.map(u => u.id));
+	const optionSchema = buildOptionSchema(UNITS);
+	const fileConfig = opts.configPath ? loadConfig(opts.configPath, known, optionSchema) : null;
+	const config = fileConfig !== null || inline.units !== undefined
+		? resolveConfig(fileConfig, inline, known, optionSchema)
+		: null;
+	if (!config) {
+		process.stderr.write('--dry-run --json needs a selection: pass --units <ids> or --config <file>.\n');
+		return 1;
+	}
+
+	const target = await detectTarget({ projectName: config.projectName, cwd: opts.targetDir });
+	// Mirrors runInit's override expression exactly so the two dry-run flavors
+	// can't drift: an explicit --pm wins, then the recipe's pm, then detection.
+	const pm = await detectPm(target.dir, { override: (inline.pm as Pm | undefined) ?? fileConfig?.pm, mode: target.mode });
+
+	const resolution = resolveSelection(config.units, UNITS);
+	if (resolution.kind === 'missing-required') {
+		process.stderr.write(`${resolution.unit} requires ${resolution.needs.join(', ')}, which weren't selected.\n`);
+		return 1;
+	}
+	if (resolution.kind === 'conflict') {
+		process.stderr.write(`${resolution.pair[0]} and ${resolution.pair[1]} can't both be selected.\n`);
+		return 1;
+	}
+
+	const byId = new Map(UNITS.map(u => [u.id, u]));
+	const selectedUnits = resolution.ids.map(id => byId.get(id)).filter((u): u is Unit => u !== undefined);
+	const optionSelections = await resolveUnitOptions(selectedUnits, config.options, false, target.dir);
+	const units = selectedUnits.map(unit => applyUnitOptions(unit, optionSelections));
+
+	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
+	const plans = units.flatMap(unit =>
+		unit.files.map(file => planFileOp(file, { pkgRoot: PKG_ROOT, targetDir: target.dir, projectName })),
+	);
+
+	process.stdout.write(`${JSON.stringify({
+		schema: PLAN_SCHEMA,
+		target: { dir: target.dir, mode: target.mode },
+		pm,
+		units: [...resolution.ids].sort(),
+		auto: [...resolution.auto].sort(),
+		// rel is native; the envelope speaks posix like every other surface.
+		files: plans.map(p => ({ path: p.rel.split(sep).join('/'), action: p.outcome })),
+	}, null, 2)}\n`);
+	return 0;
 }
 
 export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {

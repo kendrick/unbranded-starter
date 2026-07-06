@@ -1,0 +1,29 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://github.com/kendrick/unbranded-starter/schemas/outdated.schema.json",
+	"title": "unbranded outdated --json",
+	"description": "Every manifest pin graded against the registry's latest dist-tag.",
+	"type": "object",
+	"required": ["schema", "registry", "majorsBehind", "packages"],
+	"additionalProperties": false,
+	"properties": {
+		"schema": { "type": "integer" },
+		"registry": { "type": "string" },
+		"majorsBehind": { "type": "integer" },
+		"packages": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"required": ["name", "pin", "latest", "behind", "units"],
+				"additionalProperties": false,
+				"properties": {
+					"name": { "type": "string" },
+					"pin": { "type": "string" },
+					"latest": { "type": "string" },
+					"behind": { "enum": ["up-to-date", "patch", "minor", "major", "unknown"] },
+					"units": { "type": "array", "items": { "type": "string" } }
+				}
+			}
+		}
+	}
+}
