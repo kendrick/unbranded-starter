@@ -50,7 +50,15 @@ export interface RunInitOpts {
 	preselect?: UnitId[];
 }
 
-export async function runInit(opts: RunInitOpts = {}): Promise<void> {
+export interface RunInitResult {
+	// False only when the apply itself failed (the install errored). A user saying
+	// "no" at a prompt or an empty selection is a clean stop, not a failure —
+	// doctor --fix maps this flag to its exit code, and a declined prompt exiting 1
+	// would read as a broken repair.
+	ok: boolean;
+}
+
+export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	const inline = opts.inline ?? {};
 
 	// --yes means "don't prompt, just apply". With no selection there's nothing
@@ -110,7 +118,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 				return cancelAndExit();
 			if (!proceed) {
 				cancel('Cancelled.');
-				return;
+				return { ok: true };
 			}
 		}
 	}
@@ -152,7 +160,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 	}
 	if (selection.length === 0) {
 		outro('Nothing selected.');
-		return;
+		return { ok: true };
 	}
 
 	const resolution = resolveSelection(selection, UNITS);
@@ -193,7 +201,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 		note(formatDryRun(plans, opts.diff ?? false), 'Dry run (no files written)');
 		log.success(formatDryRunSummary(plans));
 		outro('Dry run: nothing written.');
-		return;
+		return { ok: true };
 	}
 
 	// A recipe or --yes already opts in; asking again would just slow CI down.
@@ -204,7 +212,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 			return cancelAndExit();
 		if (!proceed) {
 			cancel('Cancelled.');
-			return;
+			return { ok: true };
 		}
 	}
 
@@ -292,6 +300,11 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 	}
 
 	outro('Done.');
+
+	// An interrupted install stays ok: the files and state are already on disk and
+	// the warn above tells the user how to finish, which is a different situation
+	// from an install that ran and failed.
+	return { ok: !installResult.error };
 }
 
 // Resolve every selected unit's options to a concrete value. Precedence: a value
