@@ -42,7 +42,10 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 		? (JSON.parse(raw) as Record<string, unknown>)
 		: { name: basename(opts.targetDir), version: '0.0.0', type: 'module' };
 
-	const indent = had ? detectIndent(raw) : '  ';
+	// Fresh seed uses a tab, which is what the ESLint config unbranded ships expects
+	// (antfu's jsonc/indent), so a new scaffold lints clean without a fix pass (#48).
+	// Augment keeps detectIndent, so we never reformat a file the user already has.
+	const indent = had ? detectIndent(raw) : '\t';
 
 	// Files this run writes outside the copy loop, collected for the state file.
 	const computedWrites: string[] = [];

@@ -69,7 +69,11 @@ export function buildStateFile(input: { version: string; units: UnitId[]; files:
 // re-scaffolding the same units must produce a byte-identical envelope so a VCS
 // diff shows real drift, not incidental key reordering.
 export function serializeState(state: StateFile): string {
-	return `${JSON.stringify(sortKeys(state), null, 2)}\n`;
+	// Tab indent so the .unbranded.json we write into a project satisfies the ESLint
+	// config unbranded ships (antfu's jsonc/indent), the same reason package.json is
+	// tab-seeded (#48). This file is entirely unbranded-owned, so there's no user
+	// formatting to preserve — we always emit our canonical form.
+	return `${JSON.stringify(sortKeys(state), null, '\t')}\n`;
 }
 
 // Thin IO shell over the pure builder. Reads each landed file to hash it and

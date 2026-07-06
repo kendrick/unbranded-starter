@@ -8,39 +8,58 @@ export interface MergeInput {
 	packageManager?: string;
 }
 
-// Top-level keys in conventional order. Anything not listed here is appended
-// in its original order so unknown fields (e.g. tool-specific config blocks)
-// stay where the user put them.
+// Top-level keys in the order antfu's shipped config expects. This mirrors
+// @antfu/eslint-config's `sortPackageJson` list verbatim so a scaffolded
+// package.json satisfies `jsonc/sort-keys` with no `lint:fix` pass (#48). The
+// order has quirks worth not "fixing": `type` sits ahead of `version`, and
+// `private`/`packageManager` ahead of `description`. Anything not listed is
+// appended in its original order so unknown fields stay where the user put them.
 const TOP_LEVEL_ORDER = [
+	'publisher',
 	'name',
+	'displayName',
+	'type',
 	'version',
+	'private',
+	'packageManager',
 	'description',
-	'keywords',
-	'license',
 	'author',
 	'contributors',
+	'license',
+	'funding',
 	'homepage',
 	'repository',
 	'bugs',
-	'funding',
-	'type',
+	'keywords',
+	'categories',
+	'sideEffects',
+	'imports',
+	'exports',
 	'main',
 	'module',
-	'bin',
-	'exports',
+	'unpkg',
+	'jsdelivr',
 	'types',
+	'typesVersions',
+	'bin',
+	'icon',
 	'files',
 	'engines',
-	'packageManager',
+	'activationEvents',
+	'contributes',
 	'scripts',
-	'dependencies',
-	'devDependencies',
 	'peerDependencies',
+	'peerDependenciesMeta',
+	'dependencies',
 	'optionalDependencies',
-	'bundledDependencies',
-	'overrides',
+	'devDependencies',
 	'pnpm',
-	'workspaces',
+	'overrides',
+	'resolutions',
+	'husky',
+	'simple-git-hooks',
+	'lint-staged',
+	'eslintConfig',
 ];
 
 // Nested maps we sort alphabetically. The goal is reproducible diffs across

@@ -11,8 +11,10 @@ import { PKG_ROOT } from '../../src/util/paths';
 // eslint.config.mjs with the flavor's own installed plugins. Linting the config
 // file is what forces eslint to build the full config, so a missing plugin or an
 // unresolved rule (e.g. base referencing pnpm/* rules) fails here. Full-project
-// `eslint .` is a separate concern — the seeded package.json's key order and indent
-// don't satisfy antfu's jsonc rules yet, which is orthogonal to flavors.
+// `eslint .` on a fresh scaffold lives in scaffold-lint.spec (#48); this helper
+// pre-seeds a two-space package.json, so it takes the augment path and keeps that
+// file two-space — linting the whole project here would flag the seed's indent, not
+// anything about flavors.
 const CLI = join(PKG_ROOT, 'dist/cli.js');
 
 interface Scaffold {
