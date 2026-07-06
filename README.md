@@ -128,6 +128,7 @@ These are the pieces that make unbranded worth keeping in a repo rather than run
 
 - **`unbranded diff`** compares your tracked files against `.unbranded.json`, the state file every run records. It labels each file unchanged, user-modified, template-updated, or both, and exits non-zero when anything has drifted, so it drops straight into a CI check. Add `--diff` for the patch, `--json` for tooling.
 - **`unbranded doctor`** audits any repo, whether unbranded scaffolded it or not. It flags missing config, coexisting lockfiles, absent version pins, and more, and names the unit or command that fixes each finding. It writes nothing. `--strict` turns findings into a non-zero exit so it doubles as a repo-hygiene gate.
+- **`unbranded doctor --fix`** is the opt-in bridge from audit to remedy: it hands the fixable findings to the normal apply pipeline, opening the picker with those units preselected (or applying them outright with `--fix --yes`). Findings a unit can't close are listed as manual steps and never executed.
 
 Doctor's findings are opinions, and not every one is a defect on your repo. To accept a finding, add its id to a `doctor.ignore` array in `.unbranded.json`:
 
@@ -141,7 +142,9 @@ Doctor's findings are opinions, and not every one is a defect on your repo. To a
 
 Every finding id is stable and printed next to the finding, so you can copy it straight from a report. Suppressed findings drop out of both the human and `--json` output (a one-line count keeps them from vanishing silently) and no longer count toward the `--strict` exit code. A typo'd id gets a warning, not an error. `unbranded` preserves the block when it rewrites the state file, so re-running the scaffold won't wipe your accepted findings.
 
-Both are read-only and need no TTY, so they sit in CI as comfortably as at your prompt.
+Diff and doctor are read-only and need no TTY, so they sit in CI as comfortably as at your prompt.
+
+Every apply records its work in two places: `.unbranded.json` (which files landed, their hashes, which unit wrote each one, and the options the run resolved) and an `.unbranded/` sidecar holding byte-exact baselines of the copied files. The baselines are the merge base a future `unbranded update` will use to fold newer templates into your repo without losing local edits, so commit the sidecar along with the state file. The envelope carries a `schema` field (now 2) so tooling can key off it; a schema-1 file from an older release still reads, it just predates baselines.
 
 ## Commands and Flags
 
@@ -165,6 +168,7 @@ The common flags, with `unbranded --help` for the rest:
 | `--dry-run`                   | resolve and report, write nothing                             |
 | `--force`                     | skip the dirty-tree guard                                     |
 | `--json`                      | machine-readable output for `list`, `diff`, and `doctor`      |
+| `--fix`                       | with `doctor`, install the units that close fixable findings  |
 
 ## Non-Interactive Runs
 
