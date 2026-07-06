@@ -62,12 +62,12 @@ describe('mergePackageJson', () => {
 		expect(result.packageManager).toBe('yarn@4.1.0');
 	});
 
-	it('sorts packageManager between engines and scripts', () => {
+	it('orders packageManager ahead of engines, both ahead of scripts (antfu order)', () => {
 		const result = mergePackageJson(
 			{ name: 'foo', scripts: { build: 'tsc' }, engines: { node: '>=22' } },
 			[{ packageManager: 'pnpm@10.0.0' }],
 		);
-		expect(Object.keys(result)).toEqual(['name', 'engines', 'packageManager', 'scripts']);
+		expect(Object.keys(result)).toEqual(['name', 'packageManager', 'engines', 'scripts']);
 	});
 
 	it('alphabetizes dependencies', () => {
@@ -86,7 +86,7 @@ describe('mergePackageJson', () => {
 		expect(Object.keys(result.scripts as object)).toEqual(['build', 'lint', 'test']);
 	});
 
-	it('orders top-level keys in conventional package.json order', () => {
+	it('orders top-level keys the way the shipped antfu config expects', () => {
 		const result = mergePackageJson(
 			{
 				dependencies: { a: '1' },
@@ -97,7 +97,17 @@ describe('mergePackageJson', () => {
 			},
 			[],
 		);
-		expect(Object.keys(result)).toEqual(['name', 'version', 'type', 'scripts', 'dependencies']);
+		// antfu's sortPackageJson puts `type` ahead of `version`; getting this wrong is
+		// exactly what trips `jsonc/sort-keys` on a fresh scaffold (#48).
+		expect(Object.keys(result)).toEqual(['name', 'type', 'version', 'scripts', 'dependencies']);
+	});
+
+	it('honors antfu\'s specific quirks: type before version, packageManager before description', () => {
+		const result = mergePackageJson(
+			{ description: 'x', version: '0.0.0', type: 'module', packageManager: 'pnpm@10.0.0', name: 'foo' },
+			[],
+		);
+		expect(Object.keys(result)).toEqual(['name', 'type', 'version', 'packageManager', 'description']);
 	});
 
 	it('preserves unknown keys at the end in original order', () => {
