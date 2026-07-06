@@ -5,15 +5,20 @@ on:
     branches: [main]
   pull_request:
 
+# Three jobs instead of one so the wall-clock is the slowest job, not the sum.
+# `checks` (fast, full matrix) runs in parallel with `e2e` (slow real installs,
+# trimmed matrix + sharded), so the typecheck/lint/unit time no longer sits on the
+# critical path ahead of the e2e. `launcher-smoke` is a one-off integration check.
 jobs:
-  build-and-test:
+  checks:
+    name: checks (node ${{ matrix.node }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        # Windows matters because package-manager binaries are .cmd shims there,
-        # which bare spawn can't exec. 22 is the engines floor (active LTS); 24
-        # is the current line.
+        # Full grid here because these steps are cheap and node-version behavior
+        # (util.styleText, parseArgs, the npm-pack quirk) is what the two node legs
+        # are really guarding. 22 is the engines floor (active LTS); 24 is current.
         os: [ubuntu-latest, windows-latest]
         node: [22, 24]
     steps:
@@ -54,22 +59,65 @@ jobs:
       - name: Smoke-test built CLI
         run: node dist/cli.js --version
 
-      # E2E suite: spawns the built CLI in tmp dirs with --config recipes.
-      # Covers the no-install paths and the tarball contents snapshot. A
-      # matrix across PMs (npm/pnpm/yarn/bun) can land in a separate
-      # workflow once the install-mode tests exist.
+  e2e:
+    name: e2e (node ${{ matrix.node }}, ${{ matrix.os }}, shard ${{ matrix.shard }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The e2e spawns the built CLI in tmp dirs and runs real package-manager
+        # installs, so it's the slow, OS-sensitive leg (PM binaries are .cmd shims
+        # on Windows that bare spawn can't exec; path separators differ). Windows
+        # earns its place here for that; ubuntu also runs node 24 so the color e2e
+        # exercises util.styleText on the current line. The one cell we skip is
+        # windows+24: a Windows-only bug still shows on windows-22, a node-24 bug on
+        # ubuntu-24. Two shards per cell so the real-install suite runs in parallel.
+        include:
+          - {os: ubuntu-latest, node: 22, shard: 1}
+          - {os: ubuntu-latest, node: 22, shard: 2}
+          - {os: ubuntu-latest, node: 24, shard: 1}
+          - {os: ubuntu-latest, node: 24, shard: 2}
+          - {os: windows-latest, node: 22, shard: 1}
+          - {os: windows-latest, node: 22, shard: 2}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: npm install -g npm@latest
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      # vitest --shard splits the test files across jobs; the e2e config already
+      # runs single-fork within a job, so the parallelism is across shards, not
+      # within one (which would trip over shared cwd/tmp state).
       - name: E2E tests
-        run: pnpm vitest run --config vitest.e2e.config.ts
+        run: pnpm vitest run --config vitest.e2e.config.ts --shard=${{ matrix.shard }}/2
 
-      # The create-unbranded launcher pins an exact `unbranded` version that
-      # only resolves from the registry after publish, so the sole pre-publish
-      # way to exercise the real forwarding path is to pack both packages and
-      # co-install the tarballs into a throwaway project.
+  launcher-smoke:
+    name: create-unbranded launcher smoke
+    # The create-unbranded launcher pins an exact `unbranded` version that only
+    # resolves from the registry after publish, so the sole pre-publish way to
+    # exercise the real forwarding path is to pack both packages and co-install
+    # the tarballs into a throwaway project. Linux-only, once: the launcher is
+    # cross-platform and its forwarding rides the Windows install/e2e legs above.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: npm install -g npm@latest
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
       - name: Smoke-test create-unbranded launcher
-        # Bash-only harness (mktemp, $GITHUB_WORKSPACE). The launcher itself is
-        # cross-platform, and its forwarding is exercised by the Windows install
-        # and e2e legs above, so running it once on Linux is enough.
-        if: runner.os != 'Windows'
         run: |
           # --ignore-scripts keeps the prepare hook (simple-git-hooks) from
           # printing to the stdout we capture the tarball name from. dist/ is
