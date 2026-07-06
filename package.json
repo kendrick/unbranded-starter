@@ -36,10 +36,13 @@
 	},
 	"files": [
 		".editorconfig",
+		"AGENTS.md",
 		"dist",
+		"docs",
 		"eslint.config.mjs",
 		"opt-in",
 		"postcss.config.mjs",
+		"schemas",
 		"stylelint.config.mjs",
 		"templates",
 		"tsconfig.base.json",

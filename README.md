@@ -145,7 +145,7 @@ Doctor's findings are opinions, and not every one is a defect on your repo. To a
 
 Every finding id is stable and printed next to the finding, so you can copy it straight from a report. Suppressed findings drop out of both the human and `--json` output (a one-line count keeps them from vanishing silently) and no longer count toward the `--strict` exit code. A typo'd id gets a warning, not an error. `unbranded` preserves the block when it rewrites the state file, so re-running the scaffold won't wipe your accepted findings.
 
-Diff and doctor are read-only and need no TTY, so they sit in CI as comfortably as at your prompt.
+Diff and doctor are read-only and need no TTY, so they sit in CI as comfortably as at your prompt. In fact the whole non-interactive surface is a versioned contract for tooling and agents: every `--json` envelope has a shipped JSON Schema under `schemas/`, [AGENTS.md](AGENTS.md) documents the promise, and [docs/agent-cookbook.md](docs/agent-cookbook.md) walks the loop end to end.
 
 Every apply records its work in two places: `.unbranded.json` (which files landed, their hashes, which unit wrote each one, and the options the run resolved) and an `.unbranded/` sidecar holding byte-exact baselines of the copied files. The baselines are the merge base `unbranded update` uses to fold newer templates into your repo without losing local edits, so commit the sidecar along with the state file. The envelope carries a `schema` field (now 2) so tooling can key off it; a schema-1 file from an older release still reads, it just predates baselines.
 
