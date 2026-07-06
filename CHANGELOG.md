@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/kendrick/unbranded-starter/compare/v0.5.0...v0.6.0) (2026-07-06)
+
+
+### Features
+
+* honor NO_COLOR and --no-color/--color across every command ([#52](https://github.com/kendrick/unbranded-starter/issues/52)) ([7f4c8c3](https://github.com/kendrick/unbranded-starter/commit/7f4c8c3616a9adf8a009b0e20a26a20f53edc793))
+
+
+### Bug Fixes
+
+* a fresh scaffold lints clean under the shipped ESLint config ([#54](https://github.com/kendrick/unbranded-starter/issues/54)) ([1572975](https://github.com/kendrick/unbranded-starter/commit/15729755687d5f9d1685092953f568e71378e269))
+
 ## [0.5.0](https://github.com/kendrick/unbranded-starter/compare/v0.4.0...v0.5.0) (2026-07-05)
 
 
