@@ -112,4 +112,9 @@ export interface Unit {
 		engines?: Record<string, string>;
 		packageManager?: string;
 	};
+
+	// Printed by `unbranded remove` as a next step when the unit leaves residue
+	// its file/package.json back-out can't reach (git config, installed browsers).
+	// Guidance only — remove never executes anything destructive on its own.
+	removeNotes?: string;
 }

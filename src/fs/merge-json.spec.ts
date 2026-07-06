@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergePackageJson } from './merge-json';
+import { mergePackageJson, removePackageJsonEntries } from './merge-json';
 
 describe('mergePackageJson', () => {
 	it('returns existing unchanged when no patches apply', () => {
@@ -130,5 +130,53 @@ describe('mergePackageJson', () => {
 			],
 		);
 		expect(result.dependencies).toEqual({ a: '3.0.0', b: '2.0.0' });
+	});
+});
+
+describe('removePackageJsonEntries', () => {
+	it('removes dependency names from both maps even when the installed version drifted', () => {
+		const { pkg } = removePackageJsonEntries({
+			name: 'x',
+			dependencies: { 'clsx': '9.9.9', 'left-pad': '1.0.0' },
+			devDependencies: { tailwindcss: '5.0.0' },
+		}, { dependencies: ['clsx'], devDependencies: ['tailwindcss'] });
+		// Version drift is normal (renovate, user bumps); the name is the identity.
+		expect(pkg.dependencies).toEqual({ 'left-pad': '1.0.0' });
+		expect('devDependencies' in pkg).toBe(false);
+	});
+
+	it('removes a script only while it still says what the unit wrote', () => {
+		const { pkg, keptScripts } = removePackageJsonEntries({
+			name: 'x',
+			scripts: { lint: 'eslint .', test: 'my own harness', dev: 'vite' },
+		}, { scripts: { lint: 'eslint .', test: 'vitest run' } });
+		// lint matched and goes; test was rewritten by the user and stays, reported.
+		expect(pkg.scripts).toEqual({ dev: 'vite', test: 'my own harness' });
+		expect(keptScripts).toEqual(['test']);
+	});
+
+	it('drops a section it emptied but keeps one that still has entries', () => {
+		const { pkg } = removePackageJsonEntries({
+			name: 'x',
+			scripts: { prepare: 'husky' },
+			devDependencies: { 'husky': '9.1.7', 'lint-staged': '17.0.4', 'vitest': '2.1.9' },
+		}, { devDependencies: ['husky', 'lint-staged'], scripts: { prepare: 'husky' } });
+		expect('scripts' in pkg).toBe(false);
+		expect(pkg.devDependencies).toEqual({ vitest: '2.1.9' });
+	});
+
+	it('treats unknown names as no-ops and never invents sections', () => {
+		const { pkg, keptScripts } = removePackageJsonEntries(
+			{ name: 'x' },
+			{ dependencies: ['ghost'], scripts: { lint: 'eslint .' } },
+		);
+		expect(pkg).toEqual({ name: 'x' });
+		expect(keptScripts).toEqual([]);
+	});
+
+	it('leaves the input object untouched', () => {
+		const input = { name: 'x', dependencies: { clsx: '2.1.1' } };
+		removePackageJsonEntries(input, { dependencies: ['clsx'] });
+		expect(input.dependencies).toEqual({ clsx: '2.1.1' });
 	});
 });

@@ -129,6 +129,7 @@ These are the pieces that make unbranded worth keeping in a repo rather than run
 - **`unbranded diff`** compares your tracked files against `.unbranded.json`, the state file every run records. It labels each file unchanged, user-modified, template-updated, or both, and exits non-zero when anything has drifted, so it drops straight into a CI check. Add `--diff` for the patch, `--json` for tooling.
 - **`unbranded doctor`** audits any repo, whether unbranded scaffolded it or not. It flags missing config, coexisting lockfiles, absent version pins, and more, and names the unit or command that fixes each finding. It writes nothing. `--strict` turns findings into a non-zero exit so it doubles as a repo-hygiene gate.
 - **`unbranded doctor --fix`** is the opt-in bridge from audit to remedy: it hands the fixable findings to the normal apply pipeline, opening the picker with those units preselected (or applying them outright with `--fix --yes`). Findings a unit can't close are listed as manual steps and never executed.
+- **`unbranded remove <unit>`** backs a unit out: it deletes the unit's unmodified files (a file you edited gets a per-file prompt, and `--yes` keeps it), drops the package.json entries no remaining unit still claims, and updates the tracking. It refuses to strand a dependent — removing `core-tailwind` while `opt-shadcn` needs it is an error unless you pass `--cascade` to take the whole chain out. `--dry-run` previews everything.
 
 Doctor's findings are opinions, and not every one is a defect on your repo. To accept a finding, add its id to a `doctor.ignore` array in `.unbranded.json`:
 
@@ -149,26 +150,28 @@ Every apply records its work in two places: `.unbranded.json` (which files lande
 ## Commands and Flags
 
 ```
-unbranded            interactive prompt flow (the default)
-unbranded list       print the unit catalog
-unbranded diff       report drift against the recorded state
-unbranded doctor     audit the current repo
+unbranded                interactive prompt flow (the default)
+unbranded list           print the unit catalog
+unbranded diff           report drift against the recorded state
+unbranded doctor         audit the current repo
+unbranded remove <unit>  back a tracked unit out
 ```
 
 The common flags, with `unbranded --help` for the rest:
 
-| Flag                          | Does                                                          |
-| ----------------------------- | ------------------------------------------------------------- |
-| `--config, -c <file>`         | run a JSON recipe non-interactively                           |
-| `--target <dir>`              | scaffold against `<dir>` instead of the current directory     |
-| `--units <a,b,c>`             | pick units inline, no recipe file                             |
-| `--pm <npm\|pnpm\|yarn\|bun>` | set the package manager and skip detection                    |
-| `--yes`                       | apply without the confirm prompt (needs `--units`/`--config`) |
-| `--latest`                    | take the newest versions, not the pins                        |
-| `--dry-run`                   | resolve and report, write nothing                             |
-| `--force`                     | skip the dirty-tree guard                                     |
-| `--json`                      | machine-readable output for `list`, `diff`, and `doctor`      |
-| `--fix`                       | with `doctor`, install the units that close fixable findings  |
+| Flag                          | Does                                                           |
+| ----------------------------- | -------------------------------------------------------------- |
+| `--config, -c <file>`         | run a JSON recipe non-interactively                            |
+| `--target <dir>`              | scaffold against `<dir>` instead of the current directory      |
+| `--units <a,b,c>`             | pick units inline, no recipe file                              |
+| `--pm <npm\|pnpm\|yarn\|bun>` | set the package manager and skip detection                     |
+| `--yes`                       | apply without the confirm prompt (needs `--units`/`--config`)  |
+| `--latest`                    | take the newest versions, not the pins                         |
+| `--dry-run`                   | resolve and report, write nothing                              |
+| `--force`                     | skip the dirty-tree guard                                      |
+| `--json`                      | machine-readable output for `list`, `diff`, and `doctor`       |
+| `--fix`                       | with `doctor`, install the units that close fixable findings   |
+| `--cascade`                   | with `remove`, also remove the units that depend on the target |
 
 ## Non-Interactive Runs
 

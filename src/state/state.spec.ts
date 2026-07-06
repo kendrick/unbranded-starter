@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildStateFile, hashBuffer, readStateFile, serializeState, STATE_FILENAME, STATE_SCHEMA, writeStateFile } from './state';
+import { applyRemovalToState, buildStateFile, hashBuffer, readStateFile, serializeState, STATE_FILENAME, STATE_SCHEMA, writeStateFile } from './state';
 
 describe('buildStateFile', () => {
 	it('wraps the tracked files in a schema-versioned envelope', () => {
@@ -261,5 +261,72 @@ describe('writeStateFile / readStateFile', () => {
 		const state = readStateFile(tmp);
 		// The exact value tracks package.json; asserting it is a non-empty semver-ish string keeps the test robust.
 		expect(state?.version).toMatch(/\d+\.\d+\.\d+/);
+	});
+});
+
+describe('applyRemovalToState', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-state-remove-'));
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	function seed(): void {
+		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
+		writeFileSync(join(tmp, 'b.txt'), 'bravo\n');
+		writeStateFile({
+			targetDir: tmp,
+			units: ['core-eslint', 'core-typescript'],
+			writes: [
+				{ dest: join(tmp, 'a.txt'), unit: 'core-eslint', mode: 'copy' },
+				{ dest: join(tmp, 'b.txt'), unit: 'core-typescript', mode: 'copy' },
+			],
+			options: { eslintFlavor: 'react' },
+		});
+	}
+
+	it('shrinks every map and prunes the removed file\'s baseline', () => {
+		seed();
+		applyRemovalToState({ targetDir: tmp, removeUnits: ['core-eslint'], removeFiles: ['a.txt'], removeOptionKeys: ['eslintFlavor'] });
+
+		const state = readStateFile(tmp);
+		expect(state?.units).toEqual(['core-typescript']);
+		expect(Object.keys(state?.files ?? {})).toEqual(['b.txt']);
+		expect(state?.attribution).toEqual({ 'b.txt': 'core-typescript' });
+		expect(state?.modes).toEqual({ 'b.txt': 'copy' });
+		expect(state?.options).toBeUndefined();
+		expect(existsSync(join(tmp, '.unbranded', 'baseline', 'a.txt'))).toBe(false);
+		expect(existsSync(join(tmp, '.unbranded', 'baseline', 'b.txt'))).toBe(true);
+	});
+
+	it('preserves doctor.ignore and option keys it was not told to drop', () => {
+		seed();
+		const path = join(tmp, STATE_FILENAME);
+		const edited = { ...JSON.parse(readFileSync(path, 'utf-8')), doctor: { ignore: ['missing-editorconfig'] } };
+		writeFileSync(path, `${JSON.stringify(edited, null, '\t')}\n`);
+
+		applyRemovalToState({ targetDir: tmp, removeUnits: ['core-typescript'], removeFiles: ['b.txt'] });
+
+		const state = readStateFile(tmp);
+		expect(state?.doctor?.ignore).toEqual(['missing-editorconfig']);
+		expect(state?.options).toEqual({ eslintFlavor: 'react' });
+	});
+
+	it('removing the last unit deletes the state file and the sidecar wholesale', () => {
+		seed();
+		applyRemovalToState({ targetDir: tmp, removeUnits: ['core-eslint', 'core-typescript'], removeFiles: ['a.txt', 'b.txt'] });
+		// Nothing tracked means nothing to explain: a lingering envelope and README
+		// would advertise management that no longer exists.
+		expect(existsSync(join(tmp, STATE_FILENAME))).toBe(false);
+		expect(existsSync(join(tmp, '.unbranded'))).toBe(false);
+	});
+
+	it('is a no-op without a state file', () => {
+		expect(() => applyRemovalToState({ targetDir: tmp, removeUnits: ['core-eslint'], removeFiles: [] })).not.toThrow();
+		expect(existsSync(join(tmp, STATE_FILENAME))).toBe(false);
 	});
 });

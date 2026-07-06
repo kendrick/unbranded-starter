@@ -6,6 +6,7 @@ import { runDiff } from './commands/diff';
 import { runDoctor, runDoctorFix } from './commands/doctor';
 import { runInit } from './commands/init';
 import { runList } from './commands/list';
+import { runRemove } from './commands/remove';
 import { applyColorPolicy } from './util/color';
 import { nodeVersionError } from './util/node-version';
 import { PKG_ROOT } from './util/paths';
@@ -26,6 +27,8 @@ Commands:
   diff                  Compare tracked files against .unbranded.json; exits non-zero on drift
   doctor                Read-only repo audit; maps findings to fix-it units. --strict exits non-zero
                         Add --fix to install the units that close the fixable findings
+  remove <unit>         Back a tracked unit out: delete its unmodified files, drop its sole-owned
+                        package.json entries, and update .unbranded.json
 
 Options:
   --config, -c <file>            Run non-interactively with a JSON recipe
@@ -42,6 +45,7 @@ Options:
   --json                         With \`list\`, \`diff\`, or \`doctor\`, emit machine-readable output
   --strict                       With \`doctor\`, exit non-zero when the audit finds anything
   --fix                          With \`doctor\`, hand the fixable findings to the apply pipeline (no --json; composes with --yes, --dry-run, --pm)
+  --cascade                      With \`remove\`, also remove the units that depend on the target
   --no-color                     Disable ANSI color everywhere (also honors the NO_COLOR env var)
   --color                        Force ANSI color even when output is piped
   --help, -h                     Show this help
@@ -58,6 +62,7 @@ Examples:
   unbranded doctor                                     # audit the current repo and map gaps to fix-it units
   unbranded doctor --strict --json                     # repo-hygiene CI gate: non-zero exit on any finding
   unbranded doctor --fix --yes                         # audit, then install every fixable finding's unit
+  unbranded remove opt-husky --dry-run                 # preview backing a unit out, change nothing
   unbranded --config recipe.json                       # reproducible, scriptable run
   unbranded --units core-eslint,core-vitest --pm pnpm --yes   # fully non-interactive, no recipe file
   unbranded --latest                                   # take the newest versions, not the pins
@@ -80,6 +85,7 @@ const { values, positionals } = parseArgs({
 		'json': { type: 'boolean' },
 		'strict': { type: 'boolean' },
 		'fix': { type: 'boolean' },
+		'cascade': { type: 'boolean' },
 		'no-color': { type: 'boolean' },
 		'color': { type: 'boolean' },
 		'help': { type: 'boolean', short: 'h' },
@@ -146,6 +152,25 @@ if (command === 'doctor') {
 		}));
 	}
 	process.exit(runDoctor({ json: values.json, strict: values.strict }));
+}
+
+// Backing a unit out is an apply-shaped verb (it writes), so it reuses the same
+// composable flags: --yes, --dry-run, --force, plus its own --cascade.
+if (command === 'remove') {
+	const unitId = positionals[1];
+	if (unitId === undefined) {
+		process.stderr.write('Usage: unbranded remove <unit-id>. Run `unbranded list` for the ids.\n');
+		process.exit(1);
+	}
+	process.exit(await runRemove(unitId, {
+		yes: values.yes,
+		dryRun: values['dry-run'],
+		force: values.force,
+		cascade: values.cascade,
+	}).catch((err: unknown) => {
+		log.error(err instanceof Error ? err.message : String(err));
+		return 1;
+	}));
 }
 
 // A stray positional is almost always a typo (`unbranded lst`). Failing loudly

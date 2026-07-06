@@ -249,6 +249,10 @@ export const UNITS: Unit[] = [
 				requires: 'git',
 			},
 		],
+		// husky init wires core.hooksPath into .git/config, which file removal
+		// can't reach — without this pointer, commits keep trying to run a hook
+		// that's gone.
+		removeNotes: 'husky set core.hooksPath in this repo\'s git config; run `git config --unset core.hooksPath` to fully detach the hooks.',
 	},
 	{
 		id: 'opt-vscode',

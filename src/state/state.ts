@@ -160,6 +160,49 @@ export function writeStateFile(opts: {
 	return path;
 }
 
+// The one sanctioned way the tracked set shrinks (writeStateFile only grows it).
+// Drops the removed units, the rels they owned, and the option keys they defined,
+// then reuses the sidecar sync to prune their baselines. `removeOptionKeys` is a
+// parameter because which unit owns which option is manifest knowledge, and this
+// module stays manifest-free. When the last unit goes, the envelope and sidecar
+// go with it — a lingering README would advertise management that no longer exists.
+export function applyRemovalToState(opts: {
+	targetDir: string;
+	removeUnits: UnitId[];
+	removeFiles: string[];
+	removeOptionKeys?: string[];
+}): void {
+	const prior = readStateFile(opts.targetDir);
+	if (!prior)
+		return;
+
+	const gone = new Set(opts.removeFiles);
+	const units = prior.units.filter(u => !opts.removeUnits.includes(u));
+
+	if (units.length === 0) {
+		rmSync(join(opts.targetDir, STATE_FILENAME), { force: true });
+		rmSync(join(opts.targetDir, SIDECAR_DIR), { recursive: true, force: true });
+		return;
+	}
+
+	const merged = {
+		version: readCliVersion(),
+		units,
+		files: dropKeys(prior.files ?? {}, gone),
+		options: dropKeys(prior.options ?? {}, new Set(opts.removeOptionKeys ?? [])),
+		attribution: dropKeys(prior.attribution ?? {}, gone),
+		modes: dropKeys(prior.modes ?? {}, gone),
+		doctor: prior.doctor,
+	};
+
+	syncSidecar(opts.targetDir, [], merged.files, merged.modes);
+	writeFileSync(join(opts.targetDir, STATE_FILENAME), serializeState(buildStateFile(merged)));
+}
+
+function dropKeys<V extends string>(record: Record<string, V>, gone: ReadonlySet<string>): Record<string, V> {
+	return Object.fromEntries(Object.entries(record).filter(([k]) => !gone.has(k))) as Record<string, V>;
+}
+
 // Returns undefined for both "no state" and "unreadable state". `diff` treats an
 // untracked project as a normal, clean exit, so a malformed file must degrade to
 // the same friendly path rather than throwing a stack trace at a CI job.
