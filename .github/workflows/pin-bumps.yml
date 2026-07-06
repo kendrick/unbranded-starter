@@ -1,0 +1,51 @@
+name: Pin bumps
+
+# The maintainer half of the freshness policy (#35): grade the manifest pins
+# with `unbranded outdated --json`, then open one PR per unit whose pins moved.
+# Each PR rides the normal CI, so a bump that breaks a unit's e2e never lands
+# on its own.
+on:
+  schedule:
+    # Mondays 06:00 UTC. Weekly is the cadence the README promises.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      # PRs created with the default github.token do NOT trigger CI — and CI is
+      # the whole merge gate here. Set a PIN_BUMP_TOKEN secret (a fine-grained
+      # PAT with contents+PRs write) to get gated PRs; without it the workflow
+      # still runs, but each bump PR needs a manual close/reopen to start CI.
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PIN_BUMP_TOKEN || github.token }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Grade the manifest pins
+        run: node dist/cli.js outdated --json > /tmp/outdated.json
+
+      - name: Open per-unit bump PRs
+        env:
+          GH_TOKEN: ${{ secrets.PIN_BUMP_TOKEN || github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          node scripts/bump-pins.mjs /tmp/outdated.json
