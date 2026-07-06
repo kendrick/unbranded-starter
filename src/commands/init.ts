@@ -44,6 +44,10 @@ export interface RunInitOpts {
 	// `--force`: skip the dirty-tree guard. Rides its own channel (like --latest)
 	// rather than InlineFlags; a recipe's `force` field is the config-mode twin.
 	force?: boolean;
+	// Open the interactive picker with these units already checked (doctor --fix).
+	// Only the picker path reads it; non-interactive runs carry their selection in
+	// config.units and never see a picker to seed.
+	preselect?: UnitId[];
 }
 
 export async function runInit(opts: RunInitOpts = {}): Promise<void> {
@@ -139,6 +143,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<void> {
 			units: UNITS,
 			installed,
 			initialFlavors: pickerInitialFlavors(target.dir),
+			initialSelected: opts.preselect,
 		});
 		if (isCancel(picked))
 			return cancelAndExit();

@@ -1,6 +1,14 @@
 import type { Unit, UnitId } from '../manifest/types';
-import { describe, expect, it } from 'vitest';
-import { formatPlan } from './init';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { unitPicker } from '../prompts/unit-picker/prompt';
+import { formatPlan, runInit } from './init';
+
+// The picker is the one TTY boundary in the interactive flow; mocking just it lets
+// runInit's threading be exercised against a real temp dir and the real detectors.
+vi.mock('../prompts/unit-picker/prompt', () => ({ unitPicker: vi.fn() }));
 
 // Minimal fixture builder — formatPlan only reads id/label/files/deps.
 function unit(id: UnitId, label: string, extras: Partial<Unit> = {}): Unit {
@@ -13,6 +21,27 @@ function unit(id: UnitId, label: string, extras: Partial<Unit> = {}): Unit {
 		...extras,
 	};
 }
+
+describe('runInit preselect', () => {
+	let tmp: string;
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+		vi.mocked(unitPicker).mockReset();
+	});
+
+	it('opens the picker with the preselected units checked', async () => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-preselect-'));
+		// A package.json puts detectTarget in augment mode (no project-name prompt);
+		// inline --pm skips PM detection. The picker mock is then the only prompt.
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		vi.mocked(unitPicker).mockResolvedValue({ ids: ['core-editorconfig'], flavors: {} });
+
+		await runInit({ targetDir: tmp, dryRun: true, preselect: ['core-editorconfig'], inline: { pm: 'pnpm' } });
+
+		expect(vi.mocked(unitPicker).mock.calls[0]?.[0]?.initialSelected).toEqual(['core-editorconfig']);
+	});
+});
 
 describe('formatPlan', () => {
 	const eslint = unit('core-eslint', 'ESLint');
