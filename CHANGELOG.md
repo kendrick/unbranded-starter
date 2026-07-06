@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0](https://github.com/kendrick/unbranded-starter/compare/v0.6.0...v0.7.0) (2026-07-06)
+
+
+### Features
+
+* doctor --fix hands fixable findings to the apply pipeline ([#57](https://github.com/kendrick/unbranded-starter/issues/57)) ([7262b2b](https://github.com/kendrick/unbranded-starter/commit/7262b2b1aa3170e5fb540796e8cdb2f2b7d43bb1))
+* **state:** schema 2 lays the groundwork for update and remove ([#59](https://github.com/kendrick/unbranded-starter/issues/59)) ([13fde33](https://github.com/kendrick/unbranded-starter/commit/13fde337a22a37a47be196a753f914c7ae11374a))
+
 ## [0.6.0](https://github.com/kendrick/unbranded-starter/compare/v0.5.0...v0.6.0) (2026-07-06)
 
 
