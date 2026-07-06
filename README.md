@@ -26,7 +26,7 @@ But most of the repos you touch already exist, and the tooling questions never r
 - **It works on repos that already exist.** Point it at a live project and it augments in place, folding into your `package.json` and config files rather than clobbering them. A real conflict stops for an overwrite-or-skip prompt with a diff.
 - **It uses your package manager.** npm, pnpm, yarn, or bun, detected from your lockfile. No tool forces its own on you.
 - **À la carte, not a monolith.** Pick the units you want and a resolver pulls in whatever they depend on, showing you the full set before it writes anything. No eject, no all-or-nothing template.
-- **Reproducible by default.** Every version is pinned. `--latest` opts out per run, and you can save any interactive run as a recipe to replay in CI or on the next project.
+- **Reproducible by default.** Every version is pinned. `--latest` opts out per run, and you can save any interactive run as a recipe to replay in CI or on the next project. The pins themselves are kept fresh on a weekly cadence — automation checks them with `unbranded outdated` and opens per-unit bump PRs gated on that unit's tests — so reproducible never quietly becomes reproducibly old.
 - **It stays useful past day one.** Every run records what it wrote, so `unbranded diff` can show how far a project has drifted from its scaffold and `unbranded doctor` can audit any repo and name the exact unit that closes each gap.
 
 The name is the point: no framework lock-in, no house brand.
@@ -130,6 +130,7 @@ These are the pieces that make unbranded worth keeping in a repo rather than run
 - **`unbranded doctor`** audits any repo, whether unbranded scaffolded it or not. It flags missing config, coexisting lockfiles, absent version pins, and more, and names the unit or command that fixes each finding. It writes nothing. `--strict` turns findings into a non-zero exit so it doubles as a repo-hygiene gate.
 - **`unbranded doctor --fix`** is the opt-in bridge from audit to remedy: it hands the fixable findings to the normal apply pipeline, opening the picker with those units preselected (or applying them outright with `--fix --yes`). Findings a unit can't close are listed as manual steps and never executed.
 - **`unbranded update`** pulls newer template versions into your tracked files. Each file three-way merges against its recorded baseline: untouched files update silently, non-overlapping edits merge, and a true conflict asks per file whether to keep yours, take the template, or write conflict markers. `--strategy <ours|theirs|markers>` answers globally for CI, and a `--yes` run that hits a conflict without one fails instead of guessing. JSON files (package.json, merged settings) go through the structured merge, never a text merge.
+- **`unbranded outdated`** checks every pinned version in the unit manifest against the npm registry and grades the gap (patch, minor, major). The default exit is always 0 so a report never fails a job; `--strict` exits non-zero when majors are behind, and `--json` feeds tooling. `--registry` points it at a mirror.
 - **`unbranded remove <unit>`** backs a unit out: it deletes the unit's unmodified files (a file you edited gets a per-file prompt, and `--yes` keeps it), drops the package.json entries no remaining unit still claims, and updates the tracking. It refuses to strand a dependent — removing `core-tailwind` while `opt-shadcn` needs it is an error unless you pass `--cascade` to take the whole chain out. `--dry-run` previews everything.
 
 Doctor's findings are opinions, and not every one is a defect on your repo. To accept a finding, add its id to a `doctor.ignore` array in `.unbranded.json`:
@@ -156,6 +157,7 @@ unbranded list           print the unit catalog
 unbranded diff           report drift against the recorded state
 unbranded doctor         audit the current repo
 unbranded update         three-way merge newer templates into tracked files
+unbranded outdated       grade manifest pins against the npm registry
 unbranded remove <unit>  back a tracked unit out
 ```
 
@@ -175,6 +177,7 @@ The common flags, with `unbranded --help` for the rest:
 | `--fix`                       | with `doctor`, install the units that close fixable findings         |
 | `--cascade`                   | with `remove`, also remove the units that depend on the target       |
 | `--strategy`                  | with `update`, answer every conflict: `ours`, `theirs`, or `markers` |
+| `--registry <url>`            | with `outdated`, check a mirror instead of registry.npmjs.org        |
 
 ## Non-Interactive Runs
 
