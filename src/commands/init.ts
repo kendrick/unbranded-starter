@@ -2,6 +2,7 @@ import type { InlineFlags } from '../config/load';
 import type { Pm } from '../detect/pm';
 import type { CopyResult, FilePlan, PlanOutcome } from '../fs/copy';
 import type { Unit, UnitId, UnitOption } from '../manifest/types';
+import type { TrackedWrite } from '../state/state';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { cancel, confirm, intro, isCancel, log, note, outro, select } from '@clack/prompts';
@@ -217,14 +218,19 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	}
 
 	const copyResults: CopyResult[] = [];
+	// This loop is the one place that knows which unit each write belongs to, so
+	// attribution and the file's mode are captured here for the state file.
+	const writes: TrackedWrite[] = [];
 	for (const unit of units) {
 		for (const file of unit.files) {
-			copyResults.push(await copyFileOp(file, {
+			const result = await copyFileOp(file, {
 				pkgRoot: PKG_ROOT,
 				targetDir: target.dir,
 				projectName,
 				onConflict: config?.onConflict,
-			}));
+			});
+			copyResults.push(result);
+			writes.push({ dest: result.dest, unit: unit.id, mode: file.mode ?? 'copy' });
 		}
 	}
 
@@ -249,8 +255,11 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	writeStateFile({
 		targetDir: target.dir,
 		units: resolution.ids,
-		results: copyResults,
-		extraWrites: installResult.computedWrites,
+		writes: [
+			...writes,
+			...installResult.computedWrites.map(w => ({ dest: w.path, unit: w.unit, mode: 'computed' as const })),
+		],
+		options: optionSelections,
 	});
 
 	if (installResult.cancelled) {

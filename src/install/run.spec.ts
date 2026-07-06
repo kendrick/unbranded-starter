@@ -63,7 +63,7 @@ describe('writeAndInstall version policy', () => {
 		expect(pkg.packageManager).toBeUndefined();
 		// Reported back for the state file: this computed file lands after the copy
 		// loop, so the caller can't know it exists any other way.
-		expect(result.computedWrites).toContain(join(tmp, '.nvmrc'));
+		expect(result.computedWrites).toContainEqual({ path: join(tmp, '.nvmrc'), unit: 'core-node-version' });
 	});
 
 	it('never clobbers an existing .nvmrc — and does not claim to have written it', async () => {
@@ -72,7 +72,7 @@ describe('writeAndInstall version policy', () => {
 		expect(readFileSync(join(tmp, '.nvmrc'), 'utf-8')).toBe('18\n');
 		// We didn't write it, so it must not be tracked, otherwise diff would flag
 		// the user's own .nvmrc as drift against a hash we never laid down.
-		expect(result.computedWrites).not.toContain(join(tmp, '.nvmrc'));
+		expect(result.computedWrites.map(w => w.path)).not.toContain(join(tmp, '.nvmrc'));
 	});
 
 	it('leaves .nvmrc alone when core-node-version is not selected', async () => {
@@ -115,7 +115,7 @@ describe('writeAndInstall vscode extensions', () => {
 			'editorconfig.editorconfig',
 		]);
 		// The computed extensions.json is reported for the state file too.
-		expect(result.computedWrites).toContain(join(tmp, '.vscode', 'extensions.json'));
+		expect(result.computedWrites).toContainEqual({ path: join(tmp, '.vscode', 'extensions.json'), unit: 'opt-vscode' });
 	});
 
 	it('unions into an existing extensions.json without clobbering its entries or sibling keys', async () => {

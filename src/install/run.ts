@@ -1,6 +1,6 @@
 import type { Pm } from '../detect/pm';
 import type { MergeInput } from '../fs/merge-json';
-import type { Unit } from '../manifest/types';
+import type { Unit, UnitId } from '../manifest/types';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -19,16 +19,24 @@ export interface WriteAndInstallOpts {
 	latest?: boolean;
 }
 
+// A file written outside the copy loop, tagged with the unit it belongs to so
+// the state file can attribute it (schema 2) — the caller has no other way to
+// know which unit a computed path came from.
+export interface ComputedWrite {
+	path: string;
+	unit: UnitId;
+}
+
 export interface WriteAndInstallResult {
 	wrote: boolean;
 	installed: boolean;
 	cancelled: boolean;
 	error?: string;
-	// Absolute paths of files written outside the copy loop: the computed .nvmrc
-	// and .vscode/extensions.json. Threaded back so writeStateFile can hash them
+	// Files written outside the copy loop: the computed .nvmrc and
+	// .vscode/extensions.json. Threaded back so writeStateFile can hash them
 	// into .unbranded.json; nothing else in the run knows they exist. These land
 	// before the install spawn, so the list is complete even on a cancelled install.
-	computedWrites: string[];
+	computedWrites: ComputedWrite[];
 }
 
 export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteAndInstallResult> {
@@ -48,7 +56,7 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 	const indent = had ? detectIndent(raw) : '\t';
 
 	// Files this run writes outside the copy loop, collected for the state file.
-	const computedWrites: string[] = [];
+	const computedWrites: ComputedWrite[] = [];
 
 	const patches: MergeInput[] = opts.units.map(u => ({
 		dependencies: opts.latest ? toLatest(u.dependencies) : u.dependencies,
@@ -76,7 +84,7 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 		// against a hash we never laid down.
 		if (!existsSync(nvmrcPath)) {
 			writeFileSync(nvmrcPath, pins.nvmrc);
-			computedWrites.push(nvmrcPath);
+			computedWrites.push({ path: nvmrcPath, unit: NODE_VERSION_UNIT_ID });
 		}
 	}
 
@@ -85,7 +93,7 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 	// so it can't be a static template. Generate it here and union it into any
 	// file the user already has.
 	if (opts.units.some(u => u.id === VSCODE_UNIT_ID))
-		computedWrites.push(writeVscodeExtensions(opts.targetDir, opts.units));
+		computedWrites.push({ path: writeVscodeExtensions(opts.targetDir, opts.units), unit: VSCODE_UNIT_ID });
 
 	const merged = mergePackageJson(existing, patches);
 	writeFileSync(pkgPath, `${JSON.stringify(merged, null, indent)}\n`);

@@ -1,24 +1,43 @@
-import type { CopyResult } from '../fs/copy';
 import type { UnitId } from '../manifest/types';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, posix, relative, sep } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join, posix, relative, sep } from 'node:path';
 import { PKG_ROOT } from '../util/paths';
 
-// Bump when the on-disk shape changes in a way a reader can't tolerate. A future
-// `unbranded update` keys off `schema`, not field-sniffing, so the envelope stays
-// forward-parseable the same way the unit catalog does.
-export const STATE_SCHEMA = 1;
+// Bump when the on-disk shape changes in a way a reader can't tolerate. Schema 2
+// adds the sibling maps (`options`, `attribution`, `modes`) and the baseline
+// sidecar while leaving `files` byte-compatible, so a schema-1 reader still parses
+// the parts it knows. `unbranded update` keys off `schema`, not field-sniffing.
+export const STATE_SCHEMA = 2;
 
 // Lives at the project root, one level of visibility above node_modules. The
 // leading dot keeps it out of the way while staying obviously ours.
 export const STATE_FILENAME = '.unbranded.json';
+
+// The sidecar directory next to the state file: `baseline/` copies of managed
+// files (the merge base for `unbranded update`) plus a README that tells a human
+// what the directory is and why it should be committed.
+export const SIDECAR_DIR = '.unbranded';
 
 // A self-describing breadcrumb. This file lands in every scaffolded repo, so an
 // agent or person who stumbles on it should learn what wrote it and which
 // commands read it without leaving the file. It sorts first in the envelope
 // (leading underscore) so it's the first thing you see.
 export const STATE_TOOL_HINT = 'unbranded manages the files below. Run `unbranded diff` to see your local drift or `unbranded doctor` to audit the repo; https://github.com/kendrick/unbranded-starter';
+
+// How a tracked file was produced, recorded so `update` can pick the right
+// refresh path without replaying the manifest: text merge for `copy`, structured
+// merge for `merge-json`, block re-check for `append-if-missing`, and
+// regeneration for `computed` (.nvmrc, .vscode/extensions.json).
+export type TrackedFileMode = 'copy' | 'merge-json' | 'append-if-missing' | 'computed';
+
+// One file a run produced, wherever it came from: the copy loop or the computed
+// writes after it. `dest` is absolute; writeStateFile relativizes.
+export interface TrackedWrite {
+	dest: string;
+	unit: UnitId;
+	mode: TrackedFileMode;
+}
 
 // User-managed config that rides in the state file rather than a separate dotfile.
 // `ignore` lists doctor finding ids the repo has accepted; `unbranded doctor` reads
@@ -33,13 +52,23 @@ export interface StateFile {
 	// tool-written JSON. Sorts first, so it reads as the file's own header.
 	_tool: string;
 	schema: number;
-	// The CLI version that scaffolded this project. Recorded so a later diff/update
-	// can reason about which template generation the hashes below came from.
+	// The CLI version that last wrote this envelope. Recorded so a later
+	// diff/update can reason about which template generation touched it.
 	version: string;
 	units: UnitId[];
 	// dest path (relative to the project root, posix-normalized) → content hash.
 	// One hash per file keeps the diff a clean one-line-per-change.
 	files: Record<string, string>;
+	// Schema-2 siblings, all optional so a schema-1 envelope reads cleanly with
+	// them absent (consumers degrade rather than error):
+	// the run's resolved unit options (e.g. eslintFlavor), needed to re-render
+	// templates and to compute option-dependent package.json contributions…
+	options?: Record<string, string>;
+	// …which unit wrote each tracked file, recorded at write time because the
+	// manifest's dests can drift across versions and a replay would misattribute…
+	attribution?: Record<string, UnitId>;
+	// …and how each file was produced, so update picks the right refresh path.
+	modes?: Record<string, TrackedFileMode>;
 	// Optional user config. Absent on a fresh scaffold; present once a user opts in
 	// (e.g. adds `doctor.ignore`). Preserved verbatim across re-scaffolds.
 	doctor?: DoctorConfig;
@@ -49,18 +78,28 @@ export function hashBuffer(buf: Buffer): string {
 	return createHash('sha256').update(buf).digest('hex');
 }
 
-// Pure envelope builder. Sorts units and file keys so the object a caller hands
+// Pure envelope builder. Sorts units and record keys so the object a caller hands
 // in can't leak its own key order into the output; the serializer sorts again,
-// but sorting here keeps the in-memory value honest for tests too.
-export function buildStateFile(input: { version: string; units: UnitId[]; files: Record<string, string>; doctor?: DoctorConfig }): StateFile {
+// but sorting here keeps the in-memory value honest for tests too. Empty maps are
+// omitted entirely — same rule as the doctor block, no noise nobody asked for.
+export function buildStateFile(input: {
+	version: string;
+	units: UnitId[];
+	files: Record<string, string>;
+	options?: Record<string, string>;
+	attribution?: Record<string, UnitId>;
+	modes?: Record<string, TrackedFileMode>;
+	doctor?: DoctorConfig;
+}): StateFile {
 	return {
 		_tool: STATE_TOOL_HINT,
 		schema: STATE_SCHEMA,
 		version: input.version,
 		units: [...input.units].sort(),
 		files: sortRecord(input.files),
-		// Only carry the block when it holds something, so a clean scaffold never
-		// writes an empty `doctor: {}` nobody asked for.
+		...whenPresent('options', input.options),
+		...whenPresent('attribution', input.attribution),
+		...whenPresent('modes', input.modes),
 		...(input.doctor && Object.keys(input.doctor).length > 0 ? { doctor: input.doctor } : {}),
 	};
 }
@@ -76,35 +115,48 @@ export function serializeState(state: StateFile): string {
 	return `${JSON.stringify(sortKeys(state), null, '\t')}\n`;
 }
 
-// Thin IO shell over the pure builder. Reads each landed file to hash it and
-// stamps the running CLI version, then writes the envelope to the project root.
-// Returns the path written for the caller to log.
-//
-// `extraWrites` carries absolute paths of files a run produced outside the copy
-// loop: the computed `.nvmrc` and `.vscode/extensions.json`, which can't ship as
-// static templates (see install/run.ts) and so never pass through `results`.
-// Without them the map is incomplete and `diff` silently ignores their drift.
-export function writeStateFile(opts: { targetDir: string; units: UnitId[]; results: CopyResult[]; extraWrites?: string[] }): string {
+// Thin IO shell over the pure builder. Hashes each landed file, records who wrote
+// it and how, refreshes the baseline sidecar, and MERGES with any prior envelope
+// rather than replacing it: the day-2 verbs (remove, update) reason over the whole
+// scaffold history, so a run that adds one unit must not forget the earlier ones.
+// Only `unbranded remove` is allowed to shrink the tracked set.
+export function writeStateFile(opts: {
+	targetDir: string;
+	units: UnitId[];
+	writes: TrackedWrite[];
+	options?: Record<string, string>;
+}): string {
 	const files: Record<string, string> = {};
-	const dests = [...opts.results.map(r => r.dest), ...(opts.extraWrites ?? [])];
-	for (const dest of dests) {
-		// A skipped write can leave a dest that was never created (nothing on our
-		// side to hash), so only track files that actually exist post-apply.
-		if (!existsSync(dest))
-			continue;
-		const rel = toPosix(relative(opts.targetDir, dest));
-		files[rel] = hashBuffer(readFileSync(dest));
+	const attribution: Record<string, UnitId> = {};
+	const modes: Record<string, TrackedFileMode> = {};
+
+	// A skipped write can leave a dest that was never created (nothing on our
+	// side to hash), so only track files that actually exist post-apply.
+	const landed = opts.writes.filter(w => existsSync(w.dest));
+	for (const w of landed) {
+		const rel = toPosix(relative(opts.targetDir, w.dest));
+		files[rel] = hashBuffer(readFileSync(w.dest));
+		attribution[rel] = w.unit;
+		modes[rel] = w.mode;
 	}
 
-	// Preserve any user-managed config (e.g. doctor.ignore) a prior run or a hand
-	// edit left in the file. buildStateFile otherwise emits a fresh envelope that
-	// would silently drop it on every re-scaffold, so the "durable off switch" for
-	// doctor findings wouldn't survive the next `unbranded` run.
+	// Preserve everything a prior run (or a hand edit, for doctor.ignore) left in
+	// the file. New values win per key; a schema-1 prior simply has no maps to carry.
 	const prior = readStateFile(opts.targetDir);
+	const merged = {
+		version: readCliVersion(),
+		units: [...new Set([...(prior?.units ?? []), ...opts.units])],
+		files: { ...prior?.files, ...files },
+		options: { ...prior?.options, ...opts.options },
+		attribution: { ...prior?.attribution, ...attribution },
+		modes: { ...prior?.modes, ...modes },
+		doctor: prior?.doctor,
+	};
 
-	const state = buildStateFile({ version: readCliVersion(), units: opts.units, files, doctor: prior?.doctor });
+	syncSidecar(opts.targetDir, landed, merged.files, merged.modes);
+
 	const path = join(opts.targetDir, STATE_FILENAME);
-	writeFileSync(path, serializeState(state));
+	writeFileSync(path, serializeState(buildStateFile(merged)));
 	return path;
 }
 
@@ -123,15 +175,71 @@ export function readStateFile(dir: string): StateFile | undefined {
 	}
 }
 
+const SIDECAR_README = `# The unbranded Sidecar
+
+[unbranded](https://github.com/kendrick/unbranded-starter) scaffolded some of this project's tooling config, and this directory is its working data. \`baseline/\` keeps a byte-exact copy of each managed file as unbranded last wrote it.
+
+## Why It Should Be Committed
+
+The baselines are what let \`unbranded update\` pull newer template versions into your repo without losing local edits: with the original bytes on hand, it can merge your changes and the template's changes instead of asking you to pick one wholesale. Baselines only work if they travel with the repo, so commit this directory like any other file.
+
+Deleting it breaks nothing today, but \`unbranded update\` would lose its merge base and fall back to asking before overwriting each changed file.
+
+\`unbranded diff\` shows how your files have drifted from what was scaffolded; \`unbranded doctor\` audits the repo.
+`;
+
+// The baseline sidecar: byte-exact copies of copy-mode files as this run wrote
+// them — the merge base `unbranded update` needs to three-way merge user edits
+// with a newer template. Structured (merge-json), append, and computed files refresh
+// structurally instead, so a text baseline would only mislead. Stray baselines
+// are pruned: a wrong merge base is worse than none.
+function syncSidecar(targetDir: string, landed: TrackedWrite[], files: Record<string, string>, modes: Record<string, TrackedFileMode>): void {
+	const baselineDir = join(targetDir, SIDECAR_DIR, 'baseline');
+
+	for (const w of landed) {
+		if (w.mode !== 'copy')
+			continue;
+		const dest = join(baselineDir, relative(targetDir, w.dest));
+		mkdirSync(dirname(dest), { recursive: true });
+		writeFileSync(dest, readFileSync(w.dest));
+	}
+
+	// Tracked copy-mode files keep their baseline (a prior run's copy is still the
+	// honest base even when this run didn't rewrite the file); everything else goes.
+	const keep = new Set(Object.keys(files).filter(rel => modes[rel] === 'copy'));
+	if (existsSync(baselineDir)) {
+		const entries = (readdirSync(baselineDir, { recursive: true }) as string[]).map(e => join(baselineDir, e));
+		for (const abs of entries.filter(e => statSync(e).isFile())) {
+			if (!keep.has(toPosix(relative(baselineDir, abs))))
+				rmSync(abs);
+		}
+		// Longest paths first, so nested empty dirs unwind bottom-up.
+		for (const abs of entries.filter(e => existsSync(e) && statSync(e).isDirectory()).sort((a, b) => b.length - a.length)) {
+			if (readdirSync(abs).length === 0)
+				rmdirSync(abs);
+		}
+	}
+
+	mkdirSync(join(targetDir, SIDECAR_DIR), { recursive: true });
+	writeFileSync(join(targetDir, SIDECAR_DIR, 'README.md'), SIDECAR_README);
+}
+
 function readCliVersion(): string {
 	const pkg = JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf-8')) as { version: string };
 	return pkg.version;
 }
 
-function sortRecord(record: Record<string, string>): Record<string, string> {
-	const out: Record<string, string> = {};
+// Spread helper for the optional envelope maps: absent or empty stays absent.
+function whenPresent<K extends string, V extends string>(key: K, record: Record<string, V> | undefined): Partial<Record<K, Record<string, V>>> {
+	if (!record || Object.keys(record).length === 0)
+		return {};
+	return { [key]: sortRecord(record) } as Partial<Record<K, Record<string, V>>>;
+}
+
+function sortRecord<V extends string>(record: Record<string, V>): Record<string, V> {
+	const out: Record<string, V> = {};
 	for (const key of Object.keys(record).sort())
-		out[key] = record[key] as string;
+		out[key] = record[key] as V;
 	return out;
 }
 
