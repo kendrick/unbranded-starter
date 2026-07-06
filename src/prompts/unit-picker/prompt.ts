@@ -60,6 +60,9 @@ export interface UnitPickerOptions {
 	units: Unit[];
 	installed: Set<UnitId>;
 	initialFlavors?: Record<string, string>;
+	// Seed the selection (doctor --fix, presets): the picker opens with these checked
+	// and editable, so confirming is one keystroke but nothing applies sight unseen.
+	initialSelected?: UnitId[];
 	input?: Readable;
 	output?: Writable;
 	signal?: AbortSignal;
@@ -82,7 +85,7 @@ class UnitPickerPrompt extends Prompt<UnitId[]> {
 		}, false);
 
 		this.message = opts.message;
-		this.picker = createPickerState(opts.units, opts.installed, opts.initialFlavors ?? {});
+		this.picker = createPickerState(opts.units, opts.installed, opts.initialFlavors ?? {}, opts.initialSelected ?? []);
 		this._setValue([...this.picker.selected]);
 		this.on('key', (char, key) => this.onKey(char, key));
 	}

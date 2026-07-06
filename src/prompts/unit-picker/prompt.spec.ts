@@ -63,6 +63,15 @@ describe('unitPicker (stream-driven)', () => {
 		expect(result.ids).toEqual(['core-tailwind']);
 	});
 
+	it('submits a preselected seed untouched when the user just confirms', async () => {
+		const { input, output } = drive('\r');
+		const result = await unitPicker({ message: 'Pick', units: UNITS, installed: new Set(), initialSelected: ['core-vitest'], input, output });
+		expect(isCancel(result)).toBe(false);
+		if (isCancel(result))
+			return;
+		expect(result.ids).toEqual(['core-vitest']);
+	});
+
 	it('restores the escape alias after a submit', async () => {
 		const { input, output } = drive('\r');
 		await unitPicker({ message: 'Pick', units: UNITS, installed: new Set(), input, output });

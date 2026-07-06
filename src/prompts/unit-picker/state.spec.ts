@@ -112,6 +112,28 @@ describe('reducePicker selection and implies preview', () => {
 	});
 });
 
+describe('createPickerState initial selection', () => {
+	it('seeds explicit picks and the implies preview from initialSelected', () => {
+		const s = createPickerState(UNITS, new Set(), {}, ['core-eslint', 'core-vitest']);
+		expect(s.selected.has('core-eslint')).toBe(true);
+		expect(s.selected.has('core-vitest')).toBe(true);
+		// The preview must reflect the seed immediately, not wait for a toggle.
+		expect(s.auto.has('core-typescript')).toBe(true);
+		expect(s.requiredBy['core-typescript']).toBe('core-eslint');
+	});
+
+	it('drops seeded ids that are not in the unit list', () => {
+		const s = createPickerState(UNITS, new Set(), {}, ['core-eslint', 'opt-playwright']);
+		expect(s.selected.has('core-eslint')).toBe(true);
+		expect(s.selected.has('opt-playwright')).toBe(false);
+	});
+
+	it('defaults to an empty selection', () => {
+		expect(state().selected.size).toBe(0);
+		expect(state().auto.size).toBe(0);
+	});
+});
+
 describe('reducePicker flavor cycling', () => {
 	it('cycles the active row\'s flavor, wrapping both directions', () => {
 		let s = reducePicker(state(), { type: 'move', delta: 1 }); // core-eslint
