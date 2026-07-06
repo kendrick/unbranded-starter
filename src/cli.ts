@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { log } from '@clack/prompts';
 import { runDiff } from './commands/diff';
-import { runDoctor } from './commands/doctor';
+import { runDoctor, runDoctorFix } from './commands/doctor';
 import { runInit } from './commands/init';
 import { runList } from './commands/list';
 import { applyColorPolicy } from './util/color';
@@ -25,6 +25,7 @@ Commands:
   list                  Print the unit catalog; add --json for machine-readable output
   diff                  Compare tracked files against .unbranded.json; exits non-zero on drift
   doctor                Read-only repo audit; maps findings to fix-it units. --strict exits non-zero
+                        Add --fix to install the units that close the fixable findings
 
 Options:
   --config, -c <file>            Run non-interactively with a JSON recipe
@@ -40,6 +41,7 @@ Options:
   --diff                         With --dry-run (or \`diff\`), print the unified patch for every changed file
   --json                         With \`list\`, \`diff\`, or \`doctor\`, emit machine-readable output
   --strict                       With \`doctor\`, exit non-zero when the audit finds anything
+  --fix                          With \`doctor\`, hand the fixable findings to the apply pipeline (no --json; composes with --yes, --dry-run, --pm)
   --no-color                     Disable ANSI color everywhere (also honors the NO_COLOR env var)
   --color                        Force ANSI color even when output is piped
   --help, -h                     Show this help
@@ -55,6 +57,7 @@ Examples:
   unbranded diff --json                                # CI drift check: non-zero exit when files have drifted
   unbranded doctor                                     # audit the current repo and map gaps to fix-it units
   unbranded doctor --strict --json                     # repo-hygiene CI gate: non-zero exit on any finding
+  unbranded doctor --fix --yes                         # audit, then install every fixable finding's unit
   unbranded --config recipe.json                       # reproducible, scriptable run
   unbranded --units core-eslint,core-vitest --pm pnpm --yes   # fully non-interactive, no recipe file
   unbranded --latest                                   # take the newest versions, not the pins
@@ -76,6 +79,7 @@ const { values, positionals } = parseArgs({
 		'diff': { type: 'boolean' },
 		'json': { type: 'boolean' },
 		'strict': { type: 'boolean' },
+		'fix': { type: 'boolean' },
 		'no-color': { type: 'boolean' },
 		'color': { type: 'boolean' },
 		'help': { type: 'boolean', short: 'h' },
@@ -122,7 +126,25 @@ if (command === 'diff') {
 
 // Read-only repo audit: guaranteed zero writes, cwd only. Default exit is 0 so a
 // report never fails a job; --strict turns findings into a non-zero exit.
+// --fix crosses into the apply pipeline (writes!), so it refuses --json rather
+// than guess whether the caller wanted the audit report or the repair.
 if (command === 'doctor') {
+	if (values.fix) {
+		if (values.json) {
+			process.stderr.write('doctor --fix has no --json output. Run the audit with `doctor --json`, or drop --json to apply fixes.\n');
+			process.exit(1);
+		}
+		process.exit(await runDoctorFix({
+			yes: values.yes,
+			dryRun: values['dry-run'],
+			diff: values.diff,
+			force: values.force,
+			pm: values.pm,
+		}).catch((err: unknown) => {
+			log.error(err instanceof Error ? err.message : String(err));
+			return 1;
+		}));
+	}
 	process.exit(runDoctor({ json: values.json, strict: values.strict }));
 }
 

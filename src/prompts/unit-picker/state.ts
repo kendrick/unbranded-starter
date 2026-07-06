@@ -46,6 +46,7 @@ export function createPickerState(
 	units: Unit[],
 	installed: Set<UnitId>,
 	initialFlavors: Record<string, string> = {},
+	initialSelected: UnitId[] = [],
 ): PickerState {
 	const options = buildUnitPickerOptions(units, installed);
 	const flavors: Record<string, string> = {};
@@ -53,7 +54,13 @@ export function createPickerState(
 		for (const o of opt.options ?? [])
 			flavors[o.key] = initialFlavors[o.key] ?? o.default;
 	}
-	return { units, options, filter: '', cursor: 0, selected: new Set(), auto: new Set(), requiredBy: {}, expanded: null, flavors };
+	// Seeds come from outside the picker (doctor --fix, presets), so filter to units
+	// that actually exist — a phantom id would sit invisibly in the selection with no
+	// row to toggle it off. The implies preview must reflect the seed on frame one,
+	// the same way a manual toggle would.
+	const known = new Set(units.map(u => u.id));
+	const selected = new Set(initialSelected.filter(id => known.has(id)));
+	return { units, options, filter: '', cursor: 0, selected, ...previewAuto(selected, units), expanded: null, flavors };
 }
 
 function matches(opt: PickerOption, filter: string): boolean {

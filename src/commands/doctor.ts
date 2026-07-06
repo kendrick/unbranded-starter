@@ -4,10 +4,12 @@ import type { StateFile } from '../state/state';
 import type { PackageJson } from '../util/package-json';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { note } from '@clack/prompts';
 import { inspectPm } from '../detect/pm';
 import { effectiveDest, engines, hasDep, hasNodeVersionPin, hasScript } from '../detect/signals';
 import { readStateFile } from '../state/state';
 import { readPackageJson } from '../util/package-json';
+import { runInit } from './init';
 import { buildCatalog } from './list';
 
 // Version 2 adds the suppression fields (`suppressed`, `ignoredUnknown`) alongside
@@ -239,6 +241,59 @@ export function runDoctor(opts: RunDoctorOpts = {}): number {
 	// Suppressed findings are accepted, so they never fail the gate; only active
 	// ones do. An unknown ignore id is a config warning, not a repo defect.
 	return opts.strict && active.length > 0 ? 1 : 0;
+}
+
+// The fixable/manual split that --fix acts on: a finding with a `unit` has a
+// catalog remedy the apply pipeline can install; everything else is a repo
+// condition only a human should touch (deleting lockfiles, editing fields).
+// Units keep audit order and dedupe, since two findings can share one remedy.
+export function partitionFixable(findings: Finding[]): { units: UnitId[]; manual: Finding[] } {
+	const units: UnitId[] = [];
+	for (const f of findings) {
+		if (f.unit !== undefined && !units.includes(f.unit))
+			units.push(f.unit);
+	}
+	return { units, manual: findings.filter(f => f.unit === undefined) };
+}
+
+export interface RunDoctorFixOpts {
+	cwd?: string;
+	// --yes: apply every fixable finding without the picker or the Apply confirm.
+	yes?: boolean;
+	dryRun?: boolean;
+	diff?: boolean;
+	force?: boolean;
+	// Rides runInit's existing --pm override channel, mainly so --fix --yes can't
+	// dead-end on the PM prompt in a repo with no lockfile to detect from.
+	pm?: string;
+}
+
+// The bridge from audit to remedy: collect the units that close this run's active
+// findings, then hand them to the normal apply pipeline — resolver, plan,
+// guardrails, and prompts all still apply. Interactive runs get the picker with
+// the fix set preselected (still editable); --yes skips straight to a
+// non-interactive apply. Exit 0 covers "nothing to fix"; only a failed apply is 1.
+export async function runDoctorFix(opts: RunDoctorFixOpts = {}): Promise<number> {
+	const cwd = opts.cwd ?? process.cwd();
+	const { findings } = auditRepo({ cwd });
+	const { active } = applySuppression(findings, readDoctorIgnore(readStateFile(cwd)));
+	const { units, manual } = partitionFixable(active);
+
+	// Manual findings are listed, never executed: their remedies delete or edit
+	// things, and --fix's contract is "only ever installs units".
+	if (manual.length > 0)
+		note(manual.map(f => `• ${f.message}\n  ${f.fix}`).join('\n'), 'Manual steps (--fix won\'t touch these)');
+
+	if (units.length === 0) {
+		process.stdout.write('unbranded doctor: nothing for --fix to install.\n');
+		return 0;
+	}
+
+	const shared = { targetDir: cwd, dryRun: opts.dryRun, diff: opts.diff, force: opts.force };
+	const result = opts.yes
+		? await runInit({ ...shared, inline: { units: units.join(','), pm: opts.pm, yes: true } })
+		: await runInit({ ...shared, inline: { pm: opts.pm }, preselect: units });
+	return result.ok ? 0 : 1;
 }
 
 function formatDoctor(active: Finding[], suppressed: Finding[], unknownIgnored: string[]): string {

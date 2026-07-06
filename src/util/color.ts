@@ -1,7 +1,8 @@
 // One color decision the whole CLI shares. Our own ANSI (the diff colorizer, the
-// picker theme) reads `colorEnabled()`; clack's picocolors reads the NO_COLOR env
-// that `applyColorPolicy()` sets. Keeping the rule pure and in one place is what
-// lets `list`, `diff`, `doctor`, `--dry-run`, and the interactive flow agree.
+// picker theme) reads `colorEnabled()`; clack colors via node's `util.styleText`,
+// which reads NO_COLOR/FORCE_COLOR live on every call, so `applyColorPolicy()`
+// bridges the decision into those vars. Keeping the rule pure and in one place is
+// what lets `list`, `diff`, `doctor`, `--dry-run`, and the interactive flow agree.
 
 export interface ColorInputs {
 	env: Record<string, string | undefined>;
