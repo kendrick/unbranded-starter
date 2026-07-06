@@ -1,7 +1,7 @@
 {
 	"name": "create-unbranded",
 	"type": "module",
-	"version": "0.6.0",
+	"version": "0.7.0",
 	"description": "`npm create unbranded` — a launcher for the unbranded CLI.",
 	"author": "Kendrick Arnett",
 	"license": "MIT",
@@ -20,6 +20,6 @@
 		"node": ">=22"
 	},
 	"dependencies": {
-		"unbranded": "0.6.0"
+		"unbranded": "0.7.0"
 	}
 }
