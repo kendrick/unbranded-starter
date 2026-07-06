@@ -47,8 +47,8 @@ describe('unbranded diff', () => {
 		// One hash per written file, keys sorted for a clean VCS diff.
 		expect(Object.keys(state.files)).toEqual(['.editorconfig']);
 		expect(state.files['.editorconfig']).toMatch(/^[0-9a-f]{64}$/);
-		// Top-level keys serialize in sorted order; the _tool hint sorts first.
-		expect([...raw.matchAll(/^ {2}"(\w+)":/gm)].map(m => m[1])).toEqual(['_tool', 'files', 'schema', 'units', 'version']);
+		// Top-level keys serialize in sorted order (tab-indented, #48); _tool sorts first.
+		expect([...raw.matchAll(/^\t"(\w+)":/gm)].map(m => m[1])).toEqual(['_tool', 'files', 'schema', 'units', 'version']);
 	});
 
 	it('reports no drift and exits 0 right after a clean scaffold', () => {

@@ -30,14 +30,17 @@ describe('buildStateFile', () => {
 });
 
 describe('serializeState', () => {
-	it('emits sorted keys, two-space indent, trailing newline — deterministic', () => {
+	it('emits sorted keys, tab indent, trailing newline — deterministic', () => {
 		const a = serializeState(buildStateFile({ version: '1.0.0', units: ['core-eslint'], files: { b: '2', a: '1' } }));
 		// Same inputs supplied in a different key order must serialize identically.
 		const b = serializeState(buildStateFile({ version: '1.0.0', units: ['core-eslint'], files: { a: '1', b: '2' } }));
 		expect(a).toBe(b);
 		expect(a.endsWith('\n')).toBe(true);
+		// Tab indent so a scaffolded .unbranded.json satisfies the shipped ESLint
+		// config's jsonc/indent, same as package.json (#48).
+		expect(a).toContain('\n\t"');
 		// Top-level keys alphabetical; the _tool hint sorts first (underscore).
-		const order = [...a.matchAll(/^ {2}"(\w+)":/gm)].map(m => m[1]);
+		const order = [...a.matchAll(/^\t"(\w+)":/gm)].map(m => m[1]);
 		expect(order).toEqual(['_tool', 'files', 'schema', 'units', 'version']);
 	});
 });
