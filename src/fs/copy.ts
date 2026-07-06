@@ -357,7 +357,8 @@ function appendMissingLines(existing: Buffer, incoming: Buffer): AppendResult {
 
 // The plain patch already carries +/-/@@ prefixes, so "no color" just means
 // handing it back untouched — the prefixes are the fallback the audit asks for.
-function colorizeDiff(patch: string, enabled: boolean): string {
+// Exported for update's --diff, which renders patches outside a FilePlan.
+export function colorizeDiff(patch: string, enabled: boolean): string {
 	if (!enabled)
 		return patch;
 	return patch.split('\n').map((line) => {
