@@ -1,10 +1,16 @@
+import type { UnitId } from '../manifest/types';
 import type { StateFile } from '../state/state';
 import type { Finding } from './doctor';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { applySuppression, auditRepo, KNOWN_FINDING_IDS, readDoctorIgnore } from './doctor';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { applySuppression, auditRepo, KNOWN_FINDING_IDS, partitionFixable, readDoctorIgnore, runDoctorFix } from './doctor';
+import { runInit } from './init';
+
+// runDoctorFix's job is collecting the right units and delegating; the apply
+// pipeline itself is init's (and the e2e's) problem, so it's the one mocked seam.
+vi.mock('./init', () => ({ runInit: vi.fn() }));
 
 function writeJson(path: string, obj: unknown): void {
 	writeFileSync(path, JSON.stringify(obj, null, 2));
@@ -196,6 +202,107 @@ describe('auditRepo', () => {
 			expect(KNOWN_FINDING_IDS.has(id), `unregistered finding id: ${id}`).toBe(true);
 		// Guard against a no-op test: the scenarios above must exercise a real slice.
 		expect(emitted.size).toBeGreaterThanOrEqual(9);
+	});
+});
+
+describe('partitionFixable', () => {
+	const finding = (id: string, unit?: UnitId): Finding => ({ id, message: id, fix: 'x', unit });
+
+	it('splits unit-backed findings from manual ones, keeping audit order', () => {
+		const r = partitionFixable([
+			finding('missing-editorconfig', 'core-editorconfig'),
+			finding('multiple-lockfiles'),
+			finding('no-test-script', 'core-vitest'),
+		]);
+		expect(r.units).toEqual(['core-editorconfig', 'core-vitest']);
+		expect(r.manual.map(f => f.id)).toEqual(['multiple-lockfiles']);
+	});
+
+	it('dedupes when two findings resolve to the same unit', () => {
+		// ts-dep-no-tsconfig and tsconfig-no-ts-dep both point at core-typescript;
+		// the picker must not be seeded with the same id twice.
+		const r = partitionFixable([
+			finding('ts-dep-no-tsconfig', 'core-typescript'),
+			finding('tsconfig-no-ts-dep', 'core-typescript'),
+		]);
+		expect(r.units).toEqual(['core-typescript']);
+	});
+
+	it('returns no units for an all-manual list', () => {
+		const r = partitionFixable([finding('multiple-lockfiles')]);
+		expect(r.units).toEqual([]);
+		expect(r.manual).toHaveLength(1);
+	});
+});
+
+describe('runDoctorFix', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-doctor-fix-'));
+		vi.mocked(runInit).mockResolvedValue({ ok: true });
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+		vi.mocked(runInit).mockReset();
+	});
+
+	it('exits 0 without entering the apply pipeline when there is nothing to fix', async () => {
+		cleanRepo(tmp);
+		expect(await runDoctorFix({ cwd: tmp })).toBe(0);
+		expect(runInit).not.toHaveBeenCalled();
+	});
+
+	it('hands the fixable units to the picker as a preselect', async () => {
+		cleanRepo(tmp);
+		rmSync(join(tmp, '.editorconfig'));
+		rmSync(join(tmp, '.gitattributes'));
+		expect(await runDoctorFix({ cwd: tmp })).toBe(0);
+		expect(runInit).toHaveBeenCalledWith(expect.objectContaining({
+			targetDir: tmp,
+			preselect: ['core-editorconfig', 'core-gitattributes'],
+		}));
+	});
+
+	it('applies non-interactively under --yes via inline units', async () => {
+		cleanRepo(tmp);
+		rmSync(join(tmp, '.editorconfig'));
+		await runDoctorFix({ cwd: tmp, yes: true });
+		expect(runInit).toHaveBeenCalledWith(expect.objectContaining({
+			targetDir: tmp,
+			inline: expect.objectContaining({ units: 'core-editorconfig', yes: true }),
+		}));
+	});
+
+	it('leaves doctor.ignore\'d findings out of the fix set', async () => {
+		cleanRepo(tmp);
+		rmSync(join(tmp, '.editorconfig'));
+		rmSync(join(tmp, '.gitattributes'));
+		writeJson(join(tmp, '.unbranded.json'), { doctor: { ignore: ['missing-editorconfig'] } });
+		await runDoctorFix({ cwd: tmp, yes: true });
+		expect(runInit).toHaveBeenCalledWith(expect.objectContaining({
+			inline: expect.objectContaining({ units: 'core-gitattributes' }),
+		}));
+	});
+
+	it('maps an apply failure to exit 1', async () => {
+		cleanRepo(tmp);
+		rmSync(join(tmp, '.editorconfig'));
+		vi.mocked(runInit).mockResolvedValue({ ok: false });
+		expect(await runDoctorFix({ cwd: tmp, yes: true })).toBe(1);
+	});
+
+	it('threads dry-run, diff, force, and pm through to the pipeline', async () => {
+		cleanRepo(tmp);
+		rmSync(join(tmp, '.editorconfig'));
+		await runDoctorFix({ cwd: tmp, dryRun: true, diff: true, force: true, pm: 'npm' });
+		expect(runInit).toHaveBeenCalledWith(expect.objectContaining({
+			dryRun: true,
+			diff: true,
+			force: true,
+			inline: expect.objectContaining({ pm: 'npm' }),
+		}));
 	});
 });
 
