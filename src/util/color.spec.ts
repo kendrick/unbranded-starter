@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { applyColorPolicy, computeColorEnabled } from './color';
+import { applyColorPolicy, colorEnvPatch, computeColorEnabled } from './color';
 
 describe('computeColorEnabled', () => {
 	it('follows the stream when nothing overrides it', () => {
@@ -63,5 +63,31 @@ describe('applyColorPolicy', () => {
 		process.env.FORCE_COLOR = '1';
 		applyColorPolicy();
 		expect(process.env.NO_COLOR).toBeUndefined();
+	});
+});
+
+describe('colorEnvPatch', () => {
+	it('sets NO_COLOR when color is off, so styleText (clack, the picker) sees it', () => {
+		expect(colorEnvPatch({ env: {}, argv: ['--no-color'], isTTY: true })).toEqual({ NO_COLOR: '1' });
+		expect(colorEnvPatch({ env: {}, argv: [], isTTY: false })).toEqual({ NO_COLOR: '1' });
+	});
+
+	it('clears a conflicting FORCE_COLOR when --no-color wins, so styleText can honor NO_COLOR', () => {
+		// node lets FORCE_COLOR override (and warn over) NO_COLOR, so an explicit off
+		// has to drop it rather than merely add NO_COLOR beside it.
+		expect(colorEnvPatch({ env: { FORCE_COLOR: '1' }, argv: ['--no-color'], isTTY: true })).toEqual({ FORCE_COLOR: null, NO_COLOR: '1' });
+	});
+
+	it('does nothing when a real TTY or an existing FORCE_COLOR already colors', () => {
+		expect(colorEnvPatch({ env: {}, argv: [], isTTY: true })).toEqual({});
+		expect(colorEnvPatch({ env: { FORCE_COLOR: '1' }, argv: [], isTTY: false })).toEqual({});
+	});
+
+	it('forces color for --color over a pipe, the one case styleText can\'t infer from argv', () => {
+		expect(colorEnvPatch({ env: {}, argv: ['--color'], isTTY: false })).toEqual({ FORCE_COLOR: '1' });
+	});
+
+	it('does not leave NO_COLOR set when it is already absent and color is on', () => {
+		expect(colorEnvPatch({ env: {}, argv: ['--color'], isTTY: true })).toEqual({});
 	});
 });
