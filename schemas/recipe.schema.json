@@ -1,0 +1,19 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://github.com/kendrick/unbranded-starter/schemas/recipe.schema.json",
+	"title": "unbranded recipe (--config input)",
+	"description": "The non-interactive run input. Unknown extra keys are tolerated (a saved recipe carries a _generatedBy marker, for example); unknown unit ids and bad enum values fail validation at load time.",
+	"type": "object",
+	"required": ["units", "pm", "onConflict", "postInstall"],
+	"properties": {
+		"units": { "type": "array", "items": { "type": "string" } },
+		"pm": { "enum": ["npm", "pnpm", "yarn", "bun", null] },
+		"onConflict": { "enum": ["overwrite", "skip"] },
+		"postInstall": { "enum": ["all", "none"] },
+		"options": { "type": "object", "additionalProperties": { "type": "string" } },
+		"versions": { "enum": ["pinned", "latest"] },
+		"projectName": { "type": "string" },
+		"git": { "enum": ["init", "init-commit", "none"] },
+		"force": { "type": "boolean" }
+	}
+}

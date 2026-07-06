@@ -1,0 +1,29 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://github.com/kendrick/unbranded-starter/schemas/doctor.schema.json",
+	"title": "unbranded doctor --json",
+	"description": "The repo audit. A finding with a `unit` can be closed by installing that unit; the rest are manual. Suppressed findings come from doctor.ignore in .unbranded.json.",
+	"type": "object",
+	"required": ["schema", "ok", "findings", "suppressed", "ignoredUnknown"],
+	"additionalProperties": false,
+	"properties": {
+		"schema": { "type": "integer" },
+		"ok": { "type": "boolean" },
+		"findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+		"suppressed": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+		"ignoredUnknown": { "type": "array", "items": { "type": "string" } }
+	},
+	"$defs": {
+		"finding": {
+			"type": "object",
+			"required": ["id", "message", "fix"],
+			"additionalProperties": false,
+			"properties": {
+				"id": { "type": "string" },
+				"message": { "type": "string" },
+				"fix": { "type": "string" },
+				"unit": { "type": "string" }
+			}
+		}
+	}
+}

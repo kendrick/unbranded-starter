@@ -1,0 +1,26 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://github.com/kendrick/unbranded-starter/schemas/state.schema.json",
+	"title": ".unbranded.json (state file, schema 2)",
+	"description": "What unbranded manages in a scaffolded repo: the installed units, one content hash per tracked file, and (schema 2) which unit wrote each file, how it was produced, and the run's resolved options. Byte-exact merge baselines live beside it in .unbranded/baseline/. A schema-1 file is this shape minus options/attribution/modes.",
+	"type": "object",
+	"required": ["_tool", "schema", "version", "units", "files"],
+	"additionalProperties": false,
+	"properties": {
+		"_tool": { "type": "string" },
+		"schema": { "type": "integer" },
+		"version": { "type": "string" },
+		"units": { "type": "array", "items": { "type": "string" } },
+		"files": { "type": "object", "additionalProperties": { "type": "string" } },
+		"options": { "type": "object", "additionalProperties": { "type": "string" } },
+		"attribution": { "type": "object", "additionalProperties": { "type": "string" } },
+		"modes": { "type": "object", "additionalProperties": { "enum": ["copy", "merge-json", "append-if-missing", "computed"] } },
+		"doctor": {
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"ignore": { "type": "array", "items": { "type": "string" } }
+			}
+		}
+	}
+}
