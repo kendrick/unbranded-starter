@@ -75,3 +75,25 @@ export function resolveSelection(seed: UnitId[], units: Unit[]): ResolveResult {
 
 	return { kind: 'ok', ids: [...selected], auto: [...auto], requiredBy };
 }
+
+// The reverse question resolveSelection answers forward: which installed units
+// would be stranded if `target` went away? A unit depends on the target when its
+// own implies/requires closure reaches it — transitively, so removing the bottom
+// of a chain names the whole chain. `unbranded remove` refuses with this list, or
+// removes the closure under --cascade. Pure, like the resolver.
+export function dependentsOf(target: UnitId, installed: UnitId[], units: Unit[]): UnitId[] {
+	const byId = new Map<UnitId, Unit>(units.map(u => [u.id, u]));
+	return installed.filter((id) => {
+		if (id === target)
+			return false;
+		// Fixed-point closure over implies + requires, same shape as the resolver's
+		// implies loop (a Set visits mid-loop additions, so one pass converges).
+		const reach = new Set<UnitId>([id]);
+		for (const r of reach) {
+			const unit = byId.get(r);
+			for (const edge of [...(unit?.implies ?? []), ...(unit?.requires ?? [])])
+				reach.add(edge);
+		}
+		return reach.has(target);
+	});
+}

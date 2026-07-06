@@ -1,6 +1,6 @@
 import type { Unit, UnitId } from './types';
 import { describe, expect, it } from 'vitest';
-import { resolveSelection } from './resolve';
+import { dependentsOf, resolveSelection } from './resolve';
 
 // Minimal fixture builder so tests stay readable.
 function unit(id: UnitId, extras: Partial<Unit> = {}): Unit {
@@ -140,5 +140,44 @@ describe('resolveSelection', () => {
 		];
 		const result = resolveSelection(['core-eslint', 'core-stylelint'], units);
 		expect(result.kind).toBe('conflict');
+	});
+});
+
+describe('dependentsOf', () => {
+	// shadcn implies tailwind; postcss implies tailwind; ci requires eslint.
+	const units = [
+		unit('core-tailwind'),
+		unit('opt-shadcn', { implies: ['core-tailwind'] }),
+		unit('core-postcss', { implies: ['core-tailwind'] }),
+		unit('core-eslint'),
+		unit('opt-ci-github', { requires: ['core-eslint'] }),
+		unit('core-typescript'),
+	];
+
+	it('names every installed unit whose implies or requires reaches the target', () => {
+		expect(dependentsOf('core-tailwind', ['core-tailwind', 'opt-shadcn', 'core-postcss'], units).sort())
+			.toEqual(['core-postcss', 'opt-shadcn']);
+		expect(dependentsOf('core-eslint', ['core-eslint', 'opt-ci-github'], units))
+			.toEqual(['opt-ci-github']);
+	});
+
+	it('walks transitive edges, not just direct ones', () => {
+		// a implies b, b implies c: removing c strands both a and b.
+		const chain = [
+			unit('core-tailwind'),
+			unit('core-postcss', { implies: ['core-tailwind'] }),
+			unit('opt-shadcn', { implies: ['core-postcss'] }),
+		];
+		expect(dependentsOf('core-tailwind', ['core-tailwind', 'core-postcss', 'opt-shadcn'], chain).sort())
+			.toEqual(['core-postcss', 'opt-shadcn']);
+	});
+
+	it('only counts installed units — the rest of the catalog is irrelevant', () => {
+		// opt-shadcn depends on tailwind but is not installed here.
+		expect(dependentsOf('core-tailwind', ['core-tailwind', 'core-typescript'], units)).toEqual([]);
+	});
+
+	it('returns empty for a leaf unit nothing points at', () => {
+		expect(dependentsOf('core-typescript', ['core-typescript', 'core-eslint'], units)).toEqual([]);
 	});
 });
