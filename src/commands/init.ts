@@ -7,6 +7,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, sep } from 'node:path';
 import { cancel, confirm, intro, isCancel, log, note, outro, select } from '@clack/prompts';
 import { assertValidPm, loadConfig, resolveConfig } from '../config/load';
+import { loadPreset, presetNames } from '../config/presets';
 import { buildRecipe, serializeRecipe } from '../config/recipe';
 import { detectInstalledUnits } from '../detect/installed';
 import { detectPm } from '../detect/pm';
@@ -49,6 +50,9 @@ export interface RunInitOpts {
 	// Only the picker path reads it; non-interactive runs carry their selection in
 	// config.units and never see a picker to seed.
 	preselect?: UnitId[];
+	// `--preset <name>`: a shipped recipe as the file config, with --units turning
+	// additive. Mutually exclusive with configPath; cli.ts enforces that.
+	preset?: string;
 }
 
 export interface RunInitResult {
@@ -67,19 +71,21 @@ export const PLAN_SCHEMA = 1;
 // that flow narrates through clack from its first line, and one stray chrome
 // line on stdout breaks a JSON consumer. Requires a selection (--units or
 // --config) because there is no picker to drive without a TTY story.
-export async function runPlanJson(opts: { configPath?: string; inline?: InlineFlags; targetDir?: string }): Promise<number> {
+export async function runPlanJson(opts: { configPath?: string; inline?: InlineFlags; targetDir?: string; preset?: string }): Promise<number> {
 	const inline = opts.inline ?? {};
 	if (inline.pm !== undefined)
 		assertValidPm(inline.pm);
 
 	const known = new Set(UNITS.map(u => u.id));
 	const optionSchema = buildOptionSchema(UNITS);
-	const fileConfig = opts.configPath ? loadConfig(opts.configPath, known, optionSchema) : null;
+	const fileConfig = opts.preset
+		? loadPreset(opts.preset, known, optionSchema).config
+		: (opts.configPath ? loadConfig(opts.configPath, known, optionSchema) : null);
 	const config = fileConfig !== null || inline.units !== undefined
-		? resolveConfig(fileConfig, inline, known, optionSchema)
+		? resolveConfig(fileConfig, inline, known, optionSchema, { unitsMode: opts.preset ? 'additive' : 'override' })
 		: null;
 	if (!config) {
-		process.stderr.write('--dry-run --json needs a selection: pass --units <ids> or --config <file>.\n');
+		process.stderr.write('--dry-run --json needs a selection: pass --units <ids>, --config <file>, or --preset <name>.\n');
 		return 1;
 	}
 
@@ -125,8 +131,8 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 
 	// --yes means "don't prompt, just apply". With no selection there's nothing
 	// to apply and no prompt is allowed to fill the gap, so fail before any IO.
-	if (inline.yes && inline.units === undefined && !opts.configPath) {
-		throw new Error('`--yes` needs `--units <ids>` to know what to install, or point at a recipe with `--config <file>`.');
+	if (inline.yes && inline.units === undefined && !opts.configPath && !opts.preset) {
+		throw new Error('`--yes` needs `--units <ids>` to know what to install, or point at a recipe with `--config <file>` or `--preset <name>`.');
 	}
 
 	// Validate --pm up front so a bad value fails fast in every mode, not only
@@ -145,12 +151,16 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 
 	// Loading config first means we fail with a clear error before prompting,
 	// rather than mid-flow after the user already started picking things.
-	const fileConfig = opts.configPath ? loadConfig(opts.configPath, known, optionSchema) : null;
+	const fileConfig = opts.preset
+		? loadPreset(opts.preset, known, optionSchema).config
+		: (opts.configPath ? loadConfig(opts.configPath, known, optionSchema) : null);
 
-	// A merged config drives every non-interactive path: a recipe file, inline
-	// --units, or --yes. A bare interactive run leaves it null.
+	// A merged config drives every non-interactive path: a recipe file, a shipped
+	// preset, inline --units, or --yes. A bare interactive run leaves it null.
 	const nonInteractive = fileConfig !== null || inline.units !== undefined || Boolean(inline.yes);
-	const config = nonInteractive ? resolveConfig(fileConfig, inline, known, optionSchema) : null;
+	const config = nonInteractive
+		? resolveConfig(fileConfig, inline, known, optionSchema, { unitsMode: opts.preset ? 'additive' : 'override' })
+		: null;
 
 	// The flag wins over the recipe field, so `--config r.json --latest` works.
 	const latest = opts.latest || config?.versions === 'latest';
@@ -158,7 +168,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// Supplying a recipe or passing --yes is the opt-in, so skip the Apply
 	// confirm. Inline --units on its own still gets it, which keeps a flag typo
 	// catchable before anything is written.
-	const skipApply = Boolean(opts.configPath) || Boolean(inline.yes);
+	const skipApply = Boolean(opts.configPath) || Boolean(opts.preset) || Boolean(inline.yes);
 
 	intro(config ? 'unbranded (non-interactive)' : 'unbranded');
 
@@ -208,12 +218,40 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		selection = config.units;
 	}
 	else {
+		// "Start from a preset?" seeds the picker, it never bypasses it: the units
+		// land preselected and editable, so a preset is a head start rather than a
+		// commitment. Skipped when a caller (doctor --fix) already brought a seed.
+		let initialSelected = opts.preselect;
+		let presetFlavors: Record<string, string> = {};
+		if (initialSelected === undefined) {
+			const fromPreset = await select<string>({
+				message: 'Start from a preset?',
+				options: [
+					{ value: '', label: 'Start empty' },
+					...presetNames().map((name) => {
+						const preset = loadPreset(name, known, optionSchema);
+						return { value: name, label: name, hint: `${preset.config.units.length} units` };
+					}),
+				],
+				initialValue: '',
+			});
+			if (isCancel(fromPreset))
+				return cancelAndExit();
+			if (fromPreset !== '') {
+				const preset = loadPreset(fromPreset, known, optionSchema);
+				initialSelected = preset.config.units;
+				presetFlavors = preset.config.options ?? {};
+			}
+		}
+
 		const picked = await unitPicker({
 			message: 'What do you want to install?',
 			units: UNITS,
 			installed,
-			initialFlavors: pickerInitialFlavors(target.dir),
-			initialSelected: opts.preselect,
+			// A preset's recorded flavor beats the environment sniff: choosing
+			// next-app should open the picker on the next flavor.
+			initialFlavors: { ...pickerInitialFlavors(target.dir), ...presetFlavors },
+			initialSelected,
 		});
 		if (isCancel(picked))
 			return cancelAndExit();
