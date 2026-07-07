@@ -1,0 +1,23 @@
+{
+	"_preset": "Everything node-lib has, plus the front-end stack: Tailwind v4, PostCSS, Stylelint, shadcn/ui, Playwright with axe, and a shared VS Code workspace. ESLint runs the next flavor.",
+	"units": [
+		"core-editorconfig",
+		"core-gitattributes",
+		"core-node-version",
+		"core-eslint",
+		"core-typescript",
+		"core-vitest",
+		"core-stylelint",
+		"core-tailwind",
+		"core-postcss",
+		"opt-shadcn",
+		"opt-playwright",
+		"opt-vscode",
+		"opt-husky",
+		"opt-ci-github"
+	],
+	"options": { "eslintFlavor": "next" },
+	"pm": null,
+	"onConflict": "skip",
+	"postInstall": "none"
+}
