@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
@@ -145,18 +145,36 @@ describe('cli --dry-run (interactive mode)', () => {
 		rmSync(tmp, { recursive: true, force: true });
 	});
 
-	it('runs the prompt flow, then writes nothing', () => {
+	it('runs the prompt flow, then writes nothing', async () => {
 		writeJson(join(tmp, 'package.json'), { name: 'test-project', version: '0.0.0' });
 		// An empty lockfile lets pm detection resolve pnpm without a select prompt,
-		// leaving only the multiselect to drive.
+		// leaving the preset select and the multiselect to drive.
 		writeFileSync(join(tmp, 'pnpm-lock.yaml'), '');
 
 		const before = snapshot(tmp);
-		// space toggles the first unit (EditorConfig + .nvmrc); carriage return submits.
-		const result = spawnSync('node', [CLI, '--dry-run'], { cwd: tmp, encoding: 'utf-8', input: ' \r' });
+		// Two sequential clack prompts can't be driven by one piped write: bytes
+		// that arrive during the select→picker handoff are dropped, so each prompt
+		// gets its keystrokes only after it has had time to attach. Down+enter
+		// picks the first preset; the final enter submits the preseeded picker.
+		const result = await new Promise<{ status: number | null; stdout: string; stderr: string }>((resolvePromise) => {
+			const child = spawn('node', [CLI, '--dry-run'], { cwd: tmp });
+			let stdout = '';
+			let stderr = '';
+			child.stdout.on('data', (d: Buffer) => {
+				stdout += d.toString();
+			});
+			child.stderr.on('data', (d: Buffer) => {
+				stderr += d.toString();
+			});
+			setTimeout(() => child.stdin.write('\x1B[B\r'), 500);
+			// end() (not just write) matters: an open stdin pipe keeps the child's
+			// event loop alive after the flow finishes, and the test times out.
+			setTimeout(() => child.stdin.end('\r'), 1500);
+			child.on('close', status => resolvePromise({ status, stdout, stderr }));
+		});
 		const after = snapshot(tmp);
 
-		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
+		expect(result.status, `stderr: ${result.stderr}\nstdout: ${result.stdout}`).toBe(0);
 		expect(result.stdout).toContain('would create');
 		expect(result.stdout).toContain('Dry run: nothing written.');
 		expect(after).toBe(before);

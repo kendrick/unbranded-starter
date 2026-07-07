@@ -37,6 +37,12 @@ The name is the point: no framework lock-in, no house brand.
 npx unbranded
 ```
 
+In a hurry? Skip the picker and start from a shipped recipe:
+
+```bash
+npx unbranded --preset node-lib --pm pnpm
+```
+
 Run it inside a directory that already has a `package.json` and it augments that project in place. Run it anywhere else and it asks for a project name, then creates and enters the new directory. It detects your package manager from the lockfile (pnpm → bun → yarn → npm), then asks what you'd like to install.
 
 A run looks roughly like this:
@@ -121,6 +127,16 @@ Fifteen units, grouped by category. Selecting one can pull in others: ESLint imp
 - **pnpm workspace + Turbo** — workspace yaml (with `onlyBuiltDependencies` for esbuild/sharp/unrs-resolver) and a turbo.json baseline.
 
 Run `unbranded list` for the same catalog in your terminal, or `unbranded list --json` to hand it to other tooling.
+
+### Presets
+
+Three shipped recipes bundle the common answers, and the interactive flow offers them as a starting point before the picker:
+
+- **node-lib** — a typed, tested, linted Node library: strict TypeScript, ESLint (base flavor), Vitest, pre-commit hooks, CI, and the editor/git hygiene units.
+- **next-app** — everything node-lib has plus the front-end stack: Tailwind v4, PostCSS, Stylelint, shadcn/ui, Playwright with axe, and a shared VS Code workspace, with ESLint on the next flavor.
+- **cli** — node-lib without the git hooks, for command-line tools.
+
+`--preset <name>` behaves like `--config` pointed at the bundled file, with one twist: `--units` _adds_ to a preset instead of replacing its list, because a preset is a starting point. Presets default to the safe run (no install, no overwrites); pass `--pm` to install and `--on-conflict overwrite` to clobber. The files live in [presets/](presets/) as plain recipe JSON, so they double as documentation.
 
 ## Beyond Day One
 

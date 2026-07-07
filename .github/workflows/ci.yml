@@ -138,6 +138,34 @@ jobs:
       - name: E2E tests (fresh-scaffold full lint)
         run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/scaffold-lint.spec.ts
 
+  e2e-presets:
+    name: e2e preset ${{ matrix.preset }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # One real install per job, same shape as e2e-flavors: the preset suite
+        # scaffolds a project, pnpm-installs it, then runs the scaffold's own
+        # lint/typecheck/test. ubuntu-only — the PM-spawn path on Windows is
+        # already covered by e2e-main's install/git legs, and next-app's install
+        # is the heaviest in the suite.
+        preset: [node-lib, next-app, cli]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: E2E tests (preset install)
+        run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/preset-install.spec.ts
+        env:
+          UB_PRESET: ${{ matrix.preset }}
+
   launcher-smoke:
     name: create-unbranded launcher smoke
     # The create-unbranded launcher pins an exact `unbranded` version that only

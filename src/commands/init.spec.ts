@@ -11,6 +11,13 @@ import { formatPlan, runInit } from './init';
 // runInit's threading be exercised against a real temp dir and the real detectors.
 vi.mock('../prompts/unit-picker/prompt', () => ({ unitPicker: vi.fn() }));
 
+// The start-from-a-preset select now runs ahead of the picker; answering
+// "start empty" keeps these tests on the flow they've always exercised.
+vi.mock('@clack/prompts', async (importOriginal) => {
+	const mod = await importOriginal<typeof import('@clack/prompts')>();
+	return { ...mod, select: vi.fn(async () => '') };
+});
+
 // The install spawn is the other boundary (same seam run.spec mocks): stubbing it
 // per-test lets the error path run without a package manager in the loop.
 vi.mock('../install/run', () => ({ writeAndInstall: vi.fn() }));
@@ -33,6 +40,22 @@ describe('runInit preselect', () => {
 	afterEach(() => {
 		rmSync(tmp, { recursive: true, force: true });
 		vi.mocked(unitPicker).mockReset();
+	});
+
+	it('seeds the picker from a chosen preset, flavor included', async () => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-preset-'));
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		const { select } = await import('@clack/prompts');
+		vi.mocked(select).mockResolvedValueOnce('next-app');
+		vi.mocked(unitPicker).mockResolvedValue({ ids: [], flavors: {} });
+
+		await runInit({ targetDir: tmp, dryRun: true, inline: { pm: 'pnpm' } });
+
+		const picker = vi.mocked(unitPicker).mock.calls[0]?.[0];
+		expect(picker?.initialSelected).toContain('opt-shadcn');
+		expect(picker?.initialSelected).toContain('core-eslint');
+		// The preset's recorded flavor beats the environment sniff.
+		expect(picker?.initialFlavors?.eslintFlavor).toBe('next');
 	});
 
 	it('opens the picker with the preselected units checked', async () => {
