@@ -42,6 +42,7 @@
 		"eslint.config.mjs",
 		"opt-in",
 		"postcss.config.mjs",
+		"presets",
 		"schemas",
 		"stylelint.config.mjs",
 		"templates",

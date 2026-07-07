@@ -22,6 +22,9 @@ opt-in/vscode/README.md
 opt-in/vscode/settings.json
 package.json
 postcss.config.mjs
+presets/cli.json
+presets/next-app.json
+presets/node-lib.json
 schemas/catalog.schema.json
 schemas/diff.schema.json
 schemas/doctor.schema.json

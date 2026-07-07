@@ -1,11 +1,13 @@
 import type { Category, FileOp, PostInstall, Unit, UnitId, UnitOption } from '../manifest/types';
+import { loadPreset, presetNames } from '../config/presets';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '../manifest/categories';
 import { UNITS } from '../manifest/index';
+import { resolveSelection } from '../manifest/resolve';
 
 // Bump this when the JSON shape changes in a way that would break a consumer.
 // Tooling keys off `schema` rather than sniffing for fields, so the envelope
-// stays parseable across versions.
-export const CATALOG_SCHEMA = 1;
+// stays parseable across versions. 2 added the `presets` section (#38).
+export const CATALOG_SCHEMA = 2;
 
 // A FileOp with `src` removed. `src` anchors a path under PKG_ROOT — an
 // internal detail of where we ship templates from — so it never crosses the
@@ -50,9 +52,19 @@ export interface CatalogUnit {
 	packageJsonPatch?: Unit['packageJsonPatch'];
 }
 
+// A shipped preset, expanded: `units` is the RESOLVED closure (implies edges
+// walked), so a consumer sees what a `--preset` run would actually install
+// rather than re-deriving the resolver's answer.
+export interface CatalogPreset {
+	name: string;
+	description: string;
+	units: UnitId[];
+}
+
 export interface Catalog {
 	schema: number;
 	units: CatalogUnit[];
+	presets: CatalogPreset[];
 }
 
 // Category display order, then declared order within a category. Array.sort is
@@ -115,7 +127,21 @@ export function buildCatalog(units: Unit[] = UNITS): Catalog {
 	return {
 		schema: CATALOG_SCHEMA,
 		units: orderUnits(units).map(toCatalogUnit),
+		presets: buildCatalogPresets(units),
 	};
+}
+
+function buildCatalogPresets(units: Unit[]): CatalogPreset[] {
+	const known = new Set(units.map(u => u.id));
+	return presetNames().map((name) => {
+		const preset = loadPreset(name, known);
+		const resolution = resolveSelection(preset.config.units, units);
+		return {
+			name,
+			description: preset.description,
+			units: resolution.kind === 'ok' ? [...resolution.ids].sort() : [...preset.config.units].sort(),
+		};
+	});
 }
 
 export function formatCatalog(units: Unit[] = UNITS): string {
@@ -140,6 +166,12 @@ export function formatCatalog(units: Unit[] = UNITS): string {
 			}
 		}
 		lines.push('');
+	}
+
+	lines.push('Presets (start points for --preset; --units adds to them)');
+	for (const preset of buildCatalogPresets(ordered)) {
+		lines.push(`  ${preset.name.padEnd(idWidth)}  ${preset.description}`);
+		lines.push(`  ${' '.repeat(idWidth)}    → ${preset.units.join(', ')}`);
 	}
 
 	return `${lines.join('\n').trimEnd()}\n`;

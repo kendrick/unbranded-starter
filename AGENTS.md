@@ -34,7 +34,7 @@ No command below needs a TTY. Anything interactive has a flag that answers it.
 
 | Surface            | Schema file                    | `schema` today |
 | ------------------ | ------------------------------ | -------------- |
-| `list --json`      | `schemas/catalog.schema.json`  | 1              |
+| `list --json`      | `schemas/catalog.schema.json`  | 2              |
 | `diff --json`      | `schemas/diff.schema.json`     | 1              |
 | `doctor --json`    | `schemas/doctor.schema.json`   | 2              |
 | `outdated --json`  | `schemas/outdated.schema.json` | 1              |
