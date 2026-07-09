@@ -69,7 +69,12 @@ describe('buildPnpmWorkspace', () => {
 	});
 
 	it('declares a single-package stub when asked (pnpm 10 rejects a file without one)', () => {
-		expect(buildPnpmWorkspace(['esbuild'], { withPackages: true })).toMatch(/^packages:\n\s+- '\.'/m);
+		const yaml = buildPnpmWorkspace(['esbuild'], { withPackages: true });
+		expect(yaml).toMatch(/^packages:$/m);
+		// Plain scalar, not `- '.'`: a scaffold's own ESLint yaml formatter rejects
+		// the needless quotes, which broke every preset install on pnpm 10 (#67).
+		expect(yaml).toContain('- .');
+		expect(yaml).not.toContain('- \'.\'');
 	});
 });
 

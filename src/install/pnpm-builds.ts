@@ -76,9 +76,10 @@ export function buildPnpmWorkspace(deps: readonly string[], opts: { withPackages
 	if (opts.withPackages) {
 		lines.push(
 			'# pnpm 10 rejects a workspace file with no packages list; `.` is just this one',
-			'# package, not a monorepo. pnpm 11 drops the requirement.',
+			'# package, not a monorepo. pnpm 11 drops the requirement. Unquoted on purpose:',
+			'# the ESLint config a scaffold ships flags a needlessly quoted scalar.',
 			'packages:',
-			'  - \'.\'',
+			'  - .',
 			'',
 		);
 	}
