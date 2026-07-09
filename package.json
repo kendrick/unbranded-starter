@@ -62,8 +62,10 @@
 		"test:e2e": "pnpm build && vitest run --config vitest.e2e.config.ts",
 		"test:all": "pnpm test && pnpm test:e2e",
 		"typecheck": "tsc --noEmit",
-		"lint": "eslint . --cache && stylelint \"**/*.css\" --allow-empty-input",
-		"lint:fix": "eslint . --cache --fix && stylelint \"**/*.css\" --fix --allow-empty-input"
+		"lint": "eslint . --cache",
+		"lint:fix": "eslint . --cache --fix",
+		"lint:css": "stylelint \"**/*.css\" --allow-empty-input",
+		"lint:css:fix": "stylelint \"**/*.css\" --fix --allow-empty-input"
 	},
 	"dependencies": {
 		"@clack/core": "1.3.1",
