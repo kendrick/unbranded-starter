@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -42,16 +42,16 @@ function runPreset(name: string, tmp: string): void {
 	// (#48's accepted tension), and the scaffold's own lint enforces tabs — a
 	// two-space seed here would fail the very lint this test exists to run.
 	writeFileSync(join(tmp, 'package.json'), `${JSON.stringify({ name: `preset-${name}`, version: '0.0.0', private: true }, null, '\t')}\n`);
-	// pnpm 11 hard-fails scripts when a dependency's build was ignored (esbuild,
-	// via vitest): strictDepBuilds is on by default and the allowlist moved from
-	// onlyBuiltDependencies (v10) to the allowBuilds map (v11). Both keys ride
-	// here so the suite passes under either major — CI runs v10 per the repo's
-	// packageManager pin, local corepack may resolve v11. Whether scaffolds
-	// should seed this themselves is a product question the suite shouldn't
-	// answer on its own (see the PR discussion).
-	writeFileSync(join(tmp, 'pnpm-workspace.yaml'), 'onlyBuiltDependencies:\n  - esbuild\nallowBuilds:\n  esbuild: true\n');
 	const scaffold = spawnSync('node', [CLI, '--preset', name, '--pm', 'pnpm', '--on-conflict', 'overwrite'], { cwd: tmp, encoding: 'utf-8' });
 	expect(scaffold.status, `scaffold stderr: ${scaffold.stderr}\nstdout: ${scaffold.stdout}`).toBe(0);
+	// Every preset pulls Vitest -> esbuild, whose build pnpm blocks by default, so
+	// the scaffold seeds pnpm-workspace.yaml with the allowlist itself now (#67) —
+	// version-aware, see pnpm-builds.ts. That the install above already succeeded
+	// proves the seed landed in time; asserting both keys guards the file's shape.
+	// The v11 acceptance leg proves it installs clean on the major that hard-fails.
+	const workspace = readFileSync(join(tmp, 'pnpm-workspace.yaml'), 'utf-8');
+	expect(workspace).toMatch(/allowBuilds:\n\s+esbuild: true/);
+	expect(workspace).toMatch(/onlyBuiltDependencies:\n\s+- esbuild/);
 	writeStubProject(tmp);
 }
 

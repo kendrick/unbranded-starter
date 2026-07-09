@@ -166,6 +166,29 @@ jobs:
         env:
           UB_PRESET: ${{ matrix.preset }}
 
+  e2e-pnpm11:
+    name: e2e pnpm 11 acceptance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No version override: the repo builds under its pinned pnpm 10, same as
+      # every other job. The spec drives pnpm 11 through `npx pnpm@11` for the
+      # scaffolded project alone, so the one major that hard-fails an
+      # un-allowlisted build finally gets exercised in CI (#67).
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: E2E tests (pnpm 11 acceptance)
+        run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/pnpm11-acceptance.spec.ts
+        env:
+          UB_PNPM11: '1'
+
   launcher-smoke:
     name: create-unbranded launcher smoke
     # The create-unbranded launcher pins an exact `unbranded` version that only
