@@ -7,12 +7,20 @@ packages:
   - 'apps/*'
   - 'packages/*'
 
-# Silences the post-install warning about unbuilt packages.
+# Approve the build scripts these packages run at install time. pnpm blocks
+# build scripts by default; on pnpm 11 an un-approved build stops `pnpm install`
+# cold, where pnpm 10 only warned. pnpm 10 reads the onlyBuiltDependencies list
+# and pnpm 11 the allowBuilds map, so both ride here to cover either major.
 # These are the common offenders across modern Next/Vite/React stacks.
 onlyBuiltDependencies:
   - esbuild
   - sharp
   - unrs-resolver
+
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
 
 # Optional: pin peer dependency versions across all workspaces
 peerDependencyRules:

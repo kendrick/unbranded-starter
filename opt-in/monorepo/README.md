@@ -30,6 +30,7 @@ Drop these into a new monorepo to get pnpm workspaces + Turbo.
 
 ## Notes
 
+- The workspace yaml carries build-script approvals (`onlyBuiltDependencies` for pnpm 10, `allowBuilds` for pnpm 11) so native packages like esbuild and sharp actually build. Commit it: on pnpm 11 an un-approved build stops `pnpm install`, so leaving it out breaks every fresh clone and CI run.
 - `tsconfig.base.json` (from the starter root) sits at repo root; each workspace's `tsconfig.json` extends it.
 - `eslint.config.mjs` typically lives at repo root and applies to all workspaces. Per-workspace overrides go in workspace-level `eslint.config.mjs`.
 - For TypeScript project references (`references` array), add them per-workspace; see `unbranded-ds` or `nextera-livewire` for examples.
