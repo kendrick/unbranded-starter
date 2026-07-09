@@ -283,3 +283,26 @@ describe('assertValidPm', () => {
 		expect(() => assertValidPm('cargo')).toThrow(/pm must be one of/);
 	});
 });
+
+describe('resolveConfig unitsMode additive', () => {
+	const known = new Set<UnitId>(['core-eslint', 'core-vitest', 'core-typescript']);
+
+	it('adds inline units to the file config instead of replacing them, deduped', () => {
+		const file = validate({ units: ['core-eslint'], pm: null, onConflict: 'skip', postInstall: 'none' }, known);
+		const config = resolveConfig(file, { units: 'core-vitest,core-eslint' }, known, undefined, { unitsMode: 'additive' });
+		expect(config.units).toEqual(['core-eslint', 'core-vitest']);
+	});
+
+	it('still lets every other inline flag override the preset field', () => {
+		const file = validate({ units: ['core-eslint'], pm: null, onConflict: 'skip', postInstall: 'none' }, known);
+		const config = resolveConfig(file, { pm: 'pnpm' }, known, undefined, { unitsMode: 'additive' });
+		expect(config.pm).toBe('pnpm');
+		expect(config.units).toEqual(['core-eslint']);
+	});
+
+	it('defaults to override semantics when no mode is given', () => {
+		const file = validate({ units: ['core-eslint'], pm: null, onConflict: 'skip', postInstall: 'none' }, known);
+		const config = resolveConfig(file, { units: 'core-vitest' }, known);
+		expect(config.units).toEqual(['core-vitest']);
+	});
+});

@@ -2,72 +2,200 @@
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"$id": "https://github.com/kendrick/unbranded-starter/schemas/catalog.schema.json",
 	"title": "unbranded list --json",
-	"description": "The unit catalog envelope. The schema integer bumps on breaking shape changes.",
+	"description": "The unit catalog envelope. The schema integer bumps on breaking shape changes; 2 added the presets section.",
 	"type": "object",
-	"required": ["schema", "units"],
+	"required": [
+		"schema",
+		"units",
+		"presets"
+	],
 	"additionalProperties": false,
 	"properties": {
-		"schema": { "type": "integer" },
-		"units": { "type": "array", "items": { "$ref": "#/$defs/unit" } }
+		"schema": {
+			"type": "integer"
+		},
+		"units": {
+			"type": "array",
+			"items": {
+				"$ref": "#/$defs/unit"
+			}
+		},
+		"presets": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"required": [
+					"name",
+					"description",
+					"units"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"units": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		}
 	},
 	"$defs": {
-		"stringMap": { "type": "object", "additionalProperties": { "type": "string" } },
+		"stringMap": {
+			"type": "object",
+			"additionalProperties": {
+				"type": "string"
+			}
+		},
 		"unit": {
 			"type": "object",
-			"required": ["id", "category", "label", "description", "files"],
+			"required": [
+				"id",
+				"category",
+				"label",
+				"description",
+				"files"
+			],
 			"additionalProperties": false,
 			"properties": {
-				"id": { "type": "string" },
-				"category": { "type": "string" },
-				"label": { "type": "string" },
-				"description": { "type": "string" },
-				"dependencies": { "$ref": "#/$defs/stringMap" },
-				"devDependencies": { "$ref": "#/$defs/stringMap" },
-				"files": { "type": "array", "items": { "$ref": "#/$defs/file" } },
-				"options": { "type": "array", "items": { "$ref": "#/$defs/option" } },
-				"implies": { "type": "array", "items": { "type": "string" } },
-				"excludes": { "type": "array", "items": { "type": "string" } },
-				"requires": { "type": "array", "items": { "type": "string" } },
-				"postInstall": { "type": "array", "items": { "$ref": "#/$defs/postInstall" } },
+				"id": {
+					"type": "string"
+				},
+				"category": {
+					"type": "string"
+				},
+				"label": {
+					"type": "string"
+				},
+				"description": {
+					"type": "string"
+				},
+				"dependencies": {
+					"$ref": "#/$defs/stringMap"
+				},
+				"devDependencies": {
+					"$ref": "#/$defs/stringMap"
+				},
+				"files": {
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/file"
+					}
+				},
+				"options": {
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/option"
+					}
+				},
+				"implies": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"excludes": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"requires": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"postInstall": {
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/postInstall"
+					}
+				},
 				"packageJsonPatch": {
 					"type": "object",
 					"additionalProperties": false,
 					"properties": {
-						"scripts": { "$ref": "#/$defs/stringMap" },
-						"engines": { "$ref": "#/$defs/stringMap" },
-						"packageManager": { "type": "string" }
+						"scripts": {
+							"$ref": "#/$defs/stringMap"
+						},
+						"engines": {
+							"$ref": "#/$defs/stringMap"
+						},
+						"packageManager": {
+							"type": "string"
+						}
 					}
 				}
 			}
 		},
 		"file": {
 			"type": "object",
-			"required": ["dest"],
+			"required": [
+				"dest"
+			],
 			"additionalProperties": false,
 			"properties": {
-				"dest": { "type": "string" },
-				"rename": { "type": "string" },
-				"mode": { "enum": ["copy", "merge-json", "append-if-missing"] }
+				"dest": {
+					"type": "string"
+				},
+				"rename": {
+					"type": "string"
+				},
+				"mode": {
+					"enum": [
+						"copy",
+						"merge-json",
+						"append-if-missing"
+					]
+				}
 			}
 		},
 		"option": {
 			"type": "object",
-			"required": ["key", "label", "default", "choices"],
+			"required": [
+				"key",
+				"label",
+				"default",
+				"choices"
+			],
 			"additionalProperties": false,
 			"properties": {
-				"key": { "type": "string" },
-				"label": { "type": "string" },
-				"default": { "type": "string" },
+				"key": {
+					"type": "string"
+				},
+				"label": {
+					"type": "string"
+				},
+				"default": {
+					"type": "string"
+				},
 				"choices": {
 					"type": "array",
 					"items": {
 						"type": "object",
-						"required": ["value", "label"],
+						"required": [
+							"value",
+							"label"
+						],
 						"additionalProperties": false,
 						"properties": {
-							"value": { "type": "string" },
-							"label": { "type": "string" },
-							"hint": { "type": "string" }
+							"value": {
+								"type": "string"
+							},
+							"label": {
+								"type": "string"
+							},
+							"hint": {
+								"type": "string"
+							}
 						}
 					}
 				}
@@ -75,14 +203,34 @@
 		},
 		"postInstall": {
 			"type": "object",
-			"required": ["id", "command", "prompt", "default"],
+			"required": [
+				"id",
+				"command",
+				"prompt",
+				"default"
+			],
 			"additionalProperties": false,
 			"properties": {
-				"id": { "type": "string" },
-				"command": { "type": "array", "items": { "type": "string" } },
-				"prompt": { "type": "string" },
-				"default": { "type": "boolean" },
-				"requires": { "enum": ["git"] }
+				"id": {
+					"type": "string"
+				},
+				"command": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"prompt": {
+					"type": "string"
+				},
+				"default": {
+					"type": "boolean"
+				},
+				"requires": {
+					"enum": [
+						"git"
+					]
+				}
 			}
 		}
 	}

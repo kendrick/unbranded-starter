@@ -5,8 +5,8 @@ import { buildCatalog, CATALOG_SCHEMA, formatCatalog } from './list';
 describe('buildCatalog', () => {
 	it('wraps the units in a versioned envelope', () => {
 		const catalog = buildCatalog();
-		expect(catalog.schema).toBe(1);
-		expect(CATALOG_SCHEMA).toBe(1);
+		expect(catalog.schema).toBe(2);
+		expect(CATALOG_SCHEMA).toBe(2);
 		expect(catalog.units.length).toBe(UNITS.length);
 	});
 
@@ -74,5 +74,28 @@ describe('formatCatalog', () => {
 		const out = formatCatalog();
 		expect(out).toMatch(/eslintFlavor: base \| react \| next/);
 		expect(out).toMatch(/default: base/);
+	});
+});
+
+describe('catalog presets', () => {
+	it('bumps the envelope to schema 2 and lists each preset with its resolved expansion', () => {
+		const catalog = buildCatalog();
+		expect(catalog.schema).toBe(2);
+		const names = catalog.presets.map(p => p.name);
+		expect(names).toEqual(['cli', 'next-app', 'node-lib']);
+
+		// The expansion is the RESOLVED closure, so implied units show up:
+		// next-app names opt-shadcn, and tailwind rides its implies edge.
+		const nextApp = catalog.presets.find(p => p.name === 'next-app');
+		expect(nextApp?.units).toContain('opt-shadcn');
+		expect(nextApp?.units).toContain('core-tailwind');
+		expect(nextApp?.description.length).toBeGreaterThan(0);
+	});
+
+	it('prints a presets section in the human catalog', () => {
+		const out = formatCatalog();
+		expect(out).toContain('Presets');
+		expect(out).toContain('node-lib');
+		expect(out).toContain('next-app');
 	});
 });

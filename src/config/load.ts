@@ -85,7 +85,17 @@ export interface InlineFlags {
 // `--latest` overrides a recipe's `versions`: a flag beats the matching recipe
 // field. Callers gate on having a units source before calling; if neither the
 // recipe nor `--units` supplies one, validate() reports the missing array.
-export function resolveConfig(fileConfig: Config | null, inline: InlineFlags, knownUnits: Set<UnitId>, schema?: OptionSchema): Config {
+//
+// `unitsMode: 'additive'` is the preset twist: a preset is a starting point,
+// so `--preset node-lib --units opt-vscode` extends the set instead of
+// replacing it. Every other field keeps the flag-beats-file rule.
+export function resolveConfig(
+	fileConfig: Config | null,
+	inline: InlineFlags,
+	knownUnits: Set<UnitId>,
+	schema?: OptionSchema,
+	opts: { unitsMode?: 'override' | 'additive' } = {},
+): Config {
 	// Inline --units accepts an `id:value` suffix (e.g. core-eslint:react) that
 	// picks a unit option inline. The id feeds the units array; the suffix, mapped
 	// to the unit's option key via the schema, feeds the options map (inline
@@ -118,6 +128,8 @@ export function resolveConfig(fileConfig: Config | null, inline: InlineFlags, kn
 	else {
 		units = fileConfig?.units;
 	}
+	if (opts.unitsMode === 'additive' && inline.units !== undefined && fileConfig?.units)
+		units = [...new Set([...fileConfig.units, ...(units ?? [])])];
 
 	const mergedOptions = { ...fileConfig?.options, ...inlineOptions };
 	const options = Object.keys(mergedOptions).length > 0 ? mergedOptions : undefined;

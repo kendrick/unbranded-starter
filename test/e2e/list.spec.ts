@@ -42,7 +42,7 @@ describe('unbranded list', () => {
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 
 		const parsed = JSON.parse(result.stdout) as Catalog;
-		expect(parsed.schema).toBe(1);
+		expect(parsed.schema).toBe(2);
 		expect(parsed.units.length).toBeGreaterThan(0);
 		expect(result.stdout).not.toContain('"src"');
 		// The generated config is delivered inline per flavor; that content is an

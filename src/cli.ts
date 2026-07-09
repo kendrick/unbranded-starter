@@ -39,6 +39,7 @@ Commands:
 
 Options:
   --config, -c <file>            Run non-interactively with a JSON recipe
+  --preset <name>                Start from a shipped recipe (node-lib, next-app, cli); --units adds to it
   --target <dir>                 Scaffold against <dir> instead of the current directory
   --units <a,b,c>                Comma-separated unit ids (recipe field: units)
   --pm <npm|pnpm|yarn|bun>       Package manager (recipe field: pm); skips detection, including the workspace-leaf refusal
@@ -76,6 +77,7 @@ Examples:
   unbranded update --yes --strategy theirs             # CI-safe update, template wins conflicts
   unbranded outdated --strict                          # freshness gate: non-zero exit on major-behind pins
   unbranded --config recipe.json                       # reproducible, scriptable run
+  unbranded --preset node-lib --pm pnpm                # a shipped recipe; add --units to extend it
   unbranded --units core-eslint,core-vitest --pm pnpm --yes   # fully non-interactive, no recipe file
   unbranded --latest                                   # take the newest versions, not the pins
   unbranded --dry-run --diff                           # preview every change, including diffs, write nothing
@@ -101,6 +103,7 @@ const { values, positionals } = parseArgs({
 		'cascade': { type: 'boolean' },
 		'strategy': { type: 'string' },
 		'registry': { type: 'string' },
+		'preset': { type: 'string' },
 		'no-color': { type: 'boolean' },
 		'color': { type: 'boolean' },
 		'help': { type: 'boolean', short: 'h' },
@@ -120,6 +123,13 @@ applyColorPolicy();
 if (values.help) {
 	process.stdout.write(HELP);
 	process.exit(EXIT_OK);
+}
+
+// A preset IS a config; two sources of truth for the same run would need a
+// precedence story nobody could remember. Pick one.
+if (values.preset !== undefined && values.config !== undefined) {
+	process.stderr.write('--preset and --config are both full recipes; pass one or the other.\n');
+	process.exit(EXIT_ERROR);
 }
 
 if (values.version) {
@@ -234,6 +244,7 @@ if (command !== undefined) {
 if (values['dry-run'] && values.json) {
 	process.exit(await runPlanJson({
 		configPath: values.config,
+		preset: values.preset,
 		targetDir: values.target ? resolve(values.target) : undefined,
 		inline: {
 			units: values.units,
@@ -250,6 +261,7 @@ if (values['dry-run'] && values.json) {
 
 runInit({
 	configPath: values.config,
+	preset: values.preset,
 	// Resolve against the invocation cwd now, before any detection runs, so the
 	// dir is stable even though a relative --config path is still read from here.
 	targetDir: values.target ? resolve(values.target) : undefined,

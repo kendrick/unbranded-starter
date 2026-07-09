@@ -1,0 +1,17 @@
+{
+	"_preset": "A typed, tested, linted Node library: strict TypeScript, ESLint (base flavor), Vitest, pre-commit hooks, CI, and the editor/git hygiene units.",
+	"units": [
+		"core-editorconfig",
+		"core-gitattributes",
+		"core-node-version",
+		"core-eslint",
+		"core-typescript",
+		"core-vitest",
+		"opt-husky",
+		"opt-ci-github"
+	],
+	"options": { "eslintFlavor": "base" },
+	"pm": null,
+	"onConflict": "skip",
+	"postInstall": "none"
+}

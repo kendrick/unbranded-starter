@@ -7,6 +7,7 @@ import { basename, join } from 'node:path';
 import { spinner } from '@clack/prompts';
 import { mergePackageJson } from '../fs/merge-json';
 import { computeNodeVersion, NODE_VERSION_UNIT_ID, queryPmVersion } from './node-version';
+import { seedPnpmWorkspace } from './pnpm-builds';
 import { spawnOptions } from './spawn';
 import { buildRecommendations, VSCODE_UNIT_ID } from './vscode-extensions';
 
@@ -66,6 +67,11 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 		packageManager: u.packageJsonPatch?.packageManager,
 	}));
 
+	// The pm's real version drives two computed outputs below: core-node-version's
+	// packageManager pin and the pnpm build-script allowlist (whose shape differs
+	// between pnpm 10 and 11). Query it once; it's null for a null pm or on failure.
+	const pmVersion = await queryPmVersion(opts.pm, opts.targetDir);
+
 	// core-node-version can't ship its output as a static template: .nvmrc,
 	// engines, and packageManager all have to reflect the running environment.
 	// Materialize it here, appending a computed patch and writing .nvmrc, so a
@@ -74,7 +80,7 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 		const pins = computeNodeVersion({
 			nodeVersion: process.versions.node,
 			pm: opts.pm,
-			pmVersion: await queryPmVersion(opts.pm, opts.targetDir),
+			pmVersion,
 		});
 		patches.push({ engines: pins.engines, packageManager: pins.packageManager });
 		const nvmrcPath = join(opts.targetDir, '.nvmrc');
@@ -94,6 +100,14 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 	// file the user already has.
 	if (opts.units.some(u => u.id === VSCODE_UNIT_ID))
 		computedWrites.push({ path: writeVscodeExtensions(opts.targetDir, opts.units), unit: VSCODE_UNIT_ID });
+
+	// A pnpm scaffold that pulls a native-build dependency (esbuild, via Vitest)
+	// has to allowlist the build or `pnpm install` fails on pnpm 11. Seed the
+	// approval before the install spawn below, so our own install sees it, and
+	// record it for the state file. All the gating lives in seedPnpmWorkspace.
+	const pnpmWorkspace = seedPnpmWorkspace({ targetDir: opts.targetDir, pm: opts.pm, pmVersion, units: opts.units });
+	if (pnpmWorkspace)
+		computedWrites.push(pnpmWorkspace);
 
 	const merged = mergePackageJson(existing, patches);
 	writeFileSync(pkgPath, `${JSON.stringify(merged, null, indent)}\n`);

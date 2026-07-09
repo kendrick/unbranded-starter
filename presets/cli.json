@@ -1,0 +1,16 @@
+{
+	"_preset": "node-lib without the git hooks, for command-line tools. After scaffolding, point your bundler at a bin entry and add a shebang; the shipped tsconfig works as-is for a single-entry CLI.",
+	"units": [
+		"core-editorconfig",
+		"core-gitattributes",
+		"core-node-version",
+		"core-eslint",
+		"core-typescript",
+		"core-vitest",
+		"opt-ci-github"
+	],
+	"options": { "eslintFlavor": "base" },
+	"pm": null,
+	"onConflict": "skip",
+	"postInstall": "none"
+}

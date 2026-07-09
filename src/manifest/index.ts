@@ -290,7 +290,7 @@ export const UNITS: Unit[] = [
 		id: 'opt-monorepo',
 		category: 'monorepo',
 		label: 'pnpm workspace + Turbo',
-		description: 'Workspace yaml (with onlyBuiltDependencies for esbuild/sharp/unrs-resolver) and turbo.json baseline.',
+		description: 'Workspace yaml with build-script approvals for esbuild/sharp/unrs-resolver (pnpm 10 and 11) and a turbo.json baseline.',
 		files: [
 			{ src: 'opt-in/monorepo/pnpm-workspace.yaml', dest: 'pnpm-workspace.yaml' },
 			{ src: 'opt-in/monorepo/turbo.json', dest: 'turbo.json' },
