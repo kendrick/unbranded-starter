@@ -1,13 +1,13 @@
 import antfu from '@antfu/eslint-config';
-import jsxA11y from 'eslint-plugin-jsx-a11y';
 
 export default antfu(
 	{
 		// ============================================
 		// Framework Configuration
 		// ============================================
-		react: true, // react + react-hooks
-		nextjs: true, // @next/eslint-plugin-next — REMOVE for non-Next projects
+		// Node-only CLI with no JSX or CSS. The react/next/jsx-a11y config this
+		// repo scaffolds for other projects lives in the core-eslint flavors
+		// (src/manifest/eslint-config.ts), never on the repo itself.
 		typescript: true,
 
 		// ============================================
@@ -16,8 +16,6 @@ export default antfu(
 		// CI runs `pnpm lint` which is ESLint.
 		// ============================================
 		formatters: {
-			css: true,
-			html: true,
 			markdown: true,
 			json: true,
 			yaml: true,
@@ -33,12 +31,11 @@ export default antfu(
 		// Rule Overrides
 		// ============================================
 		rules: {
-			// General
 			// `properties: 'never'` lets snake_case data shapes through:
 			// env var keys (`npm_config_user_agent`), API responses, config
 			// files that aren't ours. The rule still polices identifiers.
 			'camelcase': ['error', { ignoreImports: true, properties: 'never' }],
-			'import/no-default-export': 'off', // Next.js needs default exports
+			'import/no-default-export': 'off', // config files (vitest, tsup, eslint) default-export
 			'style/multiline-ternary': 'off',
 			'ts/no-explicit-any': 'error',
 			// eslint-plugin-pnpm (auto-enabled by antfu when a pnpm-workspace.yaml
@@ -53,21 +50,6 @@ export default antfu(
 			// every entry point we ship.
 			'node/prefer-global/process': 'off',
 			'node/prefer-global/buffer': 'off',
-
-			// -----------------------------------------
-			// Next.js Performance (no-ops for non-Next projects)
-			// -----------------------------------------
-			'@next/next/no-html-link-for-pages': 'error',
-			'@next/next/no-img-element': 'error',
-			'@next/next/no-sync-scripts': 'error',
-			'@next/next/no-head-import-in-document': 'error',
-			'@next/next/no-document-import-in-page': 'error',
-			'@next/next/no-duplicate-head': 'error',
-			'@next/next/google-font-display': 'warn',
-			'@next/next/google-font-preconnect': 'warn',
-			'@next/next/no-page-custom-font': 'warn',
-			'@next/next/no-title-in-document-head': 'error',
-			'@next/next/no-unwanted-polyfillio': 'warn',
 		},
 
 		// ============================================
@@ -129,60 +111,6 @@ export default antfu(
 		files: ['**/.specify/**', '**/specs/**'],
 		rules: {
 			'import/no-duplicates': 'off',
-		},
-	},
-
-	// ============================================
-	// Specs .md files: code fences are illustrative
-	// React hook rules don't apply to doc examples
-	// ============================================
-	{
-		files: ['**/specs/**/*.md', '**/specs/**/*.md/**'],
-		rules: {
-			'react-hooks/rules-of-hooks': 'off',
-			'react-hooks/exhaustive-deps': 'off',
-		},
-	},
-
-	// ============================================
-	// Accessibility (jsx-a11y) — Strict Mode
-	// Appended as separate config for plugin registration.
-	// 28 rules at `error` (plus `no-autofocus` at `warn`).
-	// ============================================
-	{
-		plugins: {
-			'jsx-a11y': jsxA11y,
-		},
-		rules: {
-			'jsx-a11y/alt-text': 'error',
-			'jsx-a11y/anchor-has-content': 'error',
-			'jsx-a11y/anchor-is-valid': 'error',
-			'jsx-a11y/aria-activedescendant-has-tabindex': 'error',
-			'jsx-a11y/aria-props': 'error',
-			'jsx-a11y/aria-proptypes': 'error',
-			'jsx-a11y/aria-role': 'error',
-			'jsx-a11y/aria-unsupported-elements': 'error',
-			'jsx-a11y/click-events-have-key-events': 'error',
-			'jsx-a11y/heading-has-content': 'error',
-			'jsx-a11y/html-has-lang': 'error',
-			'jsx-a11y/img-redundant-alt': 'error',
-			'jsx-a11y/interactive-supports-focus': 'error',
-			'jsx-a11y/label-has-associated-control': 'error',
-			'jsx-a11y/media-has-caption': 'error',
-			'jsx-a11y/mouse-events-have-key-events': 'error',
-			'jsx-a11y/no-access-key': 'error',
-			'jsx-a11y/no-autofocus': 'warn', // Sometimes needed for UX
-			'jsx-a11y/no-distracting-elements': 'error',
-			'jsx-a11y/no-interactive-element-to-noninteractive-role': 'error',
-			'jsx-a11y/no-noninteractive-element-interactions': 'error',
-			'jsx-a11y/no-noninteractive-element-to-interactive-role': 'error',
-			'jsx-a11y/no-noninteractive-tabindex': 'error',
-			'jsx-a11y/no-redundant-roles': 'error',
-			'jsx-a11y/no-static-element-interactions': 'error',
-			'jsx-a11y/role-has-required-aria-props': 'error',
-			'jsx-a11y/role-supports-aria-props': 'error',
-			'jsx-a11y/scope': 'error',
-			'jsx-a11y/tabindex-no-positive': 'error',
 		},
 	},
 );
