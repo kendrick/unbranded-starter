@@ -124,7 +124,7 @@ Fifteen units, grouped by category. Selecting one can pull in others: ESLint imp
 
 **Monorepo**
 
-- **pnpm workspace + Turbo** — workspace yaml (with `onlyBuiltDependencies` for esbuild/sharp/unrs-resolver) and a turbo.json baseline.
+- **pnpm workspace + Turbo** — workspace yaml with build-script approvals for esbuild/sharp/unrs-resolver (pnpm 10 and 11) and a turbo.json baseline.
 
 Run `unbranded list` for the same catalog in your terminal, or `unbranded list --json` to hand it to other tooling.
 
