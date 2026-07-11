@@ -1,5 +1,52 @@
 # Changelog
 
+## [1.0.0](https://github.com/kendrick/unbranded-starter/compare/v0.7.0...v1.0.0) (2026-07-11)
+
+
+### Features
+
+* **ci:** weekly pin-bump automation, closing the freshness loop ([#65](https://github.com/kendrick/unbranded-starter/issues/65)) ([4a25a3f](https://github.com/kendrick/unbranded-starter/commit/4a25a3f91287abb8781c0a255f28daebd80ec7bc))
+* **cli:** --preset starts a run from a shipped recipe ([7195d58](https://github.com/kendrick/unbranded-starter/commit/7195d58383c0d296e83a612758d19ed2fa2135a1))
+* **cli:** route unbranded remove, with opt-husky's detach note ([50702d3](https://github.com/kendrick/unbranded-starter/commit/50702d3cef035107c387ff69c449be80b1a44f5c))
+* **config:** shipped presets are recipes, and --units extends them ([9a2711a](https://github.com/kendrick/unbranded-starter/commit/9a2711a4e46fc693ccb12744828942b32e579804))
+* **contract:** seven JSON Schemas, regression-tested against live output ([ca3fa1d](https://github.com/kendrick/unbranded-starter/commit/ca3fa1d05c3320ffeff7ab702899f83c95fa0be4))
+* **init:** --dry-run --json emits the plan as data ([5e6aeed](https://github.com/kendrick/unbranded-starter/commit/5e6aeedc14f866af1b030565f21ae4e112cf3434))
+* **list:** the catalog gains a presets section, schema 2 ([840d528](https://github.com/kendrick/unbranded-starter/commit/840d528eed20db9fdc24abae136f616b9d547348))
+* **merge-json:** removePackageJsonEntries backs a unit's contributions out ([f309f64](https://github.com/kendrick/unbranded-starter/commit/f309f642724274625d12fa529cd4cd855096104e))
+* **merge3:** the three-way merge engine behind update ([#62](https://github.com/kendrick/unbranded-starter/issues/62)) ([79f6ebb](https://github.com/kendrick/unbranded-starter/commit/79f6ebbb101e7c311ac018fa6b2bf80faa3985ff))
+* outdated grades every manifest pin against the registry ([d52fc18](https://github.com/kendrick/unbranded-starter/commit/d52fc187d997f8e3a7ea35ddae8b50d7c7abd017))
+* **outdated:** grade every manifest pin against the registry ([3000dcf](https://github.com/kendrick/unbranded-starter/commit/3000dcf9946d8263937324838834cac7a9f2edcf))
+* presets scaffold a whole stack from one --preset flag (closes [#38](https://github.com/kendrick/unbranded-starter/issues/38)) ([2ceb2c8](https://github.com/kendrick/unbranded-starter/commit/2ceb2c82d20308c225aa0e23eeccff4d3ec8b901))
+* **registry:** a time-boxed dist-tags client, the CLI's first network code ([5c40231](https://github.com/kendrick/unbranded-starter/commit/5c40231cb6479da63bc30fe55ce0d924dda6ca3f))
+* remove backs a tracked unit out without taking your edits with it ([db2fd88](https://github.com/kendrick/unbranded-starter/commit/db2fd88519745aede3a1cef5066a090b0910f842))
+* **remove:** planner and shell for backing a unit out ([91aea70](https://github.com/kendrick/unbranded-starter/commit/91aea70038810e704f9a308f27dc04437cac6a06))
+* **resolve:** dependentsOf answers the resolver's question in reverse ([044384c](https://github.com/kendrick/unbranded-starter/commit/044384c6ed0e2c99e382a9ec1b1bf6ee838cc759))
+* **state:** applyRemovalToState is the one way the tracked set shrinks ([20ccbac](https://github.com/kendrick/unbranded-starter/commit/20ccbac3064ed1475a6334149924602084a7fb47))
+* **state:** refreshTrackedFiles moves hashes and baselines after an update ([0cef4ce](https://github.com/kendrick/unbranded-starter/commit/0cef4cea5e351f0aa2fd20f510d397508541d89c))
+* the non-interactive surface becomes a versioned contract (closes [#37](https://github.com/kendrick/unbranded-starter/issues/37)) ([7aafd2f](https://github.com/kendrick/unbranded-starter/commit/7aafd2f69b23331400bf55fa50056799d387be0f))
+* update three-way merges newer templates over your edits (closes [#34](https://github.com/kendrick/unbranded-starter/issues/34)) ([1b091d6](https://github.com/kendrick/unbranded-starter/commit/1b091d681b8a2dfdc137ded7d3009dce7762763f))
+* **update:** the planner and shell behind unbranded update ([974b652](https://github.com/kendrick/unbranded-starter/commit/974b652bebc0d6ff71e74e288b16b8f01f04edbc))
+
+
+### Bug Fixes
+
+* **install:** emit the packages stub as a plain scalar, not a quoted '.' ([f968ab0](https://github.com/kendrick/unbranded-starter/commit/f968ab0ed0546b298da9d6b1a424bf5bb66ce370))
+* **install:** seed pnpm-workspace.yaml so pnpm scaffolds can build esbuild ([ac824a0](https://github.com/kendrick/unbranded-starter/commit/ac824a0a83518931bd54c8e2168b6fd14e64cdf8))
+* **monorepo:** carry the pnpm 11 build allowlist in the template ([68360e8](https://github.com/kendrick/unbranded-starter/commit/68360e8bb2049b1fe31007b49e45ad510a2bfa71))
+* pnpm scaffolds seed the build allowlist so they install on pnpm 11 (closes [#67](https://github.com/kendrick/unbranded-starter/issues/67)) ([695f73f](https://github.com/kendrick/unbranded-starter/commit/695f73fc9a842fcdf2eedf3f210d24765cd01173))
+* **release:** survive npm@latest's trailing warning in the pack helper ([231c7b8](https://github.com/kendrick/unbranded-starter/commit/231c7b822cb79e652817c7df2c2acaa7aecd5086))
+
+
+### Performance Improvements
+
+* **lint:** cache eslint so repeat lint runs stay fast ([3ac5497](https://github.com/kendrick/unbranded-starter/commit/3ac54970f8e11e81602537149d51a6088bfa9de3))
+
+
+### Miscellaneous Chores
+
+* release 1.0.0 ([8a90f99](https://github.com/kendrick/unbranded-starter/commit/8a90f9938211df591a31107d1e009418d1e3f6f5))
+* release 1.0.0 ([06dabf0](https://github.com/kendrick/unbranded-starter/commit/06dabf0f89e2bcc7f0f909280683dd4bcacd4f6a))
+
 ## [0.7.0](https://github.com/kendrick/unbranded-starter/compare/v0.6.0...v0.7.0) (2026-07-06)
 
 
