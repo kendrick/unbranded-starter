@@ -117,7 +117,7 @@ export const UNITS: Unit[] = [
 			{ src: 'stylelint.config.mjs', dest: 'stylelint.config.mjs' },
 		],
 		devDependencies: {
-			'stylelint': '17.11.0',
+			'stylelint': '17.14.0',
 			'stylelint-config-standard': '40.0.0',
 			'@dreamsicle.io/stylelint-config-tailwindcss': '1.2.2',
 		},
