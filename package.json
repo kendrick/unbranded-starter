@@ -1,7 +1,7 @@
 {
 	"name": "unbranded",
 	"type": "module",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"packageManager": "pnpm@10.0.0",
 	"description": "Interactive CLI to scaffold your preferred project tooling into any project, using your existing package manager.",
 	"author": "Kendrick Arnett",
