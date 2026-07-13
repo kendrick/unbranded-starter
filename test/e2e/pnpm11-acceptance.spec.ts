@@ -15,7 +15,14 @@ import { PKG_ROOT } from '../../src/util/paths';
 const CLI = join(PKG_ROOT, 'dist/cli.js');
 
 function pnpm11(cwd: string, args: string[]): { status: number | null; output: string } {
-	const res = spawnSync('npx', ['--yes', 'pnpm@11', ...args], { cwd, encoding: 'utf-8', env: { ...process.env, CI: 'true' } });
+	// Every pnpm phase here hits the minimumReleaseAge supply-chain gate, which
+	// rejects too-recently-published deps: `install` resolves them, and `pnpm test`
+	// re-verifies the lockfile before running the script (that verify step is what
+	// reddened CI, since the install-only opt-out missed it). The gate is unrelated
+	// to what this suite proves (the build-script allowlist), so turn it off on
+	// every invocation. The flag sits before the subcommand so pnpm consumes it
+	// rather than forwarding it to the script.
+	const res = spawnSync('npx', ['--yes', 'pnpm@11', '--config.minimumReleaseAge=0', ...args], { cwd, encoding: 'utf-8', env: { ...process.env, CI: 'true' } });
 	return { status: res.status, output: `${res.stdout}\n${res.stderr}` };
 }
 
