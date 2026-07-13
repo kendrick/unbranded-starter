@@ -7,6 +7,14 @@ function unit(id: UnitId, extras: Partial<Unit> = {}): Unit {
 	return { id, category: 'lint', label: id, description: '', files: [], ...extras };
 }
 
+// One minor above `pin` (e.g. 4.1.10 → 4.2.0). Fixtures that want a minor-behind
+// scenario derive it from the live pin instead of a literal, so a weekly pin bump
+// can't quietly turn "behind" into "up to date" and redden the suite (see #81).
+function oneMinorAhead(pin: string): string {
+	const [major = 0, minor = 0] = pin.split('.').map(Number);
+	return `${major}.${minor + 1}.0`;
+}
+
 describe('collectManifestPins', () => {
 	it('unions static deps, devDeps, and every option choice, attributing units', () => {
 		const catalog = [
@@ -113,8 +121,10 @@ describe('runOutdated', () => {
 	});
 
 	it('keeps --strict quiet for minors: only majors gate CI', async () => {
-		// vitest 2.1.9 → 2.2.0 is a minor; the freshness policy only alarms on majors.
-		expect(await runOutdated({ fetchImpl: echoRegistry({ vitest: '2.2.0' }), strict: true, registry: 'https://reg.test' })).toBe(0);
+		// A pin one minor behind should surface in the report but never gate --strict;
+		// only majors do. Stage that off vitest's live pin so the case survives bumps.
+		const vitestPin = collectManifestPins(UNITS).find(p => p.name === 'vitest')!.pin;
+		expect(await runOutdated({ fetchImpl: echoRegistry({ vitest: oneMinorAhead(vitestPin) }), strict: true, registry: 'https://reg.test' })).toBe(0);
 		expect(out.join('')).toContain('vitest');
 	});
 

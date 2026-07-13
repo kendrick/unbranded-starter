@@ -117,7 +117,7 @@ export const UNITS: Unit[] = [
 			{ src: 'stylelint.config.mjs', dest: 'stylelint.config.mjs' },
 		],
 		devDependencies: {
-			'stylelint': '17.11.0',
+			'stylelint': '17.14.0',
 			'stylelint-config-standard': '40.0.0',
 			'@dreamsicle.io/stylelint-config-tailwindcss': '1.2.2',
 		},
@@ -137,8 +137,8 @@ export const UNITS: Unit[] = [
 		// Tailwind v4 ships zero config files. Manifest is deps-only.
 		files: [],
 		devDependencies: {
-			'tailwindcss': '4.3.0',
-			'@tailwindcss/postcss': '4.3.0',
+			'tailwindcss': '4.3.2',
+			'@tailwindcss/postcss': '4.3.2',
 		},
 		recommendedExtensions: ['bradlc.vscode-tailwindcss'],
 	},
@@ -183,8 +183,8 @@ export const UNITS: Unit[] = [
 			{ src: 'opt-in/playwright/playwright.config.ts', dest: 'playwright.config.ts' },
 		],
 		devDependencies: {
-			'@playwright/test': '1.60.0',
-			'@axe-core/playwright': '4.11.3',
+			'@playwright/test': '1.61.1',
+			'@axe-core/playwright': '4.12.1',
 		},
 		packageJsonPatch: {
 			scripts: {
@@ -230,7 +230,7 @@ export const UNITS: Unit[] = [
 		],
 		devDependencies: {
 			'husky': '9.1.7',
-			'lint-staged': '17.0.4',
+			'lint-staged': '17.0.8',
 		},
 		packageJsonPatch: {
 			// `prepare` is npm's lifecycle hook for fresh clones — running it
@@ -296,7 +296,7 @@ export const UNITS: Unit[] = [
 			{ src: 'opt-in/monorepo/turbo.json', dest: 'turbo.json' },
 		],
 		devDependencies: {
-			turbo: '2.9.12',
+			turbo: '2.10.4',
 		},
 	},
 ];

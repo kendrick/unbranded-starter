@@ -10,6 +10,14 @@ import { PKG_ROOT } from '../../src/util/paths';
 
 const CLI = join(PKG_ROOT, 'dist/cli.js');
 
+// One minor above `pin` (e.g. 4.1.10 → 4.2.0). Fixtures that want a minor-behind
+// scenario derive it from the live pin instead of a literal, so a weekly pin bump
+// can't quietly turn "behind" into "up to date" and redden the suite (see #81).
+function oneMinorAhead(pin: string): string {
+	const [major = 0, minor = 0] = pin.split('.').map(Number);
+	return `${major}.${minor + 1}.0`;
+}
+
 // The registry lives in THIS process, so the CLI must be spawned async —
 // spawnSync would block the event loop and deadlock the very server the child
 // is trying to reach.
@@ -73,7 +81,7 @@ describe('unbranded outdated (against a local registry)', () => {
 	});
 
 	it('emits the schema-1 JSON envelope for tooling', async () => {
-		overrides.vitest = '2.2.0';
+		overrides.vitest = oneMinorAhead(pins.get('vitest')!);
 
 		const result = await run(['outdated', '--json', '--registry', registry]);
 		expect(result.status, result.stderr).toBe(0);
