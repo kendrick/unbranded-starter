@@ -3,9 +3,15 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { eslintDevDependencies } from '../../src/manifest/eslint-config';
+import { UNITS } from '../../src/manifest/index';
 import { PKG_ROOT } from '../../src/util/paths';
 
 const CLI = join(PKG_ROOT, 'dist/cli.js');
+// Read the pinned versions from the manifest, not literals, so the weekly pin-bump
+// PRs don't redden these tests every time a pin moves.
+const ESLINT_PIN = eslintDevDependencies('base').eslint;
+const TYPESCRIPT_PIN = UNITS.find(u => u.id === 'core-typescript')?.devDependencies?.typescript;
 
 function writeJson(path: string, obj: unknown): void {
 	writeFileSync(path, JSON.stringify(obj, null, 2));
@@ -47,7 +53,7 @@ describe('cli --config (augment mode)', () => {
 			devDependencies: Record<string, string>;
 			scripts: Record<string, string>;
 		};
-		expect(pkg.devDependencies).toMatchObject({ eslint: '9.39.4' });
+		expect(pkg.devDependencies).toMatchObject({ eslint: ESLINT_PIN });
 		expect(pkg.scripts).toMatchObject({ lint: 'eslint .' });
 
 		// pm:null means we should NOT have installed (no node_modules, no lockfile).
@@ -74,7 +80,7 @@ describe('cli --config (augment mode)', () => {
 			devDependencies: Record<string, string>;
 			scripts: Record<string, string>;
 		};
-		expect(pkg.devDependencies.typescript).toBe('5.9.3');
+		expect(pkg.devDependencies.typescript).toBe(TYPESCRIPT_PIN);
 		expect(pkg.scripts.typecheck).toBe('tsc --noEmit');
 	});
 
@@ -156,7 +162,7 @@ describe('cli --config (no package.json, pm:null)', () => {
 			devDependencies: Record<string, string>;
 		};
 		expect(pkg.name).toBe('fresh');
-		expect(pkg.devDependencies.eslint).toBe('9.39.4');
+		expect(pkg.devDependencies.eslint).toBe(ESLINT_PIN);
 	});
 });
 
@@ -222,6 +228,6 @@ describe('cli version policy (--latest / recipe versions)', () => {
 		});
 
 		spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
-		expect(eslintSpec()).toBe('9.39.4');
+		expect(eslintSpec()).toBe(ESLINT_PIN);
 	});
 });
