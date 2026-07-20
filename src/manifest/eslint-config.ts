@@ -19,7 +19,7 @@ const BASE_DEPS: Record<string, string> = {
 // antfu opts into these via `react: true`; jsx-a11y is our own strict a11y pass
 // appended on top. Without them installed the config fails to load.
 const REACT_DEPS: Record<string, string> = {
-	'@eslint-react/eslint-plugin': '5.14.6',
+	'@eslint-react/eslint-plugin': '5.17.3',
 	'eslint-plugin-jsx-a11y': '6.10.2',
 	'eslint-plugin-react-refresh': '0.5.3',
 };
