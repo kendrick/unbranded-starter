@@ -137,8 +137,8 @@ export const UNITS: Unit[] = [
 		// Tailwind v4 ships zero config files. Manifest is deps-only.
 		files: [],
 		devDependencies: {
-			'tailwindcss': '4.3.2',
-			'@tailwindcss/postcss': '4.3.2',
+			'tailwindcss': '4.3.3',
+			'@tailwindcss/postcss': '4.3.3',
 		},
 		recommendedExtensions: ['bradlc.vscode-tailwindcss'],
 	},
