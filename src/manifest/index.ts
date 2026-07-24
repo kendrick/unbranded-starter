@@ -296,7 +296,7 @@ export const UNITS: Unit[] = [
 			{ src: 'opt-in/monorepo/turbo.json', dest: 'turbo.json' },
 		],
 		devDependencies: {
-			turbo: '2.10.4',
+			turbo: '2.10.5',
 		},
 	},
 ];
