@@ -183,8 +183,8 @@ export const UNITS: Unit[] = [
 			{ src: 'opt-in/playwright/playwright.config.ts', dest: 'playwright.config.ts' },
 		],
 		devDependencies: {
-			'@playwright/test': '1.61.1',
-			'@axe-core/playwright': '4.12.1',
+			'@playwright/test': '1.62.1',
+			'@axe-core/playwright': '4.13.0',
 		},
 		packageJsonPatch: {
 			scripts: {
