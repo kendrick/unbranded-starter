@@ -21,6 +21,7 @@ No command below needs a TTY. Anything interactive has a flag that answers it.
 | `unbranded update --yes --strategy <ours\|theirs\|markers>`      | yes                  | 0; 1 on a conflict with no strategy                  |
 | `unbranded remove <unit> --yes [--cascade]`                      | yes                  | 0; 1 when dependents block or the unit isn't tracked |
 | `unbranded doctor --fix --yes`                                   | yes (installs units) | 0, incl. nothing-to-fix; 1 on apply failure          |
+| `unbranded validate <path> --json`                               | no                   | 0 valid, 1 invalid or unreadable                     |
 
 ### Exit Codes
 
@@ -40,6 +41,8 @@ No command below needs a TTY. Anything interactive has a flag that answers it.
 | `outdated --json`  | `schemas/outdated.schema.json` | 1              |
 | `--dry-run --json` | `schemas/plan.schema.json`     | 1              |
 | `.unbranded.json`  | `schemas/state.schema.json`    | 2              |
+| `validate --json`  | `schemas/validate.schema.json` | 1              |
+| unit definition    | `schemas/unit.schema.json`     | 1              |
 
 ### The State File And Its Sidecar
 

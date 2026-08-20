@@ -6,6 +6,7 @@ dist/cli.js
 dist/index.d.ts
 dist/index.js
 docs/agent-cookbook.md
+docs/authoring-units.md
 eslint.config.mjs
 opt-in/ci-github/README.md
 opt-in/ci-github/ci.yml
