@@ -33,6 +33,7 @@ schemas/plan.schema.json
 schemas/recipe.schema.json
 schemas/state.schema.json
 schemas/unit.schema.json
+schemas/validate.schema.json
 stylelint.config.mjs
 templates/gitattributes
 templates/tsconfig.json
