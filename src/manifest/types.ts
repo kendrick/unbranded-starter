@@ -8,10 +8,13 @@ export type UnitId
 export type Category = 'foundation' | 'lint' | 'style' | 'types' | 'test' | 'e2e' | 'monorepo' | 'ui' | 'git' | 'editor' | 'ci';
 
 export interface FileOp {
-	// Path relative to PKG_ROOT, written posix-style. Manifest authors don't
-	// need to think about platform; the runtime joins to native paths via
-	// node:path, and files are copied as buffers so Windows \r\n stays intact.
-	// Exactly one of `src` or `content` is set.
+	// Path relative to the unit's own directory, written posix-style. For the
+	// built-in catalog that directory is PKG_ROOT; a unit loaded from disk or a
+	// pack resolves against wherever its definition lives, which is what lets the
+	// same definition move between the three without rewriting its paths.
+	// Authors don't need to think about platform; the runtime joins to native
+	// paths via node:path, and files are copied as buffers so Windows \r\n stays
+	// intact. Exactly one of `src` or `content` is set.
 	src?: string;
 
 	// Inline payload, an alternative to `src` for content computed at selection
@@ -78,8 +81,19 @@ export interface UnitOption {
 	default: string;
 }
 
-export interface Unit {
-	id: UnitId;
+export interface PackageJsonPatch {
+	scripts?: Record<string, string>;
+	engines?: Record<string, string>;
+	packageManager?: string;
+}
+
+// Parametrized on the id type so the internal catalog and the published
+// authoring contract are one definition rather than two that drift. Built-ins
+// instantiate it closed (`UnitBase<UnitId>`) and keep exhaustiveness checking;
+// units loaded from disk or an npm pack instantiate it open (`UnitBase<string>`),
+// since their ids can't be known at compile time.
+export interface UnitBase<Id extends string> {
+	id: Id;
 	category: Category;
 	label: string;
 	description: string;
@@ -94,27 +108,33 @@ export interface Unit {
 	// Marketplace ids (publisher.name) this unit wants recommended in VS Code.
 	// opt-vscode reads these across the *selected* units to generate
 	// .vscode/extensions.json, so the recommendation set tracks what the user
-	// actually installed rather than a frozen blob. Internal — never surfaced in
-	// the public catalog.
+	// actually installed rather than a frozen blob. Authorable, but redacted from
+	// `list --json`—the public catalog is an explicit allowlist (see list.ts).
 	recommendedExtensions?: string[];
 
 	// Resolver semantics during selection:
 	//   implies  — auto-select these too
 	//   excludes — symmetric; selecting either side blocks the other
 	//   requires — hard precondition; error if any are missing from the set
-	implies?: UnitId[];
-	excludes?: UnitId[];
-	requires?: UnitId[];
+	implies?: Id[];
+	excludes?: Id[];
+	requires?: Id[];
 
 	postInstall?: PostInstall[];
-	packageJsonPatch?: {
-		scripts?: Record<string, string>;
-		engines?: Record<string, string>;
-		packageManager?: string;
-	};
+	packageJsonPatch?: PackageJsonPatch;
 
 	// Printed by `unbranded remove` as a next step when the unit leaves residue
 	// its file/package.json back-out can't reach (git config, installed browsers).
 	// Guidance only — remove never executes anything destructive on its own.
 	removeNotes?: string;
+}
+
+// The built-in catalog: ids closed to the fifteen shipped units.
+export type Unit = UnitBase<UnitId>;
+
+// The published authoring contract (F-14). Ids are open because a unit loaded
+// from a directory or an npm pack names itself, and it carries `schema` so a
+// definition read off disk states which contract version it was written against.
+export interface UnitDefinition extends UnitBase<string> {
+	schema: number;
 }
