@@ -89,6 +89,13 @@ export default antfu(
 			'**/.specify/scripts/**',
 			'**/.specify/templates/**',
 			'**/.specify/integrations/**',
+
+			// .agent-guild: the whole tree is installer-managed and gets
+			// overwritten on every `/agent-guild:init`, so lint fixes here are
+			// lost on the next run and only serve to block the commit that
+			// installs it. Same rationale as .specify above.
+			'.agent-guild/**',
+			'**/.agent-guild/**',
 		],
 	},
 
@@ -100,6 +107,22 @@ export default antfu(
 		files: ['**/*.md'],
 		rules: {
 			'style/no-mixed-spaces-and-tabs': 'off',
+		},
+	},
+
+	// ============================================
+	// Agent guidance files own an installer-managed region
+	// ============================================
+	{
+		// The Agent Guild installer rewrites its marked block on every run and
+		// writes the @import with no blank lines around it, which is exactly
+		// what prettier wants to add. Leaving the rule on makes the two tools
+		// undo each other: `pnpm lint:fix` reformats, the next
+		// `/agent-guild:init` reverts, and lint fails again. Prettier is off
+		// here so the installer's output is the accepted form.
+		files: ['CLAUDE.md', 'AGENTS.md'],
+		rules: {
+			'format/prettier': 'off',
 		},
 	},
 
