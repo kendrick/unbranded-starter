@@ -104,3 +104,5 @@ This project uses a two-tier working memory at `_working-memory/`.
 ## Conventions
 
 <!-- Populated from detection or manually. Keep to ≤10 rules. -->
+
+@.agent-guild/CLAUDE.md

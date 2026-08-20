@@ -13,3 +13,8 @@ To sync working memory, run `/update-working-memory` or invoke the `working-memo
 
 - Never add `Co-Authored-By` trailers or other "coauthored" attribution to commit messages or PR descriptions.
 - Never push automatically. Commit only when asked, and never run `git push` or a force-push without an explicit request; leave pushing to the maintainer.
+
+<!-- agent-guild:claude:start -->
+<!-- Added by the Agent Guild project installer. -->
+@.agent-guild/CLAUDE.md
+<!-- agent-guild:claude:end -->
