@@ -5,8 +5,6 @@
 			"Bash(pnpm --version)",
 			"Skill(humanizer)",
 			"Skill(humanizer:*)",
-			"Read(//Users/k.arnett/.claude/**)",
-			"Read(//private/tmp/**)",
 			"Bash(pnpm build *)",
 			"Bash(npm pack *)",
 			"Bash(curl -s *)",
@@ -19,9 +17,6 @@
 			"Bash(gh run view *)",
 			"Bash(pnpm lint *)",
 			"Bash(pnpm lint:fix)"
-		],
-		"additionalDirectories": [
-			"/Users/k.arnett/.claude/plans"
 		]
 	}
 }
