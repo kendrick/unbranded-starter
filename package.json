@@ -29,7 +29,11 @@
 		"package-manager"
 	],
 	"exports": {
-		".": "./dist/cli.js"
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./schemas/*": "./schemas/*"
 	},
 	"bin": {
 		"unbranded": "./dist/cli.js"

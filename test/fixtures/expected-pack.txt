@@ -3,6 +3,8 @@ AGENTS.md
 LICENSE
 README.md
 dist/cli.js
+dist/index.d.ts
+dist/index.js
 docs/agent-cookbook.md
 eslint.config.mjs
 opt-in/ci-github/README.md
