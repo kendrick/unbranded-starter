@@ -107,3 +107,10 @@ This project uses a two-tier working memory at `_working-memory/`.
 ## Conventions
 
 <!-- Populated from detection or manually. Keep to ≤10 rules. -->
+
+## Agent Guild
+
+<!-- agent-guild:manual:start -->
+<!-- Hand-added, and nothing maintains it. The Agent Guild installer writes exactly one guidance file per host: CLAUDE.md for the Claude host, AGENTS.md for the Codex host. Only the Claude host is installed here, so the installer never touches this file. If you install the Codex host, it writes its own section between `agent-guild:codex` markers; delete this block then, or you will carry two imports. -->
+@.agent-guild/CLAUDE.md
+<!-- agent-guild:manual:end -->

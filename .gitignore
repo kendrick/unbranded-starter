@@ -128,3 +128,6 @@ _working-memory/activeContext.md
 
 # Parallel-work git worktrees (isolated per-issue branches)
 .worktrees/
+
+# agent-guild state
+.agent-guild/state/
