@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.2](https://github.com/kendrick/unbranded-starter/compare/v1.0.1...v1.0.2) (2026-08-20)
+
+
+### Bug Fixes
+
+* **manifest:** bump core-eslint pins ([#84](https://github.com/kendrick/unbranded-starter/issues/84)) ([2240efa](https://github.com/kendrick/unbranded-starter/commit/2240efae84b30697da21620e52a786b202ba9205))
+* **manifest:** bump core-eslint pins ([#91](https://github.com/kendrick/unbranded-starter/issues/91)) ([8ead8ee](https://github.com/kendrick/unbranded-starter/commit/8ead8ee531bc1155adcc4a9955fe83d87e9bc205))
+* **manifest:** bump core-stylelint pins ([#88](https://github.com/kendrick/unbranded-starter/issues/88)) ([3845b42](https://github.com/kendrick/unbranded-starter/commit/3845b42ab4f2778f3728152da14a5556f71694d9))
+* **manifest:** bump core-tailwind pins ([#85](https://github.com/kendrick/unbranded-starter/issues/85)) ([cd908b9](https://github.com/kendrick/unbranded-starter/commit/cd908b9ef745326ac2b976152a0578f8714efcfb))
+* **manifest:** bump core-vitest pins ([#94](https://github.com/kendrick/unbranded-starter/issues/94)) ([4463f2e](https://github.com/kendrick/unbranded-starter/commit/4463f2e09a980ce481836420815a4b6cec26c312))
+* **manifest:** bump opt-husky pins ([#87](https://github.com/kendrick/unbranded-starter/issues/87)) ([40242fb](https://github.com/kendrick/unbranded-starter/commit/40242fb266d244329fc3ae74e5ca134472a59953))
+* **manifest:** bump opt-husky pins ([#95](https://github.com/kendrick/unbranded-starter/issues/95)) ([bd905bb](https://github.com/kendrick/unbranded-starter/commit/bd905bb24ca943e4a040a3c57dd9c99c25d5cb4e))
+* **manifest:** bump opt-monorepo pins ([#89](https://github.com/kendrick/unbranded-starter/issues/89)) ([621d008](https://github.com/kendrick/unbranded-starter/commit/621d008bf76b8698b6097a003c92405e22492c8d))
+* **manifest:** bump opt-monorepo pins ([#96](https://github.com/kendrick/unbranded-starter/issues/96)) ([9eeadfb](https://github.com/kendrick/unbranded-starter/commit/9eeadfb00bfff11ad34855cbd05af7a469b4e18f))
+* **manifest:** bump opt-playwright pins ([#92](https://github.com/kendrick/unbranded-starter/issues/92)) ([2da2ffb](https://github.com/kendrick/unbranded-starter/commit/2da2ffb94e2fede60773bead7d7f2d06b60fc61a))
+
 ## [1.0.1](https://github.com/kendrick/unbranded-starter/compare/v1.0.0...v1.0.1) (2026-07-13)
 
 
