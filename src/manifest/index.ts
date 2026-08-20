@@ -164,7 +164,7 @@ export const UNITS: Unit[] = [
 		],
 		devDependencies: {
 			vitest: '4.1.10',
-			jsdom: '29.1.1',
+			jsdom: '30.0.1',
 		},
 		packageJsonPatch: {
 			scripts: {
