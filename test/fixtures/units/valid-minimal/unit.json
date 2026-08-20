@@ -1,0 +1,8 @@
+{
+	"schema": 1,
+	"id": "fixture-minimal",
+	"category": "foundation",
+	"label": "Minimal",
+	"description": "A minimal valid unit with no optional fields.",
+	"files": []
+}

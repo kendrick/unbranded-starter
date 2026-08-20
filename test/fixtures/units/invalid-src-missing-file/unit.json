@@ -1,0 +1,10 @@
+{
+	"schema": 1,
+	"id": "fixture-src-missing-file",
+	"category": "foundation",
+	"label": "src file missing",
+	"description": "src names a path that doesn't exist on disk next to this definition.",
+	"files": [
+		{ "src": "nonexistent.txt", "dest": "out.txt" }
+	]
+}

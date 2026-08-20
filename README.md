@@ -167,18 +167,19 @@ The pieces that make unbranded worth keeping in a repo rather than running once 
 - **`unbranded outdated`** grades every manifest pin against the npm registry (patch, minor, major). It exits 0 by default so a report never fails a job; `--strict` gates on majors, `--registry` points at a mirror.
 - **`unbranded remove <unit>`** backs a unit out: it deletes the unit's unmodified files, drops the package.json entries no remaining unit still claims, and refuses to strand a dependent unless you pass `--cascade`. `--dry-run` previews the whole thing.
 
-Every run records what it wrote in `.unbranded.json` plus an `.unbranded/` sidecar of byte-exact baselines (the merge base `update` needs), so commit both. Doctor findings are opinions, and some won't apply to your repo; accept one by adding its id to a `doctor.ignore` array in the state file. The full non-interactive contract, the JSON schemas under `schemas/`, and the agent loop end to end live in [AGENTS.md](AGENTS.md) and [docs/agent-cookbook.md](docs/agent-cookbook.md).
+Every run records what it wrote in `.unbranded.json` plus an `.unbranded/` sidecar of byte-exact baselines (the merge base `update` needs), so commit both. Doctor findings are opinions, and some won't apply to your repo; accept one by adding its id to a `doctor.ignore` array in the state file. The full non-interactive contract, the JSON schemas under `schemas/`, and the agent loop end to end live in [AGENTS.md](AGENTS.md) and [docs/agent-cookbook.md](docs/agent-cookbook.md). Authoring your own units is covered in [docs/authoring-units.md](docs/authoring-units.md).
 
 ## Commands and Flags
 
 ```
-unbranded                interactive prompt flow (the default)
-unbranded list           print the unit catalog
-unbranded diff           report drift against the recorded state
-unbranded doctor         audit the current repo
-unbranded update         three-way merge newer templates into tracked files
-unbranded outdated       grade manifest pins against the npm registry
-unbranded remove <unit>  back a tracked unit out
+unbranded                        interactive prompt flow (the default)
+unbranded list                   print the unit catalog
+unbranded diff                   report drift against the recorded state
+unbranded doctor                 audit the current repo
+unbranded update                 three-way merge newer templates into tracked files
+unbranded outdated               grade manifest pins against the npm registry
+unbranded remove <unit>          back a tracked unit out
+unbranded validate <path>        check unit definitions against the published schema
 ```
 
 The flags you'll reach for most, with `unbranded --help` for the full set:

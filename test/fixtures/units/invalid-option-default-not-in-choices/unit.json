@@ -1,0 +1,18 @@
+{
+	"schema": 1,
+	"id": "fixture-bad-default",
+	"category": "foundation",
+	"label": "Bad option default",
+	"description": "The option's default value doesn't match any of its choices.",
+	"files": [],
+	"options": [
+		{
+			"key": "fixtureFlavorBadDefault",
+			"label": "Flavor",
+			"default": "missing-choice",
+			"choices": [
+				{ "value": "base", "label": "Base" }
+			]
+		}
+	]
+}

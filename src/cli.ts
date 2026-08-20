@@ -9,6 +9,7 @@ import { runList } from './commands/list';
 import { runOutdated } from './commands/outdated';
 import { runRemove } from './commands/remove';
 import { runUpdate } from './commands/update';
+import { runValidate } from './commands/validate';
 import { applyColorPolicy } from './util/color';
 import { EXIT_ERROR, EXIT_OK } from './util/exit-codes';
 import { nodeVersionError } from './util/node-version';
@@ -36,6 +37,8 @@ Commands:
                         recorded baselines; conflicts prompt per file (or use --strategy)
   outdated              Check every manifest pin against the npm registry; --strict exits non-zero
                         when majors are behind
+  validate <path>       Check unit definitions against the published unit schema. Accepts a .json
+                        file, a directory holding a unit.json, or a directory of those
 
 Options:
   --config, -c <file>            Run non-interactively with a JSON recipe
@@ -50,7 +53,7 @@ Options:
   --latest                       Install the latest dependency versions, not the pinned defaults (recipe field: versions)
   --dry-run                      Report what each file would do, then exit without writing or installing
   --diff                         With --dry-run (or \`diff\`), print the unified patch for every changed file
-  --json                         With \`list\`, \`diff\`, \`doctor\`, \`outdated\`, or \`--dry-run\`, emit machine-readable output
+  --json                         With \`list\`, \`diff\`, \`doctor\`, \`outdated\`, \`validate\`, or \`--dry-run\`, emit machine-readable output
   --strict                       With \`doctor\`, exit non-zero when the audit finds anything
   --fix                          With \`doctor\`, hand the fixable findings to the apply pipeline (no --json; composes with --yes, --dry-run, --pm)
   --cascade                      With \`remove\`, also remove the units that depend on the target
@@ -76,6 +79,8 @@ Examples:
   unbranded update --dry-run --diff                    # preview template updates with patches
   unbranded update --yes --strategy theirs             # CI-safe update, template wins conflicts
   unbranded outdated --strict                          # freshness gate: non-zero exit on major-behind pins
+  unbranded validate ./my-units                        # check a directory of unit definitions you authored
+  unbranded validate ./my-units --json                 # publish gate for a unit pack's CI
   unbranded --config recipe.json                       # reproducible, scriptable run
   unbranded --preset node-lib --pm pnpm                # a shipped recipe; add --units to extend it
   unbranded --units core-eslint,core-vitest --pm pnpm --yes   # fully non-interactive, no recipe file
@@ -147,6 +152,18 @@ const command = positionals[0];
 if (command === 'list') {
 	runList({ json: values.json });
 	process.exit(EXIT_OK);
+}
+
+// Authoring-side check: reads unit definitions off disk and never touches a
+// target project, so like `list` it runs before any detection. Exit code carries
+// the verdict so a pack's CI can gate publish on it.
+if (command === 'validate') {
+	const target = positionals[1];
+	if (target === undefined) {
+		process.stderr.write('Usage: unbranded validate <path>. Pass a unit definition file, a unit directory, or a directory of units.\n');
+		process.exit(EXIT_ERROR);
+	}
+	process.exit(runValidate(target, { json: values.json }));
 }
 
 // Read-only drift check against .unbranded.json. No target, no TTY; exit code

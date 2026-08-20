@@ -1,0 +1,11 @@
+{
+	"schema": 1,
+	"id": "fixture-non-exact-pin",
+	"category": "foundation",
+	"label": "Non-exact pin",
+	"description": "A dependency version uses a range instead of an exact pin.",
+	"files": [],
+	"dependencies": {
+		"left-pad": "^1.0.0"
+	}
+}

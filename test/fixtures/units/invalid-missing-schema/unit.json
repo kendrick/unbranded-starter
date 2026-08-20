@@ -1,0 +1,7 @@
+{
+	"id": "fixture-no-schema",
+	"category": "foundation",
+	"label": "No schema",
+	"description": "Missing the schema field entirely.",
+	"files": []
+}

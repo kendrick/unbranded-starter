@@ -1,0 +1,38 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://github.com/kendrick/unbranded-starter/schemas/validate.schema.json",
+	"title": "unbranded validate --json",
+	"description": "The unit-definition validation report. One entry per definition read: a lone .json file or a directory with a unit.json yields one, a units directory yields one per child. `ok` is true only when every entry is ok. An issue with code `unsupported-schema` means the definition was written against a newer unit schema than this unbranded understands, which is an upgrade prompt rather than an authoring mistake.",
+	"type": "object",
+	"required": ["schema", "ok", "units"],
+	"additionalProperties": false,
+	"properties": {
+		"schema": { "type": "integer" },
+		"ok": { "type": "boolean" },
+		"units": { "type": "array", "items": { "$ref": "#/$defs/entry" } }
+	},
+	"$defs": {
+		"entry": {
+			"type": "object",
+			"required": ["path", "ok", "issues"],
+			"additionalProperties": false,
+			"properties": {
+				"path": { "type": "string" },
+				"id": { "type": "string" },
+				"ok": { "type": "boolean" },
+				"issues": { "type": "array", "items": { "$ref": "#/$defs/issue" } }
+			}
+		},
+		"issue": {
+			"type": "object",
+			"required": ["path", "expected", "got"],
+			"additionalProperties": false,
+			"properties": {
+				"path": { "type": "string" },
+				"expected": { "type": "string" },
+				"got": { "type": "string" },
+				"code": { "enum": ["unsupported-schema"] }
+			}
+		}
+	}
+}

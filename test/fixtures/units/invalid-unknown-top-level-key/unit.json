@@ -1,0 +1,9 @@
+{
+	"schema": 1,
+	"id": "fixture-unknown-top-level-key",
+	"category": "foundation",
+	"label": "Unknown top-level key",
+	"description": "Carries a property the schema doesn't recognize.",
+	"files": [],
+	"notARealField": true
+}

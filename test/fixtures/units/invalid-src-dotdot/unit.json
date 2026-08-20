@@ -1,0 +1,10 @@
+{
+	"schema": 1,
+	"id": "fixture-src-dotdot",
+	"category": "foundation",
+	"label": "src with dot-dot",
+	"description": "src climbs out of the unit directory with a .. segment.",
+	"files": [
+		{ "src": "../secrets.txt", "dest": "out.txt" }
+	]
+}

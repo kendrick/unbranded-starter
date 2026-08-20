@@ -3,7 +3,10 @@ AGENTS.md
 LICENSE
 README.md
 dist/cli.js
+dist/index.d.ts
+dist/index.js
 docs/agent-cookbook.md
+docs/authoring-units.md
 eslint.config.mjs
 opt-in/ci-github/README.md
 opt-in/ci-github/ci.yml
@@ -32,6 +35,8 @@ schemas/outdated.schema.json
 schemas/plan.schema.json
 schemas/recipe.schema.json
 schemas/state.schema.json
+schemas/unit.schema.json
+schemas/validate.schema.json
 stylelint.config.mjs
 templates/gitattributes
 templates/tsconfig.json

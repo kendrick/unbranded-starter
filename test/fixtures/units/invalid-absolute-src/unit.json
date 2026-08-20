@@ -1,0 +1,10 @@
+{
+	"schema": 1,
+	"id": "fixture-absolute-src",
+	"category": "foundation",
+	"label": "Absolute src",
+	"description": "src is an absolute path, which would let the unit escape its own directory.",
+	"files": [
+		{ "src": "/etc/passwd", "dest": "out.txt" }
+	]
+}

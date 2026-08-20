@@ -7,7 +7,11 @@ import { fileURLToPath } from 'node:url';
 // because cli.ts parses argv at module top level today; the moment it gains a
 // main-module guard, an import forwarder becomes a silent no-op. Spawning keeps
 // argv[1] pointed at the real entry and forwards exit code and signals.
-const cli = fileURLToPath(import.meta.resolve('unbranded'));
+//
+// Resolve the `./cli` subpath, never the bare package name: the root export is
+// the unit-authoring library, so a bare specifier lands on a module that parses
+// no argv and exits 0, turning every forwarded command into a silent no-op.
+const cli = fileURLToPath(import.meta.resolve('unbranded/cli'));
 
 const { status, signal } = spawnSync(process.execPath, [cli, ...process.argv.slice(2)], {
 	stdio: 'inherit',
