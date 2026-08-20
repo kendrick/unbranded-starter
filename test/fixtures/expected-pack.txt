@@ -32,6 +32,7 @@ schemas/outdated.schema.json
 schemas/plan.schema.json
 schemas/recipe.schema.json
 schemas/state.schema.json
+schemas/unit.schema.json
 stylelint.config.mjs
 templates/gitattributes
 templates/tsconfig.json

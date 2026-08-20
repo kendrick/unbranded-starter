@@ -1,0 +1,10 @@
+{
+	"schema": 1,
+	"id": "fixture-unknown-nested-key",
+	"category": "foundation",
+	"label": "Unknown nested key",
+	"description": "A file entry carries a property the file schema doesn't recognize.",
+	"files": [
+		{ "content": "unused", "dest": "out.txt", "notARealField": true }
+	]
+}

@@ -1,0 +1,64 @@
+{
+	"schema": 1,
+	"id": "fixture-full",
+	"category": "lint",
+	"label": "Full",
+	"description": "Exercises every optional field the unit schema supports.",
+	"dependencies": {
+		"left-pad": "1.3.0"
+	},
+	"devDependencies": {
+		"eslint": "9.0.0"
+	},
+	"files": [
+		{ "content": "// generated\n", "dest": "generated.js" }
+	],
+	"options": [
+		{
+			"key": "fixtureFlavor",
+			"label": "Flavor",
+			"default": "base",
+			"choices": [
+				{
+					"value": "base",
+					"label": "Base",
+					"hint": "No extras"
+				},
+				{
+					"value": "extra",
+					"label": "Extra",
+					"hint": "Adds a file and a dependency",
+					"files": [
+						{ "content": "// extra\n", "dest": "extra.js" }
+					],
+					"dependencies": {
+						"chalk": "5.3.0"
+					}
+				}
+			]
+		}
+	],
+	"recommendedExtensions": ["dbaeumer.vscode-eslint"],
+	"implies": ["fixture-minimal"],
+	"excludes": ["fixture-conflicting"],
+	"requires": ["fixture-minimal"],
+	"postInstall": [
+		{
+			"id": "init",
+			"command": ["fixture", "init"],
+			"prompt": "Run fixture init now?",
+			"default": true,
+			"requires": "git"
+		}
+	],
+	"packageJsonPatch": {
+		"scripts": {
+			"fixture": "fixture run"
+		},
+		"engines": {
+			"node": ">=20"
+		},
+		"packageManager": "pnpm@10.0.0"
+	},
+	"removeNotes": "Also uninstall the fixture CLI globally if you added it."
+}

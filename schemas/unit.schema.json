@@ -1,0 +1,291 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://github.com/kendrick/unbranded-starter/schemas/unit.schema.json",
+	"title": "unbranded unit definition",
+	"description": "The authoring contract for a unit, as written in a unit.json on disk or exported by a unit pack. The schema integer bumps on breaking shape changes; 1 is the initial published contract (F-14). File `src` paths resolve relative to the unit definition's own directory, which is what lets one definition move between the built-in catalog, a local units directory, and a published pack without rewriting paths. Distinct from catalog.schema.json, which describes the redacted public projection emitted by `unbranded list --json` and carries neither file sources nor option effects.",
+	"type": "object",
+	"required": [
+		"schema",
+		"id",
+		"category",
+		"label",
+		"description",
+		"files"
+	],
+	"additionalProperties": false,
+	"properties": {
+		"schema": {
+			"description": "The unit-schema version this definition is written against.",
+			"type": "integer",
+			"minimum": 1
+		},
+		"id": {
+			"$ref": "#/$defs/unitId"
+		},
+		"category": {
+			"enum": [
+				"foundation",
+				"lint",
+				"style",
+				"types",
+				"test",
+				"e2e",
+				"monorepo",
+				"ui",
+				"git",
+				"editor",
+				"ci"
+			]
+		},
+		"label": {
+			"type": "string",
+			"minLength": 1
+		},
+		"description": {
+			"type": "string",
+			"minLength": 1
+		},
+		"dependencies": {
+			"$ref": "#/$defs/pinnedDeps"
+		},
+		"devDependencies": {
+			"$ref": "#/$defs/pinnedDeps"
+		},
+		"files": {
+			"description": "May be empty: a unit can contribute only dependencies, a package.json patch, or post-install steps.",
+			"type": "array",
+			"items": {
+				"$ref": "#/$defs/file"
+			}
+		},
+		"options": {
+			"type": "array",
+			"items": {
+				"$ref": "#/$defs/option"
+			}
+		},
+		"recommendedExtensions": {
+			"description": "VS Code marketplace ids (publisher.name) gathered across selected units to generate .vscode/extensions.json.",
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
+		},
+		"implies": {
+			"description": "Auto-select these units too.",
+			"type": "array",
+			"items": {
+				"$ref": "#/$defs/unitId"
+			}
+		},
+		"excludes": {
+			"description": "Symmetric conflict; selecting either side blocks the other.",
+			"type": "array",
+			"items": {
+				"$ref": "#/$defs/unitId"
+			}
+		},
+		"requires": {
+			"description": "Hard precondition; an error if any are missing from the selected set.",
+			"type": "array",
+			"items": {
+				"$ref": "#/$defs/unitId"
+			}
+		},
+		"postInstall": {
+			"type": "array",
+			"items": {
+				"$ref": "#/$defs/postInstall"
+			}
+		},
+		"packageJsonPatch": {
+			"$ref": "#/$defs/packageJsonPatch"
+		},
+		"removeNotes": {
+			"description": "Printed by `unbranded remove` when the unit leaves residue its back-out can't reach. Guidance only; nothing is executed.",
+			"type": "string"
+		}
+	},
+	"$defs": {
+		"unitId": {
+			"type": "string",
+			"pattern": "^[a-z0-9][a-z0-9-]*$"
+		},
+		"pinnedDeps": {
+			"description": "Exact versions only. A range would make two runs of the same unit produce different trees, which is the reproducibility guarantee recipes and packs rest on.",
+			"type": "object",
+			"additionalProperties": {
+				"type": "string",
+				"pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z-.]+)?(?:\\+[0-9A-Za-z-.]+)?$"
+			}
+		},
+		"stringMap": {
+			"type": "object",
+			"additionalProperties": {
+				"type": "string"
+			}
+		},
+		"file": {
+			"type": "object",
+			"required": [
+				"dest"
+			],
+			"additionalProperties": false,
+			"oneOf": [
+				{
+					"required": [
+						"src"
+					]
+				},
+				{
+					"required": [
+						"content"
+					]
+				}
+			],
+			"properties": {
+				"src": {
+					"description": "Path to the template, relative to the unit definition's own directory. Posix-style; must stay inside that directory.",
+					"type": "string",
+					"minLength": 1
+				},
+				"content": {
+					"description": "Inline payload, for content computed at authoring time rather than shipped as a template file.",
+					"type": "string"
+				},
+				"dest": {
+					"description": "Path relative to the target project root. Supports {projectName} interpolation.",
+					"type": "string",
+					"minLength": 1
+				},
+				"rename": {
+					"type": "string"
+				},
+				"mode": {
+					"enum": [
+						"copy",
+						"merge-json",
+						"append-if-missing"
+					]
+				}
+			}
+		},
+		"option": {
+			"type": "object",
+			"required": [
+				"key",
+				"label",
+				"default",
+				"choices"
+			],
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"description": "Unique across all units, so a recipe's flat options map is unambiguous.",
+					"type": "string",
+					"minLength": 1
+				},
+				"label": {
+					"type": "string",
+					"minLength": 1
+				},
+				"default": {
+					"description": "Must match one of this option's choice values.",
+					"type": "string"
+				},
+				"choices": {
+					"type": "array",
+					"minItems": 1,
+					"items": {
+						"$ref": "#/$defs/optionChoice"
+					}
+				}
+			}
+		},
+		"optionChoice": {
+			"description": "Effects are overlaid onto the unit when this choice is picked: files append, dependency maps merge with the choice winning.",
+			"type": "object",
+			"required": [
+				"value",
+				"label"
+			],
+			"additionalProperties": false,
+			"properties": {
+				"value": {
+					"type": "string",
+					"minLength": 1
+				},
+				"label": {
+					"type": "string",
+					"minLength": 1
+				},
+				"hint": {
+					"type": "string"
+				},
+				"files": {
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/file"
+					}
+				},
+				"dependencies": {
+					"$ref": "#/$defs/pinnedDeps"
+				},
+				"devDependencies": {
+					"$ref": "#/$defs/pinnedDeps"
+				}
+			}
+		},
+		"postInstall": {
+			"type": "object",
+			"required": [
+				"id",
+				"command",
+				"prompt",
+				"default"
+			],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"minLength": 1
+				},
+				"command": {
+					"description": "Binary plus args, run through the detected package manager's exec wrapper.",
+					"type": "array",
+					"minItems": 1,
+					"items": {
+						"type": "string"
+					}
+				},
+				"prompt": {
+					"type": "string",
+					"minLength": 1
+				},
+				"default": {
+					"type": "boolean"
+				},
+				"requires": {
+					"enum": [
+						"git"
+					]
+				}
+			}
+		},
+		"packageJsonPatch": {
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"scripts": {
+					"$ref": "#/$defs/stringMap"
+				},
+				"engines": {
+					"$ref": "#/$defs/stringMap"
+				},
+				"packageManager": {
+					"type": "string"
+				}
+			}
+		}
+	}
+}

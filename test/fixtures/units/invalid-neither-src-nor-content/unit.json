@@ -1,0 +1,10 @@
+{
+	"schema": 1,
+	"id": "fixture-neither-src-nor-content",
+	"category": "foundation",
+	"label": "Neither src nor content",
+	"description": "One file entry sets neither src nor content, which the schema forbids.",
+	"files": [
+		{ "dest": "out.txt" }
+	]
+}

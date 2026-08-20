@@ -1,0 +1,10 @@
+{
+	"schema": 1,
+	"id": "fixture-both-src-and-content",
+	"category": "foundation",
+	"label": "Both src and content",
+	"description": "One file entry sets both src and content, which the schema forbids.",
+	"files": [
+		{ "src": "template.txt", "content": "inline", "dest": "out.txt" }
+	]
+}

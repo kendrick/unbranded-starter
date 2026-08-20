@@ -1,0 +1,8 @@
+{
+	"schema": 99,
+	"id": "fixture-future-schema",
+	"category": "foundation",
+	"label": "Future schema",
+	"description": "Declares a schema version newer than this validator supports.",
+	"files": []
+}

@@ -1,0 +1,9 @@
+{
+	"schema": 1,
+	"id": "fixture-unknown-relation",
+	"category": "foundation",
+	"label": "Unknown relation",
+	"description": "Implies a unit id that isn't in the known catalog.",
+	"files": [],
+	"implies": ["does-not-exist"]
+}

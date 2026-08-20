@@ -1,0 +1,8 @@
+{
+	"schema": 1,
+	"id": "Fixture_Bad_Id",
+	"category": "foundation",
+	"label": "Bad id pattern",
+	"description": "Id has uppercase letters and underscores, which the pattern forbids.",
+	"files": []
+}

@@ -1,0 +1,10 @@
+{
+	"schema": 1,
+	"id": "fixture-with-src",
+	"category": "foundation",
+	"label": "With source template",
+	"description": "Ships one real template file via src, exercising the baseDir existence check.",
+	"files": [
+		{ "src": "template.txt", "dest": "template.txt" }
+	]
+}

@@ -1,0 +1,8 @@
+{
+	"schema": 1,
+	"id": "fixture-bad-category",
+	"category": "backend",
+	"label": "Bad category",
+	"description": "Category isn't one of the enum values.",
+	"files": []
+}
