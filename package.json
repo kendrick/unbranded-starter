@@ -33,6 +33,7 @@
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
 		},
+		"./cli": "./dist/cli.js",
 		"./schemas/*": "./schemas/*"
 	},
 	"bin": {
