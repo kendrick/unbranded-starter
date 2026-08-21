@@ -65,6 +65,11 @@ function optionSpans(row: Extract<PickerRow, { kind: 'option' }>, theme: PickerT
 	// Everything after the label is secondary, so it's dim and only shown when earned.
 	if (flavor)
 		spans.push({ text: ` · ${flavor} ▸`, style: theme.dim });
+	// Badged the same way `installed` is: a unit's row is the only place a user
+	// decides whether to trust something that isn't a shipped built-in, so its
+	// provenance has to be visible without opening the detail block.
+	if (option.namespace)
+		spans.push({ text: ` local: ${option.namespace}`, style: theme.dim });
 	if (option.installed)
 		spans.push({ text: ' installed', style: theme.dim });
 	if (auto) {
@@ -175,7 +180,7 @@ export function renderUnitPicker(state: PickerState, view: PickerView): string {
 		return `${theme.symbol} ${message} ${theme.dim(chosen.length ? chosen.join(', ') : 'nothing selected')}`;
 	}
 
-	const labelById = new Map(state.options.map(o => [o.value as string, o.label]));
+	const labelById = new Map(state.options.map(o => [o.value, o.label]));
 	const lines: string[] = [`${theme.symbol} ${message}`];
 
 	if (state.filter)

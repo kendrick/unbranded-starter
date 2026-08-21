@@ -1,5 +1,5 @@
 import type { PackageJsonRemoval } from '../fs/merge-json';
-import type { Unit, UnitId } from '../manifest/types';
+import type { AnyUnit } from '../manifest/types';
 import type { StateFile, TrackedFileMode } from '../state/state';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -8,15 +8,15 @@ import { effectiveDest } from '../detect/signals';
 import { removePackageJsonEntries } from '../fs/merge-json';
 import { isDirtyGitTree } from '../install/git';
 import { detectIndent } from '../install/run';
-import { UNITS } from '../manifest/index';
+import { loadCatalog, unitsDirsFor } from '../manifest/catalog';
 import { applyUnitOptions } from '../manifest/options';
 import { dependentsOf } from '../manifest/resolve';
-import { applyRemovalToState, hashBuffer, readStateFile } from '../state/state';
+import { applyRemovalToState, hashBuffer, readStateFile, unsupportedStateMessage } from '../state/state';
 import { cancelAndExit } from '../util/cancel';
 
 export interface RemovalPlan {
 	// The target plus, under --cascade, everything that depends on it.
-	units: UnitId[];
+	units: string[];
 	// Whole-file-owned (copy/computed) files that exist on disk. `modified` means
 	// the on-disk bytes no longer match the recorded hash — the user's edits are
 	// in there, so deleting needs a per-file yes.
@@ -34,11 +34,11 @@ export interface RemovalPlan {
 
 // Filesystem in, plan out — same pattern as auditRepo, so the whole decision
 // surface is testable without prompts. Nothing here writes.
-export function planRemoval(opts: { targetDir: string; state: StateFile; removeUnits: UnitId[]; units: Unit[] }): RemovalPlan {
+export function planRemoval(opts: { targetDir: string; state: StateFile; removeUnits: string[]; units: AnyUnit[] }): RemovalPlan {
 	const { state, removeUnits } = opts;
-	const byId = new Map(opts.units.map(u => [u.id, u]));
+	const byId = new Map<string, AnyUnit>(opts.units.map(u => [u.id, u]));
 	const removedSet = new Set(removeUnits);
-	const remaining = state.units.filter(u => !removedSet.has(u));
+	const remaining = state.units.map(u => u.id).filter(id => !removedSet.has(id));
 
 	const candidates: { rel: string; mode: TrackedFileMode }[] = [];
 	if (state.attribution) {
@@ -80,12 +80,12 @@ export function planRemoval(opts: { targetDir: string; state: StateFile; removeU
 	// package.json back-out. Contributions are computed with the RECORDED options
 	// baked in (a react-flavor scaffold contributed react plugins), then reference-
 	// counted against what the remaining units still claim by name.
-	const resolve = (id: UnitId): Unit | undefined => {
+	const resolve = (id: string): AnyUnit | undefined => {
 		const u = byId.get(id);
 		return u ? applyUnitOptions(u, state.options ?? {}) : undefined;
 	};
-	const removed = removeUnits.map(resolve).filter((u): u is Unit => u !== undefined);
-	const kept = remaining.map(resolve).filter((u): u is Unit => u !== undefined);
+	const removed = removeUnits.map(resolve).filter((u): u is AnyUnit => u !== undefined);
+	const kept = remaining.map(resolve).filter((u): u is AnyUnit => u !== undefined);
 	const claimedDeps = new Set(kept.flatMap(u => [...Object.keys(u.dependencies ?? {}), ...Object.keys(u.devDependencies ?? {})]));
 	const claimedScripts = new Set(kept.flatMap(u => Object.keys(u.packageJsonPatch?.scripts ?? {})));
 
@@ -146,6 +146,9 @@ export interface RunRemoveOpts {
 	force?: boolean;
 	// Also remove the units that depend on the target (via implies/requires).
 	cascade?: boolean;
+	// `--units-dir`: load local units from here instead of the paths the scaffold
+	// recorded. The override is for a directory that moved since.
+	unitsDir?: string;
 }
 
 // The day-2 exit door: doctor tells you what's missing, remove backs a unit out.
@@ -154,21 +157,32 @@ export interface RunRemoveOpts {
 // "drop a package.json entry we added".
 export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promise<number> {
 	const cwd = opts.cwd ?? process.cwd();
-	const state = readStateFile(cwd);
-	if (!state || !state.units.includes(unitId as UnitId)) {
+	const read = readStateFile(cwd);
+	if (read.kind === 'unsupported') {
+		process.stderr.write(`unbranded remove: ${unsupportedStateMessage(read.schema)}\n`);
+		return 1;
+	}
+	const state = read.kind === 'ok' ? read.state : undefined;
+	const installedIds = state ? state.units.map(u => u.id) : [];
+	if (!state || !installedIds.includes(unitId)) {
 		process.stderr.write(state
-			? `unbranded remove: ${unitId} is not tracked here. Installed units: ${state.units.join(', ')}.\n`
+			? `unbranded remove: ${unitId} is not tracked here. Installed units: ${installedIds.join(', ')}.\n`
 			: `unbranded remove: no ${'.unbranded.json'} found — nothing is tracked in this directory.\n`);
 		return 1;
 	}
-	const target = unitId as UnitId;
+	const target = unitId;
 
-	const dependents = dependentsOf(target, state.units, UNITS);
+	const catalog = loadCatalog({
+		unitsDirs: unitsDirsFor(state.units.map(u => u.source), cwd, opts.unitsDir),
+		onMissing: 'warn',
+	});
+
+	const dependents = dependentsOf(target, installedIds, catalog.units);
 	if (dependents.length > 0 && !opts.cascade) {
 		process.stderr.write(`unbranded remove: ${dependents.join(', ')} ${dependents.length === 1 ? 'depends' : 'depend'} on ${target}. Remove ${dependents.length === 1 ? 'it' : 'them'} first, or re-run with --cascade to take the whole set out.\n`);
 		return 1;
 	}
-	const removeUnits: UnitId[] = [target, ...(opts.cascade ? dependents : [])];
+	const removeUnits: string[] = [target, ...(opts.cascade ? dependents : [])];
 
 	intro(opts.dryRun ? 'unbranded remove (dry run)' : 'unbranded remove');
 
@@ -187,7 +201,17 @@ export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promi
 		}
 	}
 
-	const plan = planRemoval({ targetDir: cwd, state, removeUnits, units: UNITS });
+	// A unit whose definition we couldn't load still gets its files deleted and its
+	// state entry dropped — attribution records both — but the package.json back-out
+	// and any removeNotes are computed from the definition, so they're skipped. Say
+	// so, or the user reads a partial removal as a complete one.
+	const unloadable = removeUnits.filter(id => !catalog.ids.has(id));
+	for (const warning of catalog.warnings)
+		log.warn(warning);
+	if (unloadable.length > 0)
+		log.warn(`No definition available for ${unloadable.join(', ')}. Tracked files still go, but package.json entries they added won't be backed out.`);
+
+	const plan = planRemoval({ targetDir: cwd, state, removeUnits, units: catalog.units });
 	note(formatRemovalPlan(plan), 'Removal plan');
 
 	if (opts.dryRun) {
@@ -245,7 +269,7 @@ export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promi
 		targetDir: cwd,
 		removeUnits,
 		removeFiles: [...plan.deletions.map(d => d.rel), ...plan.retained.map(r => r.rel)],
-		removeOptionKeys: removeUnits.flatMap(id => (UNITS.find(u => u.id === id)?.options ?? []).map(o => o.key)),
+		removeOptionKeys: removeUnits.flatMap(id => (catalog.units.find(u => u.id === id)?.options ?? []).map(o => o.key)),
 	});
 
 	log.success(`Removed ${removeUnits.join(', ')}: ${toDelete.length} file${toDelete.length === 1 ? '' : 's'} deleted.`);

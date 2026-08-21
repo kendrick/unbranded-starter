@@ -138,3 +138,17 @@ export type Unit = UnitBase<UnitId>;
 export interface UnitDefinition extends UnitBase<string> {
 	schema: number;
 }
+
+// The open shape plumbing code should hold once units can come from more than
+// the built-in catalog — a `Unit` is always assignable here, but the reverse
+// isn't, so downstream `Set`/`Map`/`Record` structures stop rejecting a
+// namespaced id from a directory or pack source.
+export type AnyUnit = UnitBase<string>;
+
+// Where a resolved unit came from. `pack` is typed ahead of #42 (npm-published
+// unit packs) so the state schema settles its shape once, rather than needing
+// a second migration when packs land; nothing constructs it yet.
+export type UnitSource
+	= | { kind: 'builtin' }
+		| { kind: 'dir'; path: string }
+		| { kind: 'pack'; name: string; version: string };

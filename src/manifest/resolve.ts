@@ -1,23 +1,23 @@
-import type { Unit, UnitId } from './types';
+import type { AnyUnit } from './types';
 
 export type ResolveResult
-	= | { kind: 'ok'; ids: UnitId[]; auto: UnitId[]; requiredBy: Partial<Record<UnitId, UnitId>> }
-		| { kind: 'missing-required'; unit: UnitId; needs: UnitId[] }
-		| { kind: 'conflict'; pair: [UnitId, UnitId] };
+	= | { kind: 'ok'; ids: string[]; auto: string[]; requiredBy: Record<string, string> }
+		| { kind: 'missing-required'; unit: string; needs: string[] }
+		| { kind: 'conflict'; pair: [string, string] };
 
 // Closes the user's selection under `implies`, then validates `requires` and
 // `excludes`. Returns either the resolved set (with separate visibility on
 // which units got auto-added) or the first violation encountered.
 //
 // Pure — no prompting, no side effects. Caller decides how to surface errors.
-export function resolveSelection(seed: UnitId[], units: Unit[]): ResolveResult {
-	const byId = new Map<UnitId, Unit>(units.map(u => [u.id, u]));
+export function resolveSelection(seed: string[], units: AnyUnit[]): ResolveResult {
+	const byId = new Map<string, AnyUnit>(units.map(u => [u.id, u]));
 	const seedSet = new Set(seed);
-	const selected = new Set<UnitId>(seed);
-	const auto = new Set<UnitId>();
+	const selected = new Set<string>(seed);
+	const auto = new Set<string>();
 	// Who pulled each auto-added unit in, so the plan can explain "(auto — required
 	// by X)". Recorded at the add site, where the implying unit is in scope.
-	const requiredBy: Partial<Record<UnitId, UnitId>> = {};
+	const requiredBy: Record<string, string> = {};
 
 	// Fixed-point loop: `implies` is transitive (A → B → C), so one pass isn't
 	// enough. Keep going until nothing new gets added.
@@ -81,14 +81,14 @@ export function resolveSelection(seed: UnitId[], units: Unit[]): ResolveResult {
 // own implies/requires closure reaches it — transitively, so removing the bottom
 // of a chain names the whole chain. `unbranded remove` refuses with this list, or
 // removes the closure under --cascade. Pure, like the resolver.
-export function dependentsOf(target: UnitId, installed: UnitId[], units: Unit[]): UnitId[] {
-	const byId = new Map<UnitId, Unit>(units.map(u => [u.id, u]));
+export function dependentsOf(target: string, installed: string[], units: AnyUnit[]): string[] {
+	const byId = new Map<string, AnyUnit>(units.map(u => [u.id, u]));
 	return installed.filter((id) => {
 		if (id === target)
 			return false;
 		// Fixed-point closure over implies + requires, same shape as the resolver's
 		// implies loop (a Set visits mid-loop additions, so one pass converges).
-		const reach = new Set<UnitId>([id]);
+		const reach = new Set<string>([id]);
 		for (const r of reach) {
 			const unit = byId.get(r);
 			for (const edge of [...(unit?.implies ?? []), ...(unit?.requires ?? [])])

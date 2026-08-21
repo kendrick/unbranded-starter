@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { hashBuffer, readStateFile, STATE_SCHEMA, writeStateFile } from '../state/state';
+import { builtinUnits, hashBuffer, readStateFile, STATE_SCHEMA, writeStateFile } from '../state/state';
 import { planRemoval, runRemove } from './remove';
 
 function unit(id: UnitId, extras: Partial<Unit> = {}): Unit {
@@ -49,7 +49,7 @@ describe('planRemoval', () => {
 			_tool: 'x',
 			schema: STATE_SCHEMA,
 			version: '0.7.0',
-			units: ['core-eslint', 'core-vitest', 'opt-vscode'],
+			units: builtinUnits(['core-eslint', 'core-vitest', 'opt-vscode']),
 			files: {
 				'eslint.config.mjs': h('cfg\n'),
 				'drifted.txt': h('original\n'),
@@ -126,7 +126,7 @@ describe('planRemoval', () => {
 			_tool: 'x',
 			schema: 1,
 			version: '0.6.0',
-			units: ['core-editorconfig', 'core-gitattributes', 'opt-vscode'],
+			units: builtinUnits(['core-editorconfig', 'core-gitattributes', 'opt-vscode']),
 			files: { '.editorconfig': h('root = true\n'), '.gitattributes': h('* text=auto\n') },
 		};
 
@@ -146,7 +146,7 @@ describe('planRemoval', () => {
 			_tool: 'x',
 			schema: STATE_SCHEMA,
 			version: '0.7.0',
-			units: ['opt-husky', 'core-node-version'],
+			units: builtinUnits(['opt-husky', 'core-node-version']),
 			files: {},
 		};
 		const plan = planRemoval({ targetDir: tmp, state, removeUnits: ['opt-husky', 'core-node-version'], units: noted });
@@ -179,7 +179,7 @@ describe('runRemove', () => {
 		writeFileSync(join(tmp, 'utils.ts'), 'cn\n');
 		writeStateFile({
 			targetDir: tmp,
-			units: ['opt-shadcn', 'core-tailwind'],
+			units: builtinUnits(['opt-shadcn', 'core-tailwind']),
 			writes: [
 				{ dest: join(tmp, 'components.json'), unit: 'opt-shadcn', mode: 'copy' },
 				{ dest: join(tmp, 'utils.ts'), unit: 'opt-shadcn', mode: 'copy' },
@@ -220,8 +220,10 @@ describe('runRemove', () => {
 		// Unmodified file deleted; the user's edited one survives but is disowned.
 		expect(existsSync(join(tmp, 'components.json'))).toBe(false);
 		expect(readFileSync(join(tmp, 'utils.ts'), 'utf-8')).toBe('my own cn\n');
-		const state = readStateFile(tmp);
-		expect(state?.units).toEqual(['core-tailwind']);
+		const read = readStateFile(tmp);
+		expect(read.kind).toBe('ok');
+		const state = read.kind === 'ok' ? read.state : undefined;
+		expect(state?.units).toEqual(builtinUnits(['core-tailwind']));
 		expect(state?.files['utils.ts']).toBeUndefined();
 		// tailwindcss survives the shadcn removal: core-tailwind still claims it.
 		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as { devDependencies: Record<string, string> };

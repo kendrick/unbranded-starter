@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { hashBuffer, STATE_SCHEMA } from '../state/state';
+import { builtinUnits, hashBuffer, STATE_SCHEMA } from '../state/state';
 import { planUpdate } from './update';
 
 function unit(id: UnitId, extras: Partial<Unit> = {}): Unit {
@@ -38,7 +38,7 @@ describe('planUpdate', () => {
 			_tool: 'x',
 			schema: STATE_SCHEMA,
 			version: '0.7.0',
-			units: ['core-editorconfig'],
+			units: builtinUnits(['core-editorconfig']),
 			files: { 'config.txt': h(OLD) },
 			attribution: { 'config.txt': 'core-editorconfig' },
 			modes: { 'config.txt': 'copy' },
@@ -104,7 +104,7 @@ describe('planUpdate', () => {
 		const jsonCatalog = [unit('opt-vscode', { files: [{ content: '{\n\t"a": 1,\n\t"b": 2\n}\n', dest: 'settings.json', mode: 'merge-json' }] })];
 		writeFileSync(join(tmp, 'settings.json'), '{\n\t"a": 1,\n\t"user": true\n}\n');
 		const s = state({
-			units: ['opt-vscode'],
+			units: builtinUnits(['opt-vscode']),
 			files: { 'settings.json': h('irrelevant') },
 			attribution: { 'settings.json': 'opt-vscode' },
 			modes: { 'settings.json': 'merge-json' },
@@ -118,7 +118,7 @@ describe('planUpdate', () => {
 		const jsonCatalog = [unit('opt-vscode', { files: [{ content: '{\n\t"a": 2\n}\n', dest: 'settings.json', mode: 'merge-json' }] })];
 		writeFileSync(join(tmp, 'settings.json'), '{\n\t"a": 1\n}\n');
 		const s = state({
-			units: ['opt-vscode'],
+			units: builtinUnits(['opt-vscode']),
 			files: { 'settings.json': h('irrelevant') },
 			attribution: { 'settings.json': 'opt-vscode' },
 			modes: { 'settings.json': 'merge-json' },
@@ -131,7 +131,7 @@ describe('planUpdate', () => {
 		const appendCatalog = [unit('core-gitattributes', { files: [{ content: 'rule one\nrule two\n', dest: '.gitattributes', mode: 'append-if-missing' }] })];
 		writeFileSync(join(tmp, '.gitattributes'), 'rule one\nuser rule\n');
 		const s = state({
-			units: ['core-gitattributes'],
+			units: builtinUnits(['core-gitattributes']),
 			files: { '.gitattributes': h('irrelevant') },
 			attribution: { '.gitattributes': 'core-gitattributes' },
 			modes: { '.gitattributes': 'append-if-missing' },
@@ -144,7 +144,7 @@ describe('planUpdate', () => {
 	it('reports template-gone, user-deleted, and computed files without acting', () => {
 		writeFileSync(join(tmp, 'orphan.txt'), 'x\n');
 		const s = state({
-			units: ['core-editorconfig', 'core-node-version'],
+			units: builtinUnits(['core-editorconfig', 'core-node-version']),
 			files: { 'orphan.txt': h('x\n'), 'config.txt': h(OLD), '.nvmrc': h('22\n') },
 			attribution: { 'orphan.txt': 'core-editorconfig', 'config.txt': 'core-editorconfig', '.nvmrc': 'core-node-version' },
 			modes: { 'orphan.txt': 'copy', 'config.txt': 'copy', '.nvmrc': 'computed' },
@@ -163,7 +163,7 @@ describe('planUpdate', () => {
 		})];
 		// The user deleted test:watch and the vitest dep; update restores both.
 		writeFileSync(join(tmp, 'package.json'), `${JSON.stringify({ name: 'x', scripts: { test: 'vitest run' } }, null, '\t')}\n`);
-		const s = state({ units: ['core-vitest'], files: {}, attribution: {}, modes: {} });
+		const s = state({ units: builtinUnits(['core-vitest']), files: {}, attribution: {}, modes: {} });
 
 		const { pkg } = planUpdate({ targetDir: tmp, state: s, units: pkgCatalog, pkgRoot: tmp });
 		expect(pkg.changed).toBe(true);
@@ -175,7 +175,7 @@ describe('planUpdate', () => {
 	it('reports package.json unchanged when everything is already there', () => {
 		const pkgCatalog = [unit('core-vitest', { packageJsonPatch: { scripts: { test: 'vitest run' } } })];
 		writeFileSync(join(tmp, 'package.json'), `${JSON.stringify({ name: 'x', scripts: { test: 'user harness' } }, null, '\t')}\n`);
-		const s = state({ units: ['core-vitest'], files: {}, attribution: {}, modes: {} });
+		const s = state({ units: builtinUnits(['core-vitest']), files: {}, attribution: {}, modes: {} });
 		// mergeAdditive: an existing script wins, so nothing changes.
 		expect(planUpdate({ targetDir: tmp, state: s, units: pkgCatalog, pkgRoot: tmp }).pkg.changed).toBe(false);
 	});

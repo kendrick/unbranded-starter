@@ -1,4 +1,4 @@
-import type { Unit, UnitId } from '../manifest/types';
+import type { AnyUnit } from '../manifest/types';
 import type { PackageJson } from '../util/package-json';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -10,7 +10,7 @@ import { effectiveDest, hasDep, hasNodeVersionPin } from './signals';
 // result badges the augment picker as a hint, never a gate, so a miss just leaves an
 // un-badged row the user can still select. That asymmetry is why every probe here
 // prefers under-claiming to a false badge.
-export function detectInstalledUnits(opts: { cwd: string; units: Unit[] }): Set<UnitId> {
+export function detectInstalledUnits(opts: { cwd: string; units: AnyUnit[] }): Set<string> {
 	const { cwd, units } = opts;
 
 	// The state file wins when present: it records the exact resolved ids a prior
@@ -19,15 +19,18 @@ export function detectInstalledUnits(opts: { cwd: string; units: Unit[] }): Set<
 	// won't badge — we only know what we wrote — and re-applying a unit is harmless,
 	// so under-badging is the safe way to be wrong.
 	const known = new Set(units.map(u => u.id));
-	const state = readStateFile(cwd);
-	if (state)
-		return new Set(state.units.filter(id => known.has(id)));
+	const stateRead = readStateFile(cwd);
+	// A state file from a newer unbranded falls through to the probes below rather
+	// than refusing. This is a badge, and the commands that actually act on state
+	// gate on the same read and report properly.
+	if (stateRead.kind === 'ok')
+		return new Set(stateRead.state.units.map(u => u.id).filter(id => known.has(id)));
 
 	// No state file: fall back to probing the filesystem. Read package.json once.
 	const read = readPackageJson(cwd);
 	const pkg: PackageJson = read.kind === 'ok' ? read.pkg : {};
 
-	const installed = new Set<UnitId>();
+	const installed = new Set<string>();
 	for (const unit of units) {
 		if (isPresent(unit, cwd, pkg))
 			installed.add(unit.id);
@@ -35,7 +38,7 @@ export function detectInstalledUnits(opts: { cwd: string; units: Unit[] }): Set<
 	return installed;
 }
 
-function isPresent(unit: Unit, cwd: string, pkg: PackageJson): boolean {
+function isPresent(unit: AnyUnit, cwd: string, pkg: PackageJson): boolean {
 	// Side channels for the three units whose footprint isn't a static file we ship —
 	// their config is computed or varies by option, so `unit.files` can't answer.
 	if (unit.id === 'core-tailwind')

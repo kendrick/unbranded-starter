@@ -1,4 +1,4 @@
-import type { Unit } from '../manifest/types';
+import type { AnyUnit } from '../manifest/types';
 
 // opt-vscode's extensions.json can't ship as a static template: its recommended
 // set has to reflect which units the user actually selected. run.ts recognizes
@@ -9,7 +9,7 @@ export const VSCODE_UNIT_ID = 'opt-vscode';
 // Pure so it's unit-tested without touching disk. `existing` carries whatever
 // the user already had in .vscode/extensions.json's `recommendations`, so a
 // rerun (or a hand-maintained file) keeps their entries and only folds ours in.
-export function buildRecommendations(units: Unit[], existing: readonly string[] = []): string[] {
+export function buildRecommendations(units: AnyUnit[], existing: readonly string[] = []): string[] {
 	// Existing entries keep the user's order — same politeness merge-json gives a
 	// settings.json — deduped in case their file already carried repeats.
 	const seen = new Set<string>();

@@ -40,16 +40,16 @@ describe('unbranded diff', () => {
 		scaffold(tmp);
 
 		const raw = readFileSync(join(tmp, '.unbranded.json'), 'utf-8');
-		const state = JSON.parse(raw) as { schema: number; version: string; units: string[]; files: Record<string, string> };
+		const state = JSON.parse(raw) as { schema: number; version: string; units: { id: string; source: { kind: string } }[]; files: Record<string, string> };
 
-		expect(state.schema).toBe(2);
-		expect(state.units).toContain('core-editorconfig');
+		expect(state.schema).toBe(3);
+		expect(state.units).toContainEqual({ id: 'core-editorconfig', source: { kind: 'builtin' } });
 		// One hash per written file, keys sorted for a clean VCS diff.
 		expect(Object.keys(state.files)).toEqual(['.editorconfig']);
 		expect(state.files['.editorconfig']).toMatch(/^[0-9a-f]{64}$/);
 		// Top-level keys serialize in sorted order (tab-indented, #48); _tool sorts
-		// first. Schema 2 adds attribution and modes (options is omitted here — a
-		// core-editorconfig run resolves none).
+		// first. attribution and modes arrived in schema 2 (options is omitted here —
+		// a core-editorconfig run resolves none).
 		expect([...raw.matchAll(/^\t"(\w+)":/gm)].map(m => m[1])).toEqual(['_tool', 'attribution', 'files', 'modes', 'schema', 'units', 'version']);
 	});
 

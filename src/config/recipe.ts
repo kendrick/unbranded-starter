@@ -1,5 +1,4 @@
 import type { Pm } from '../detect/pm';
-import type { UnitId } from '../manifest/types';
 import type { Config } from './load';
 
 // A saved recipe is a Config plus a provenance marker. `_generatedBy` isn't a
@@ -11,7 +10,7 @@ export interface RecipeInput {
 	// The resolved selection, already closed under `implies`. Passing the closed
 	// set (not the raw seed) is what makes a replay stable against future resolver
 	// changes: the recipe records what actually got installed, not what was typed.
-	ids: UnitId[];
+	ids: string[];
 	pm: Pm | null;
 	// The active version policy for this run (`--latest` or a recipe's versions).
 	latest: boolean;
@@ -22,6 +21,9 @@ export interface RecipeInput {
 	options?: Record<string, string>;
 	// The running CLI version, stamped into `_generatedBy`.
 	version: string;
+	// Where the run's local units came from, relative to the saved recipe so the
+	// pair stays portable. Omitted when the selection is built-ins only.
+	unitsDir?: string;
 }
 
 // Pure. Turns the end-of-run state into a Config-shaped recipe. The caller owns
@@ -43,6 +45,7 @@ export function buildRecipe(input: RecipeInput): Recipe {
 		// (and what augment runs did anyway). Flip it in the recipe to init a repo.
 		git: 'none',
 		...(input.projectName !== undefined ? { projectName: input.projectName } : {}),
+		...(input.unitsDir !== undefined ? { unitsDir: input.unitsDir } : {}),
 		// Only record options when the run actually chose some, so a recipe for
 		// option-free units stays as terse as before.
 		...(input.options && Object.keys(input.options).length > 0 ? { options: input.options } : {}),

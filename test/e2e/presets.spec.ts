@@ -37,9 +37,9 @@ describe('unbranded --preset', () => {
 		// cli deliberately omits the git hooks.
 		expect(existsSync(join(tmp, 'lint-staged.config.mjs'))).toBe(false);
 
-		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as { units: string[]; options?: Record<string, string> };
-		expect(state.units).toContain('core-eslint');
-		expect(state.units).not.toContain('opt-husky');
+		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as { units: { id: string }[]; options?: Record<string, string> };
+		expect(state.units.map(u => u.id)).toContain('core-eslint');
+		expect(state.units.map(u => u.id)).not.toContain('opt-husky');
 		expect(state.options?.eslintFlavor).toBe('base');
 	});
 
@@ -47,10 +47,10 @@ describe('unbranded --preset', () => {
 		const result = run(['--preset', 'cli', '--units', 'opt-vscode'], tmp);
 		expect(result.status, result.stderr).toBe(0);
 
-		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as { units: string[] };
+		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as { units: { id: string }[] };
 		// Both the preset's set and the addition survive.
-		expect(state.units).toContain('core-eslint');
-		expect(state.units).toContain('opt-vscode');
+		expect(state.units.map(u => u.id)).toContain('core-eslint');
+		expect(state.units.map(u => u.id)).toContain('opt-vscode');
 	});
 
 	it('composes with --dry-run --json: the plan shows the preset expansion', () => {

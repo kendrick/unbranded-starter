@@ -124,10 +124,97 @@ The integer bumps only on a breaking shape change. A new optional field does not
 | `recommendedExtensions` | no       | VS Code marketplace ids, gathered across the selected units.                                                                                                    |
 | `removeNotes`           | no       | Printed by `unbranded remove`. Guidance only; nothing runs.                                                                                                     |
 
+## 7. Using Your Units
+
+Once your definitions validate, install them alongside the built-ins by naming their directory on the command line or in a recipe.
+
+### The Command Line
+
+```bash
+unbranded --units-dir ./my-units
+```
+
+The flag resolves the directory against the current working directory, loads every valid unit in it, and offers them in the picker beside the built-ins.
+
+The directory's basename becomes the namespace. Units in `./my-units` are referenced as `my-units/<id>`, so a definition declaring `"id": "banner"` installs as `my-units/banner`:
+
+```bash
+unbranded --units-dir ./my-units --units my-units/banner --yes
+```
+
+Name the qualified id. A bare `banner` matches nothing in the catalog and fails as an unknown id.
+
+The directory name has to match the pattern unit ids do, `^[a-z0-9][a-z0-9-]*$`, because it becomes half of every qualified reference. `my-units` works; `My Units` does not.
+
+### In a Recipe
+
+A recipe carries the same path in a `unitsDir` field:
+
+```json
+{
+	"units": ["my-units/banner", "core-eslint"],
+	"unitsDir": "./my-units",
+	"pm": "pnpm",
+	"onConflict": "overwrite",
+	"postInstall": "all"
+}
+```
+
+Under `unbranded --config recipe.json`, `./my-units` resolves against the recipe file's own directory rather than the current working directory. A recipe and the units it names travel together, so the path has to mean the same thing wherever someone runs it from.
+
+Pass `--units-dir` alongside a recipe and the flag wins.
+
+### References Inside a Unit
+
+`implies`, `requires`, and `excludes` take bare ids, exactly as they do in a built-in:
+
+```json
+{
+	"id": "banner",
+	"implies": ["license-header", "core-eslint"],
+	"excludes": ["markdown-lint"]
+}
+```
+
+The loader resolves each one against the unit's own directory first, then the built-in catalog. So `banner` implying `license-header` finds `my-units/license-header` when that sibling exists, and a built-in of that name otherwise. It is the order an import takes when it prefers a local module over an installed package.
+
+You never write a namespace inside a definition. The loader attaches it, and that is what keeps a unit directory portable: rename the directory and every reference inside it still resolves.
+
+### Shadowing a Built-in
+
+A local unit may declare a built-in's id. `my-units/core-eslint` and `core-eslint` are different units, and a sibling implying `core-eslint` gets the local one. `unbranded` warns when it loads a directory holding such a unit, because reusing a familiar name usually means the author wanted to replace the built-in rather than sit beside it.
+
+### Invalid Definitions
+
+`unbranded` skips a definition that fails validation, names it and the reason, and installs the rest of the directory. One half-written unit doesn't block the ones beside it. Run `unbranded validate ./my-units` to see the same errors on their own.
+
+### Day-2 Commands
+
+`diff`, `remove`, and `update` read the directory's path back out of `.unbranded.json`, where the scaffold recorded it, so they need no flag:
+
+```bash
+unbranded diff
+unbranded remove my-units/banner
+unbranded update
+```
+
+Pass `--units-dir` to one of those only when the directory has moved:
+
+```bash
+unbranded diff --units-dir ./new-location
+```
+
+### When the Directory Is Missing
+
+A recipe that names local units but no `unitsDir` fails before anything is written. The error names the ids it could not resolve and points at `--units-dir`. A `unitsDir` pointing at a directory that isn't there fails the same way, naming the path instead.
+
+The day-2 commands degrade instead of failing. `diff`, `remove`, and `update` warn about the directory they could not read and carry on with what they can still judge, so a directory you deleted never locks you out of removing what it installed.
+
 ## Ground Rules
 
 - Pin dependencies exactly. A range breaks reproducibility, and `validate` rejects it.
 - Keep every `src` inside the unit's own directory. `validate` rejects an absolute path or a `..` segment.
-- Never reuse a built-in's id.
-- Point relations at ids that exist, whether built-in or a sibling in the same directory.
+- Reusing a built-in's id is legal, since the namespace keeps the two apart, but it warns and it usually means you meant to override the built-in instead.
+- Point relations at ids that exist, whether built-in or a sibling in the same directory. Write them bare; the loader attaches the namespace.
 - Templates are inert data. A unit copies them and never executes them. Only `postInstall` runs anything, and every step prompts first.
+- Name a units directory the way you'd name a unit, `^[a-z0-9][a-z0-9-]*$`, because that name becomes half of every reference to what's inside it.

@@ -119,6 +119,9 @@
 						"$ref": "#/$defs/postInstall"
 					}
 				},
+				"source": {
+					"$ref": "#/$defs/source"
+				},
 				"packageJsonPatch": {
 					"type": "object",
 					"additionalProperties": false,
@@ -232,6 +235,26 @@
 					]
 				}
 			}
+		},
+		"source": {
+			"description": "Where a unit's definition came from, mirroring schemas/state.schema.json's per-unit source — a --units-dir consumer reads the same shape from either file. Absent entirely when the caller didn't ask a catalog to be built with source info (buildCatalog's second argument is optional).",
+			"oneOf": [
+				{
+					"type": "object",
+					"required": ["kind"],
+					"additionalProperties": false,
+					"properties": { "kind": { "const": "builtin" } }
+				},
+				{
+					"type": "object",
+					"required": ["kind", "path"],
+					"additionalProperties": false,
+					"properties": {
+						"kind": { "const": "dir" },
+						"path": { "type": "string", "description": "Absolute path to the units directory this unit was loaded from." }
+					}
+				}
+			]
 		}
 	}
 }

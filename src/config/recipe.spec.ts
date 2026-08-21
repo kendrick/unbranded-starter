@@ -12,7 +12,7 @@ const KNOWN = new Set(UNITS.map(u => u.id));
 const unitIds = (...values: string[]): UnitId[] => values as UnitId[];
 
 // The closed-under-implies id set a real interactive run would hand buildRecipe.
-function resolvedIds(seed: UnitId[]): UnitId[] {
+function resolvedIds(seed: string[]): string[] {
 	const result = resolveSelection(seed, UNITS);
 	if (result.kind !== 'ok')
 		throw new Error(`fixture selection did not resolve: ${result.kind}`);

@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildStateFile, hashBuffer } from '../state/state';
+import { buildStateFile, builtinUnits, hashBuffer } from '../state/state';
 import { PKG_ROOT } from '../util/paths';
 import { classify, computeDiff } from './diff';
 
@@ -51,7 +51,7 @@ describe('computeDiff', () => {
 		writeFileSync(join(tmp, '.editorconfig'), template);
 		const state = buildStateFile({
 			version: '1.0.0',
-			units: ['core-editorconfig'],
+			units: builtinUnits(['core-editorconfig']),
 			files: { '.editorconfig': hashBuffer(template) },
 		});
 
@@ -64,7 +64,7 @@ describe('computeDiff', () => {
 		writeFileSync(join(tmp, '.editorconfig'), Buffer.concat([template, Buffer.from('\n# mine\n')]));
 		const state = buildStateFile({
 			version: '1.0.0',
-			units: ['core-editorconfig'],
+			units: builtinUnits(['core-editorconfig']),
 			files: { '.editorconfig': hashBuffer(template) },
 		});
 
@@ -80,7 +80,7 @@ describe('computeDiff', () => {
 		writeFileSync(join(tmp, '.editorconfig'), scaffolded);
 		const state = buildStateFile({
 			version: '0.0.1',
-			units: ['core-editorconfig'],
+			units: builtinUnits(['core-editorconfig']),
 			files: { '.editorconfig': hashBuffer(scaffolded) },
 		});
 
@@ -108,7 +108,7 @@ describe('computeDiff', () => {
 		writeFileSync(join(tmp, '.editorconfig'), Buffer.concat([template, Buffer.from('\n# mine\n')]));
 		const state = buildStateFile({
 			version: '1.0.0',
-			units: ['core-editorconfig'],
+			units: builtinUnits(['core-editorconfig']),
 			files: { '.editorconfig': hashBuffer(template) },
 		});
 

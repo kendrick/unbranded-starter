@@ -107,11 +107,12 @@ describe('unbranded validate', () => {
 		expect(alone.stdout).toContain('implies[0]');
 	});
 
-	it('refuses a unit that takes a built-in id', () => {
+	it('validates clean when a local unit takes a built-in id', () => {
 		unit('shadow', { ...MINIMAL, id: 'core-eslint', files: [] });
 		const result = run(['validate', tmp], tmp);
-		expect(result.status).toBe(1);
-		expect(result.stdout).toContain('built-in');
+		expect(result.status).toBe(0);
+		expect(result.stdout).not.toContain('built-in');
+		expect(result.stdout).toContain('1 unit definition ok');
 	});
 
 	it('refuses two units sharing an id', () => {

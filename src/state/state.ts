@@ -1,14 +1,16 @@
-import type { UnitId } from '../manifest/types';
+import type { UnitSource } from '../manifest/types';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix, relative, sep } from 'node:path';
 import { PKG_ROOT } from '../util/paths';
 
 // Bump when the on-disk shape changes in a way a reader can't tolerate. Schema 2
-// adds the sibling maps (`options`, `attribution`, `modes`) and the baseline
-// sidecar while leaving `files` byte-compatible, so a schema-1 reader still parses
-// the parts it knows. `unbranded update` keys off `schema`, not field-sniffing.
-export const STATE_SCHEMA = 2;
+// added the sibling maps (`options`, `attribution`, `modes`) and the baseline
+// sidecar additively, so a schema-1 reader still parsed the parts it knew. Schema 3
+// is the first bump that isn't additive: `units` changes from bare id strings to
+// {id, source} entries, and an older reader handed a namespaced id would drop it as
+// unknown rather than refuse. That's what readStateFile's version gate exists for.
+export const STATE_SCHEMA = 3;
 
 // Lives at the project root, one level of visibility above node_modules. The
 // leading dot keeps it out of the way while staying obviously ours.
@@ -35,7 +37,7 @@ export type TrackedFileMode = 'copy' | 'merge-json' | 'append-if-missing' | 'com
 // writes after it. `dest` is absolute; writeStateFile relativizes.
 export interface TrackedWrite {
 	dest: string;
-	unit: UnitId;
+	unit: string;
 	mode: TrackedFileMode;
 }
 
@@ -47,6 +49,16 @@ export interface DoctorConfig {
 	ignore?: string[];
 }
 
+// One installed unit and where its definition came from. Provenance is recorded
+// because a namespaced id alone doesn't say where to find the definition again:
+// `remove` and `update` have to re-read a local unit's files, and only the path
+// gets them back. Built-ins carry `{kind:'builtin'}` and their ids stay bare
+// forever, since `core-eslint` is already written into shipped 1.x state files.
+export interface StateUnit {
+	id: string;
+	source: UnitSource;
+}
+
 export interface StateFile {
 	// A `_`-prefixed metadata key, mirroring the $schema/_comment convention in
 	// tool-written JSON. Sorts first, so it reads as the file's own header.
@@ -55,7 +67,7 @@ export interface StateFile {
 	// The CLI version that last wrote this envelope. Recorded so a later
 	// diff/update can reason about which template generation touched it.
 	version: string;
-	units: UnitId[];
+	units: StateUnit[];
 	// dest path (relative to the project root, posix-normalized) → content hash.
 	// One hash per file keeps the diff a clean one-line-per-change.
 	files: Record<string, string>;
@@ -66,12 +78,18 @@ export interface StateFile {
 	options?: Record<string, string>;
 	// …which unit wrote each tracked file, recorded at write time because the
 	// manifest's dests can drift across versions and a replay would misattribute…
-	attribution?: Record<string, UnitId>;
+	attribution?: Record<string, string>;
 	// …and how each file was produced, so update picks the right refresh path.
 	modes?: Record<string, TrackedFileMode>;
 	// Optional user config. Absent on a fresh scaffold; present once a user opts in
 	// (e.g. adds `doctor.ignore`). Preserved verbatim across re-scaffolds.
 	doctor?: DoctorConfig;
+}
+
+// Built-in ids carry no provenance worth recording — there is exactly one place a
+// built-in can come from — so the whole set converts in one call.
+export function builtinUnits(ids: string[]): StateUnit[] {
+	return ids.map(id => ({ id, source: { kind: 'builtin' } }));
 }
 
 export function hashBuffer(buf: Buffer): string {
@@ -84,10 +102,10 @@ export function hashBuffer(buf: Buffer): string {
 // omitted entirely — same rule as the doctor block, no noise nobody asked for.
 export function buildStateFile(input: {
 	version: string;
-	units: UnitId[];
+	units: StateUnit[];
 	files: Record<string, string>;
 	options?: Record<string, string>;
-	attribution?: Record<string, UnitId>;
+	attribution?: Record<string, string>;
 	modes?: Record<string, TrackedFileMode>;
 	doctor?: DoctorConfig;
 }): StateFile {
@@ -95,7 +113,7 @@ export function buildStateFile(input: {
 		_tool: STATE_TOOL_HINT,
 		schema: STATE_SCHEMA,
 		version: input.version,
-		units: [...input.units].sort(),
+		units: [...input.units].sort(byId),
 		files: sortRecord(input.files),
 		...whenPresent('options', input.options),
 		...whenPresent('attribution', input.attribution),
@@ -122,12 +140,12 @@ export function serializeState(state: StateFile): string {
 // Only `unbranded remove` is allowed to shrink the tracked set.
 export function writeStateFile(opts: {
 	targetDir: string;
-	units: UnitId[];
+	units: StateUnit[];
 	writes: TrackedWrite[];
 	options?: Record<string, string>;
 }): string {
 	const files: Record<string, string> = {};
-	const attribution: Record<string, UnitId> = {};
+	const attribution: Record<string, string> = {};
 	const modes: Record<string, TrackedFileMode> = {};
 
 	// A skipped write can leave a dest that was never created (nothing on our
@@ -142,10 +160,10 @@ export function writeStateFile(opts: {
 
 	// Preserve everything a prior run (or a hand edit, for doctor.ignore) left in
 	// the file. New values win per key; a schema-1 prior simply has no maps to carry.
-	const prior = readStateFile(opts.targetDir);
+	const prior = priorStateForWrite(opts.targetDir);
 	const merged = {
 		version: readCliVersion(),
-		units: [...new Set([...(prior?.units ?? []), ...opts.units])],
+		units: mergeUnits(prior?.units ?? [], opts.units),
 		files: { ...prior?.files, ...files },
 		options: { ...prior?.options, ...opts.options },
 		attribution: { ...prior?.attribution, ...attribution },
@@ -168,16 +186,17 @@ export function writeStateFile(opts: {
 // go with it — a lingering README would advertise management that no longer exists.
 export function applyRemovalToState(opts: {
 	targetDir: string;
-	removeUnits: UnitId[];
+	removeUnits: string[];
 	removeFiles: string[];
 	removeOptionKeys?: string[];
 }): void {
-	const prior = readStateFile(opts.targetDir);
+	const prior = priorStateForWrite(opts.targetDir);
 	if (!prior)
 		return;
 
 	const gone = new Set(opts.removeFiles);
-	const units = prior.units.filter(u => !opts.removeUnits.includes(u));
+	const removed = new Set(opts.removeUnits);
+	const units = prior.units.filter(u => !removed.has(u.id));
 
 	if (units.length === 0) {
 		rmSync(join(opts.targetDir, STATE_FILENAME), { force: true });
@@ -213,7 +232,7 @@ export function refreshTrackedFiles(opts: {
 	targetDir: string;
 	entries: Record<string, { hash: string; baseline?: string }>;
 }): void {
-	const prior = readStateFile(opts.targetDir);
+	const prior = priorStateForWrite(opts.targetDir);
 	if (!prior)
 		return;
 
@@ -239,19 +258,106 @@ export function refreshTrackedFiles(opts: {
 	writeFileSync(join(opts.targetDir, STATE_FILENAME), serializeState(state));
 }
 
-// Returns undefined for both "no state" and "unreadable state". `diff` treats an
-// untracked project as a normal, clean exit, so a malformed file must degrade to
-// the same friendly path rather than throwing a stack trace at a CI job.
-export function readStateFile(dir: string): StateFile | undefined {
+export type StateRead
+	= | { kind: 'ok'; state: StateFile }
+		| { kind: 'none' }
+		| { kind: 'unsupported'; schema: number };
+
+// Three outcomes rather than two, because "written by a newer unbranded" and "not
+// tracked here" must not collapse into the same answer. They used to: an unreadable
+// file returned undefined, and `diff` reads undefined as an untracked project and
+// exits 0 clean. A CI gate would then report no drift on a repo it can't actually
+// read. `none` still covers both "no file" and "malformed JSON" — degrading a
+// corrupt file to the friendly path beats throwing a stack trace at a CI job.
+export function readStateFile(dir: string): StateRead {
 	const path = join(dir, STATE_FILENAME);
 	if (!existsSync(path))
-		return undefined;
+		return { kind: 'none' };
+
+	let raw: unknown;
 	try {
-		return JSON.parse(readFileSync(path, 'utf-8')) as StateFile;
+		raw = JSON.parse(readFileSync(path, 'utf-8'));
 	}
 	catch {
-		return undefined;
+		return { kind: 'none' };
 	}
+
+	const doc = raw as Partial<StateFile> & { units?: unknown };
+	const schema = typeof doc.schema === 'number' ? doc.schema : 1;
+	if (schema > STATE_SCHEMA)
+		return { kind: 'unsupported', schema };
+
+	return { kind: 'ok', state: { ...doc, units: normalizeUnits(doc.units) } as StateFile };
+}
+
+export function unsupportedStateMessage(schema: number): string {
+	return `${STATE_FILENAME} here was written by a newer unbranded (state schema ${schema}; this build understands ${STATE_SCHEMA}). Upgrade unbranded to manage this project.`;
+}
+
+// Schema 1 and 2 stored units as bare id strings, and those files can only name
+// built-ins — nothing else could be installed before schema 3 — so widening them
+// on read is exact rather than a guess. Entries neither string nor id-bearing are
+// dropped; a file that malformed would have to be hand-mangled, since the version
+// gate above already turns back anything a future unbranded wrote.
+function normalizeUnits(raw: unknown): StateUnit[] {
+	if (!Array.isArray(raw))
+		return [];
+
+	const out: StateUnit[] = [];
+	for (const entry of raw) {
+		if (typeof entry === 'string') {
+			out.push({ id: entry, source: { kind: 'builtin' } });
+			continue;
+		}
+		if (entry !== null && typeof entry === 'object' && typeof (entry as { id?: unknown }).id === 'string') {
+			const e = entry as { id: string; source?: unknown };
+			out.push({ id: e.id, source: normalizeSource(e.source) });
+		}
+	}
+	return out;
+}
+
+function normalizeSource(raw: unknown): UnitSource {
+	if (raw === null || typeof raw !== 'object')
+		return { kind: 'builtin' };
+
+	const s = raw as { kind?: unknown; path?: unknown; name?: unknown; version?: unknown };
+	if (s.kind === 'dir' && typeof s.path === 'string')
+		return { kind: 'dir', path: s.path };
+	// Packs ship in a later release and deliberately reuse schema 3, so a pack entry
+	// arrives without a version bump to announce it. Reading it here is what makes
+	// that promise good.
+	if (s.kind === 'pack' && typeof s.name === 'string' && typeof s.version === 'string')
+		return { kind: 'pack', name: s.name, version: s.version };
+	return { kind: 'builtin' };
+}
+
+// Every writer in this module merges onto whatever is already on disk, so each one
+// needs the same refusal: merging onto an envelope we can't fully read would drop
+// the parts we didn't understand. Commands gate first and report properly; this
+// throw is the backstop for a path that forgot to.
+function priorStateForWrite(targetDir: string): StateFile | undefined {
+	const read = readStateFile(targetDir);
+	if (read.kind === 'unsupported')
+		throw new Error(unsupportedStateMessage(read.schema));
+	return read.kind === 'ok' ? read.state : undefined;
+}
+
+// New entries win, so re-applying a unit whose directory moved records the current
+// path rather than the stale one.
+function mergeUnits(prior: StateUnit[], next: StateUnit[]): StateUnit[] {
+	const byIdMap = new Map<string, StateUnit>();
+	for (const u of [...prior, ...next])
+		byIdMap.set(u.id, u);
+	return [...byIdMap.values()];
+}
+
+// Plain comparator rather than localeCompare: the envelope has to be byte-identical
+// across machines and locales, which is the whole reason this file sorts at all.
+function byId(a: StateUnit, b: StateUnit): number {
+	if (a.id === b.id)
+		return 0;
+	return a.id < b.id ? -1 : 1;
 }
 
 const SIDECAR_README = `# The unbranded Sidecar
