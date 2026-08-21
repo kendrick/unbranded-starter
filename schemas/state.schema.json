@@ -1,16 +1,56 @@
 {
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"$id": "https://github.com/kendrick/unbranded-starter/schemas/state.schema.json",
-	"title": ".unbranded.json (state file, schema 2)",
-	"description": "What unbranded manages in a scaffolded repo: the installed units, one content hash per tracked file, and (schema 2) which unit wrote each file, how it was produced, and the run's resolved options. Byte-exact merge baselines live beside it in .unbranded/baseline/. A schema-1 file is this shape minus options/attribution/modes.",
+	"title": ".unbranded.json (state file, schema 3)",
+	"description": "What unbranded manages in a scaffolded repo: the installed units and where each came from, one content hash per tracked file, plus which unit wrote each file, how it was produced, and the run's resolved options. Byte-exact merge baselines live beside it in .unbranded/baseline/. Schema 3 turns `units` from bare id strings into {id, source} entries; a schema-1 or -2 file is this shape with bare strings there, and minus options/attribution/modes at schema 1.",
 	"type": "object",
 	"required": ["_tool", "schema", "version", "units", "files"],
 	"additionalProperties": false,
+	"$defs": {
+		"unitEntry": {
+			"type": "object",
+			"required": ["id", "source"],
+			"additionalProperties": false,
+			"properties": {
+				"id": { "type": "string", "description": "Bare for a built-in (core-eslint), namespaced as source/id for anything else (my-units/banner)." },
+				"source": {
+					"description": "Where this unit's definition came from, so day-2 commands can read it again.",
+					"oneOf": [
+						{
+							"type": "object",
+							"required": ["kind"],
+							"additionalProperties": false,
+							"properties": { "kind": { "const": "builtin" } }
+						},
+						{
+							"type": "object",
+							"required": ["kind", "path"],
+							"additionalProperties": false,
+							"properties": {
+								"kind": { "const": "dir" },
+								"path": { "type": "string", "description": "Posix-relative to the project root." }
+							}
+						},
+						{
+							"type": "object",
+							"required": ["kind", "name", "version"],
+							"additionalProperties": false,
+							"properties": {
+								"kind": { "const": "pack" },
+								"name": { "type": "string" },
+								"version": { "type": "string" }
+							}
+						}
+					]
+				}
+			}
+		}
+	},
 	"properties": {
 		"_tool": { "type": "string" },
 		"schema": { "type": "integer" },
 		"version": { "type": "string" },
-		"units": { "type": "array", "items": { "type": "string" } },
+		"units": { "type": "array", "items": { "$ref": "#/$defs/unitEntry" } },
 		"files": { "type": "object", "additionalProperties": { "type": "string" } },
 		"options": { "type": "object", "additionalProperties": { "type": "string" } },
 		"attribution": { "type": "object", "additionalProperties": { "type": "string" } },
