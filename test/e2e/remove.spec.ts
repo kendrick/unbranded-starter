@@ -57,7 +57,7 @@ describe('unbranded remove', () => {
 		expect(pkg(tmp).devDependencies?.tailwindcss).toBeDefined();
 
 		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as { units: string[] };
-		expect(state.units).toEqual(['core-tailwind']);
+		expect(state.units).toEqual([{ id: 'core-tailwind', source: { kind: 'builtin' } }]);
 	});
 
 	it('refuses to strand a dependent, then removes the closure under --cascade', () => {
