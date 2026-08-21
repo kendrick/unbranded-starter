@@ -1,6 +1,7 @@
 import type { UnitIssue } from '../manifest/validate-unit';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { relative } from 'node:path';
+import { discover } from '../manifest/discover';
 import { UNITS } from '../manifest/index';
 import { UNIT_SCHEMA, validateUnitDefinition } from '../manifest/validate-unit';
 import { EXIT_ERROR, EXIT_OK } from '../util/exit-codes';
@@ -8,10 +9,6 @@ import { EXIT_ERROR, EXIT_OK } from '../util/exit-codes';
 // Bumps on breaking changes to the --json report envelope, independently of
 // UNIT_SCHEMA: the report can gain a field without the unit contract moving.
 export const VALIDATE_SCHEMA = 1;
-
-// The manifest filename a unit directory is recognized by. Also the marker that
-// separates "one unit" from "a directory of units" during path dispatch.
-const MANIFEST = 'unit.json';
 
 export interface ValidateEntry {
 	path: string;
@@ -30,48 +27,10 @@ export type ValidateOutcome
 	= | { kind: 'report'; report: ValidateReport }
 		| { kind: 'error'; message: string };
 
-interface Candidate {
-	// Absolute path to the definition document, for reading.
-	file: string;
-	// Where this unit's `src` paths resolve from. For a lone .json that is the
-	// file's own directory, so a definition can sit beside its templates.
-	baseDir: string;
-}
-
-// Built-in ids are always in scope: a local or packed unit may point `implies` at
-// core-eslint, and it may not claim that id for itself.
+// Built-in ids are always in scope, so a local or packed unit may point `implies`
+// at core-eslint. Claiming that id for itself is legal too — the loader namespaces
+// it to <dir>/core-eslint, which is a different unit from the built-in.
 const BUILTIN_IDS: ReadonlySet<string> = new Set(UNITS.map(u => u.id));
-
-// Three shapes, distinguished by what is on disk rather than by a flag, so the
-// same path a user passes to `validate` is the one #41's loader will walk:
-// a lone .json is one definition, a directory with a unit.json is one unit, and
-// anything else is treated as a directory of unit directories.
-export function discover(target: string): Candidate[] | { error: string } {
-	const abs = resolve(target);
-	if (!existsSync(abs))
-		return { error: `${target}: no such file or directory.` };
-
-	if (!statSync(abs).isDirectory()) {
-		if (!abs.endsWith('.json'))
-			return { error: `${target}: expected a .json unit definition or a directory.` };
-		return [{ file: abs, baseDir: dirname(abs) }];
-	}
-
-	const own = join(abs, MANIFEST);
-	if (existsSync(own))
-		return [{ file: own, baseDir: abs }];
-
-	const children = readdirSync(abs, { withFileTypes: true })
-		.filter(e => e.isDirectory())
-		.map(e => join(abs, e.name, MANIFEST))
-		.filter(file => existsSync(file))
-		.sort();
-
-	if (children.length === 0)
-		return { error: `${target}: no ${MANIFEST} here or in any immediate subdirectory.` };
-
-	return children.map(file => ({ file, baseDir: dirname(file) }));
-}
 
 export function validateTarget(target: string): ValidateOutcome {
 	const found = discover(target);
@@ -102,11 +61,10 @@ export function validateTarget(target: string): ValidateOutcome {
 		const id = idOf(doc);
 
 		if (id !== undefined) {
-			// A shadowed built-in would silently change what a recipe resolves to,
-			// so it is an authoring error rather than an override mechanism.
-			if (BUILTIN_IDS.has(id))
-				issues.push({ path: 'id', expected: 'an id not already taken by a built-in unit', got: `"${id}"` });
-
+			// A local id equal to a built-in's is not a collision: namespacing
+			// (issue #41) qualifies every local unit as `<dir>/<id>`, so
+			// `my-units/core-eslint` and `core-eslint` are distinct units and
+			// neither can shadow the other in a recipe.
 			const first = seen.get(id);
 			if (first !== undefined)
 				issues.push({ path: 'id', expected: 'an id unique within this directory', got: `"${id}", already defined by ${first}` });
