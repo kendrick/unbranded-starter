@@ -167,7 +167,7 @@ The pieces that make unbranded worth keeping in a repo rather than running once 
 - **`unbranded outdated`** grades every manifest pin against the npm registry (patch, minor, major). It exits 0 by default so a report never fails a job; `--strict` gates on majors, `--registry` points at a mirror.
 - **`unbranded remove <unit>`** backs a unit out: it deletes the unit's unmodified files, drops the package.json entries no remaining unit still claims, and refuses to strand a dependent unless you pass `--cascade`. `--dry-run` previews the whole thing.
 
-Every run records what it wrote in `.unbranded.json` plus an `.unbranded/` sidecar of byte-exact baselines (the merge base `update` needs), so commit both. Doctor findings are opinions, and some won't apply to your repo; accept one by adding its id to a `doctor.ignore` array in the state file. The full non-interactive contract, the JSON schemas under `schemas/`, and the agent loop end to end live in [AGENTS.md](AGENTS.md) and [docs/agent-cookbook.md](docs/agent-cookbook.md). Authoring your own units is covered in [docs/authoring-units.md](docs/authoring-units.md).
+Every run records what it wrote in `.unbranded.json` plus an `.unbranded/` sidecar of byte-exact baselines (the merge base `update` needs), so commit both. Doctor findings are opinions, and some won't apply to your repo; accept one by adding its id to a `doctor.ignore` array in the state file. The full non-interactive contract, the JSON schemas under `schemas/`, and the agent loop end to end live in [AGENTS.md](AGENTS.md) and [docs/agent-cookbook.md](docs/agent-cookbook.md). Authoring your own units and using them alongside the built-ins is covered in [docs/authoring-units.md](docs/authoring-units.md).
 
 ## Commands and Flags
 
@@ -188,6 +188,7 @@ The flags you'll reach for most, with `unbranded --help` for the full set:
 | ----------------------------- | ------------------------------------------------------------- |
 | `--config, -c <file>`         | run a JSON recipe non-interactively                           |
 | `--units <a,b,c>`             | pick units inline, no recipe file                             |
+| `--units-dir <dir>`           | load custom unit definitions from a directory                 |
 | `--pm <npm\|pnpm\|yarn\|bun>` | set the package manager and skip detection                    |
 | `--yes`                       | apply without the confirm prompt (needs `--units`/`--config`) |
 | `--dry-run`                   | resolve and report, write nothing                             |

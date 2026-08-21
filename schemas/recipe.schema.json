@@ -10,6 +10,7 @@
 		"pm": { "enum": ["npm", "pnpm", "yarn", "bun", null] },
 		"onConflict": { "enum": ["overwrite", "skip"] },
 		"postInstall": { "enum": ["all", "none"] },
+		"unitsDir": { "type": "string", "description": "Directory holding custom unit definitions, resolved relative to the recipe file's location" },
 		"options": { "type": "object", "additionalProperties": { "type": "string" } },
 		"versions": { "enum": ["pinned", "latest"] },
 		"projectName": { "type": "string" },
