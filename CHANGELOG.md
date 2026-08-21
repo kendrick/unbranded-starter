@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.0.0](https://github.com/kendrick/unbranded-starter/compare/v1.0.2...v2.0.0) (2026-08-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* **state:** record where each installed unit came from
+* **cli:** the "." export now resolves to the library entry instead of the CLI bin. Anything importing the package root to run the CLI must call the unbranded bin directly.
+
+### Features
+
+* **cli:** add --units-dir for your own unit definitions ([fc7582b](https://github.com/kendrick/unbranded-starter/commit/fc7582b22d0ed4dc74f47c387d3815279ab21e64))
+* **cli:** add unbranded validate ([43649b1](https://github.com/kendrick/unbranded-starter/commit/43649b1b7d27fdc674f7cb4aabdabde6cc4287b8))
+* **cli:** load your own units with --units-dir ([f86187c](https://github.com/kendrick/unbranded-starter/commit/f86187cc12f268871a8995d15d9e683d69216089))
+* **cli:** ship a library entry exporting the unit contract ([61b6915](https://github.com/kendrick/unbranded-starter/commit/61b69158a3f022329dd207bd6ff481a183f40fac))
+* **manifest:** load unit definitions from a directory ([278b38e](https://github.com/kendrick/unbranded-starter/commit/278b38eaec40aa16629e89c41b60ed1395e61422))
+* **manifest:** publish the unit definition schema and its validator ([b71f5d8](https://github.com/kendrick/unbranded-starter/commit/b71f5d8d7a48c8893ebca6a219af77087c8077e7))
+* **manifest:** resolve unit references against a namespace ([473fabd](https://github.com/kendrick/unbranded-starter/commit/473fabdf5819402547e5a690a6afa4b18f8e8925))
+* **state:** record where each installed unit came from ([637c1f2](https://github.com/kendrick/unbranded-starter/commit/637c1f2d88d6db4e8b1eb3a534b1def6a1d12fde))
+
+
+### Bug Fixes
+
+* **cli:** resolve the launcher through an explicit ./cli export ([704d611](https://github.com/kendrick/unbranded-starter/commit/704d6118fd0eb6a337b16d0e0a0b15a0cdc5523c))
+
 ## [1.0.2](https://github.com/kendrick/unbranded-starter/compare/v1.0.1...v1.0.2) (2026-08-20)
 
 
