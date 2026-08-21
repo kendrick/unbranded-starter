@@ -1,4 +1,4 @@
-import type { FileOp, Unit } from '../manifest/types';
+import type { AnyUnit, FileOp } from '../manifest/types';
 import type { StateFile } from '../state/state';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
@@ -10,9 +10,9 @@ import { computeUpdate } from '../fs/merge3';
 import { mergePackageJson } from '../fs/merge-json';
 import { isDirtyGitTree } from '../install/git';
 import { detectIndent } from '../install/run';
-import { UNITS } from '../manifest/index';
+import { loadCatalog, unitsDirsFor } from '../manifest/catalog';
 import { applyUnitOptions } from '../manifest/options';
-import { hashBuffer, readStateFile, refreshTrackedFiles, SIDECAR_DIR } from '../state/state';
+import { hashBuffer, readStateFile, refreshTrackedFiles, SIDECAR_DIR, unsupportedStateMessage } from '../state/state';
 import { cancelAndExit } from '../util/cancel';
 import { colorEnabled } from '../util/color';
 import { PKG_ROOT } from '../util/paths';
@@ -57,23 +57,33 @@ export interface UpdatePlanResult {
 // the current templates; writes nothing. Copy-mode files go through the
 // three-way engine; merge-json and append files reuse planFileOp, which is what
 // keeps update's structured behavior in lockstep with the scaffold's.
-export function planUpdate(opts: { targetDir: string; state: StateFile; units: Unit[]; pkgRoot: string }): UpdatePlanResult {
+export function planUpdate(opts: { targetDir: string; state: StateFile; units: AnyUnit[]; pkgRoot: string; templateRoots?: ReadonlyMap<string, string> }): UpdatePlanResult {
 	const { state, targetDir } = opts;
-	const byId = new Map(opts.units.map(u => [u.id, u]));
+	const byId = new Map<string, AnyUnit>(opts.units.map(u => [u.id, u]));
 
 	// Current template render for every file the installed units ship, with the
-	// recorded options baked in so a react-flavor scaffold replays as react.
-	const replay = new Map<string, { op: FileOp; content: string }>();
-	const resolved: Unit[] = [];
-	for (const id of state.units) {
+	// recorded options baked in so a react-flavor scaffold replays as react. Each
+	// entry carries its own root: a local unit's templates sit beside its
+	// definition, not in the package.
+	const replay = new Map<string, { op: FileOp; content: string; root: string }>();
+	const resolved: AnyUnit[] = [];
+	for (const { id } of state.units) {
 		const catalogUnit = byId.get(id);
 		if (!catalogUnit)
 			continue;
 		const unit = applyUnitOptions(catalogUnit, state.options ?? {});
 		resolved.push(unit);
+		const root = opts.templateRoots?.get(id) ?? opts.pkgRoot;
 		for (const op of unit.files) {
-			const content = op.content ?? readFileSync(join(opts.pkgRoot, ...(op.src ?? '').split(posix.sep)), 'utf-8');
-			replay.set(effectiveDest(op), { op, content });
+			// A template that's gone leaves the file with no replay entry, which reads
+			// downstream as "no template backs this anymore" — the same degrade as a
+			// unit we couldn't load at all. Throwing here would take down the whole
+			// update over one deleted file in someone's units directory.
+			const src = op.src === undefined ? undefined : join(root, ...op.src.split(posix.sep));
+			if (op.content === undefined && (src === undefined || !existsSync(src)))
+				continue;
+			const content = op.content ?? readFileSync(src as string, 'utf-8');
+			replay.set(effectiveDest(op), { op, content, root });
 		}
 	}
 
@@ -103,7 +113,7 @@ export function planUpdate(opts: { targetDir: string; state: StateFile; units: U
 		}
 
 		if (mode === 'merge-json' || mode === 'append-if-missing') {
-			const plan = planFileOp(entry.op, { pkgRoot: opts.pkgRoot, targetDir });
+			const plan = planFileOp(entry.op, { pkgRoot: entry.root, targetDir });
 			if (plan.outcome === 'skip' || !plan.diff) {
 				files.push({ rel, status: 'up-to-date' });
 			}
@@ -152,7 +162,7 @@ export function planUpdate(opts: { targetDir: string; state: StateFile; units: U
 // merge a scaffold would and see whether anything comes out different. The
 // existing-wins rules mean user customizations hold; what changes is whatever
 // the units ship that the file lost (or never had).
-function planPkgUpdate(targetDir: string, units: Unit[]): UpdatePkgPlan {
+function planPkgUpdate(targetDir: string, units: AnyUnit[]): UpdatePkgPlan {
 	const pkgPath = join(targetDir, 'package.json');
 	if (!existsSync(pkgPath) || units.length === 0)
 		return { changed: false };
@@ -202,15 +212,23 @@ export interface RunUpdateOpts {
 	// Global answer for every conflict/needs-choice file. Without it, --yes runs
 	// fail on conflicts instead of guessing, and interactive runs ask per file.
 	strategy?: UpdateStrategy;
+	// `--units-dir`: load local units from here instead of the paths the scaffold
+	// recorded. The override is for a directory that moved since.
+	unitsDir?: string;
 }
 
 export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 	const cwd = opts.cwd ?? process.cwd();
-	const state = readStateFile(cwd);
-	if (!state) {
+	const read = readStateFile(cwd);
+	if (read.kind === 'unsupported') {
+		process.stderr.write(`unbranded update: ${unsupportedStateMessage(read.schema)}\n`);
+		return 1;
+	}
+	if (read.kind === 'none') {
 		process.stdout.write('unbranded update: nothing is tracked in this directory (no .unbranded.json).\n');
 		return 0;
 	}
+	const state = read.state;
 
 	intro(opts.dryRun ? 'unbranded update (dry run)' : 'unbranded update');
 
@@ -227,7 +245,14 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 		}
 	}
 
-	const plan = planUpdate({ targetDir: cwd, state, units: UNITS, pkgRoot: PKG_ROOT });
+	const catalog = loadCatalog({
+		unitsDirs: unitsDirsFor(state.units.map(u => u.source), cwd, opts.unitsDir),
+		onMissing: 'warn',
+	});
+	for (const warning of catalog.warnings)
+		log.warn(warning);
+
+	const plan = planUpdate({ targetDir: cwd, state, units: catalog.units, pkgRoot: PKG_ROOT, templateRoots: catalog.templateRoots });
 	note(formatUpdateReport(plan), 'Update plan');
 
 	if (opts.diff) {

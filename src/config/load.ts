@@ -1,11 +1,10 @@
 import type { Pm } from '../detect/pm';
 import type { OptionSchema } from '../manifest/options';
-import type { UnitId } from '../manifest/types';
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 export interface Config {
-	units: UnitId[];
+	units: string[];
 	pm: Pm | null;
 	onConflict: 'overwrite' | 'skip';
 	postInstall: 'all' | 'none';
@@ -29,6 +28,10 @@ export interface Config {
 	// construction (CI) sets this to drop the warning entirely; the --force flag
 	// is the per-run equivalent. Optional so an ordinary recipe still gets the net.
 	force?: boolean;
+	// Where this run's local unit definitions live, absolute by the time it lands
+	// here. In the file it's written relative to the recipe, because a recipe is a
+	// committed artifact that travels with the units directory it names.
+	unitsDir?: string;
 }
 
 const VALID_PMS = new Set<string>(['npm', 'pnpm', 'yarn', 'bun']);
@@ -40,7 +43,11 @@ const VALID_GIT = new Set(['init', 'init-commit', 'none']);
 // v1 is JSON-only. YAML support is easy to add (we'd pull in `yaml` and key
 // off the file extension) but isn't load-bearing for the E2E suite, which is
 // what motivated this mode in the first place.
-export function loadConfig(path: string, knownUnits: Set<UnitId>, schema?: OptionSchema): Config {
+//
+// Split from loadConfig because a recipe can name the units directory that
+// supplies the very ids validation is about to check. The caller reads the
+// document, builds its catalog from `unitsDir`, and only then validates.
+export function readConfigFile(path: string): { raw: unknown; dir: string } {
 	const abs = resolve(path);
 	if (!existsSync(abs)) {
 		throw new Error(`--config file not found: ${abs}`);
@@ -49,15 +56,32 @@ export function loadConfig(path: string, knownUnits: Set<UnitId>, schema?: Optio
 		throw new Error(`--config currently supports .json only (got ${abs}).`);
 	}
 
-	let raw: unknown;
 	try {
-		raw = JSON.parse(readFileSync(abs, 'utf-8'));
+		return { raw: JSON.parse(readFileSync(abs, 'utf-8')), dir: dirname(abs) };
 	}
 	catch (err) {
 		throw new Error(`Invalid JSON in ${abs}: ${(err as Error).message}`);
 	}
+}
 
-	return validate(raw, knownUnits, schema);
+// Reads one field ahead of validation, so it checks that field's type and nothing
+// else. Resolved against the recipe's own directory: a recipe and the units it
+// names travel together, so a path relative to the invoking cwd would break the
+// moment someone ran it from anywhere but the repo root.
+export function peekUnitsDir(raw: unknown, configDir: string): string | undefined {
+	if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+		return undefined;
+	const value = (raw as Record<string, unknown>).unitsDir;
+	if (value === undefined)
+		return undefined;
+	if (typeof value !== 'string')
+		throw new TypeError('config.unitsDir must be a string when present.');
+	return resolve(configDir, value);
+}
+
+export function loadConfig(path: string, knownUnits: ReadonlySet<string>, schema?: OptionSchema): Config {
+	const { raw, dir } = readConfigFile(path);
+	return validate(raw, knownUnits, schema, { configDir: dir });
 }
 
 // Shared so the recipe validator and the `--pm` flag apply one rule with one
@@ -92,9 +116,9 @@ export interface InlineFlags {
 export function resolveConfig(
 	fileConfig: Config | null,
 	inline: InlineFlags,
-	knownUnits: Set<UnitId>,
+	knownUnits: ReadonlySet<string>,
 	schema?: OptionSchema,
-	opts: { unitsMode?: 'override' | 'additive' } = {},
+	opts: { unitsMode?: 'override' | 'additive'; unitsDir?: string } = {},
 ): Config {
 	// Inline --units accepts an `id:value` suffix (e.g. core-eslint:react) that
 	// picks a unit option inline. The id feeds the units array; the suffix, mapped
@@ -118,7 +142,7 @@ export function resolveConfig(
 			const value = token.slice(colon + 1).trim();
 			units.push(id);
 			if (schema) {
-				const option = schema.byUnit.get(id as UnitId);
+				const option = schema.byUnit.get(id);
 				if (!option)
 					throw new Error(`--units: ${id} takes no options, but ":${value}" was given.`);
 				inlineOptions[option.key] = value;
@@ -148,10 +172,12 @@ export function resolveConfig(
 		// Like git, force has no inline mirror: the --force flag rides its own
 		// RunInitOpts channel, so the merge only has to keep the recipe field alive.
 		force: fileConfig?.force,
+		// Already absolute from either source, so validate's re-resolve is a no-op.
+		unitsDir: opts.unitsDir ?? fileConfig?.unitsDir,
 	}, knownUnits, schema);
 }
 
-export function validate(raw: unknown, knownUnits: Set<UnitId>, schema?: OptionSchema): Config {
+export function validate(raw: unknown, knownUnits: ReadonlySet<string>, schema?: OptionSchema, opts: { configDir?: string } = {}): Config {
 	if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
 		throw new Error('Config must be a JSON object.');
 	}
@@ -161,10 +187,23 @@ export function validate(raw: unknown, knownUnits: Set<UnitId>, schema?: OptionS
 		throw new TypeError('config.units must be an array of UnitId strings.');
 	}
 	const unknownUnits = obj.units.filter(
-		u => typeof u !== 'string' || !knownUnits.has(u as UnitId),
+		u => typeof u !== 'string' || !knownUnits.has(u),
 	);
 	if (unknownUnits.length > 0) {
-		throw new Error(`config.units contains unknown ids: ${unknownUnits.join(', ')}. Run 'unbranded list' to see valid ids.`);
+		// A namespaced id that resolves to nothing almost always means the units
+		// directory wasn't supplied rather than that the id is wrong, and the two
+		// failures want opposite fixes. Saying so here is the whole of the promise
+		// that a recipe replayed on a machine without the directory fails at once,
+		// naming what's missing, instead of quietly scaffolding a smaller project.
+		const local = unknownUnits.filter(u => typeof u === 'string' && u.includes('/'));
+		const hint = local.length > 0
+			? ` ${local.join(', ')} ${local.length === 1 ? 'looks like a local unit' : 'look like local units'} — pass --units-dir <dir>, or set "unitsDir" in the recipe.`
+			: '';
+		throw new Error(`config.units contains unknown ids: ${unknownUnits.join(', ')}. Run 'unbranded list' to see valid ids.${hint}`);
+	}
+
+	if (obj.unitsDir !== undefined && typeof obj.unitsDir !== 'string') {
+		throw new TypeError('config.unitsDir must be a string when present.');
 	}
 
 	assertValidPm(obj.pm);
@@ -196,7 +235,7 @@ export function validate(raw: unknown, knownUnits: Set<UnitId>, schema?: OptionS
 	const options = validateOptions(obj.options, schema);
 
 	return {
-		units: obj.units as UnitId[],
+		units: obj.units as string[],
 		pm: obj.pm as Pm | null,
 		onConflict: obj.onConflict as 'overwrite' | 'skip',
 		postInstall: obj.postInstall as 'all' | 'none',
@@ -204,6 +243,7 @@ export function validate(raw: unknown, knownUnits: Set<UnitId>, schema?: OptionS
 		projectName: obj.projectName as string | undefined,
 		git: (obj.git as 'init' | 'init-commit' | 'none') ?? 'none',
 		force: obj.force as boolean | undefined,
+		...(typeof obj.unitsDir === 'string' ? { unitsDir: resolve(opts.configDir ?? '.', obj.unitsDir) } : {}),
 		...(options ? { options } : {}),
 	};
 }

@@ -1,6 +1,7 @@
-import type { FileOp, Unit, UnitId, UnitOption } from '../../manifest/types';
+import type { AnyUnit, FileOp, UnitOption } from '../../manifest/types';
 import { effectiveDest } from '../../detect/signals';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '../../manifest/categories';
+import { parseUnitRef } from '../../manifest/unit-ref';
 
 // The expandable detail for one unit (shown on Tab). Everything here is derived
 // from the manifest, flattened so the renderer never reaches back into a raw Unit.
@@ -20,12 +21,17 @@ export interface PickerDetail {
 // One selectable row in the picker. `installed`/`options`/`detail` are precomputed so
 // the reducers and renderer stay pure string/data transforms over this, never over a Unit.
 export interface PickerOption {
-	value: UnitId;
+	value: string;
 	label: string;
 	hint?: string;
 	// Category display label — the group header this row sorts under.
 	group: string;
 	installed: boolean;
+	// Set only for a unit loaded from a --units-dir. Read straight off the unit's own
+	// id (qualify() already namespaced it before it ever reached this catalog), so a
+	// local unit is self-describing here — no separate source map needs threading
+	// through createPickerState/unitPicker to badge it in the picker.
+	namespace?: string;
 	// Carried verbatim for inline flavor cycling; absent on units with no variant axis.
 	options?: UnitOption[];
 	detail: PickerDetail;
@@ -34,13 +40,13 @@ export interface PickerOption {
 // Category order, then declared order within a category — the same rule list.ts uses,
 // so the picker, `list`, and `list --json` never disagree on ordering. Array.sort is
 // stable on the Node versions we support, so equal-category units keep manifest order.
-function orderUnits(units: Unit[]): Unit[] {
+function orderUnits(units: AnyUnit[]): AnyUnit[] {
 	return [...units].sort(
 		(a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category),
 	);
 }
 
-export function buildUnitPickerOptions(units: Unit[], installed: Set<UnitId>): PickerOption[] {
+export function buildUnitPickerOptions(units: AnyUnit[], installed: Set<string>): PickerOption[] {
 	const labelById = new Map(units.map(u => [u.id, u.label]));
 
 	return orderUnits(units).map((unit) => {
@@ -57,12 +63,15 @@ export function buildUnitPickerOptions(units: Unit[], installed: Set<UnitId>): P
 				: {}),
 		};
 
+		const { namespace } = parseUnitRef(unit.id);
+
 		return {
 			value: unit.id,
 			label: unit.label,
 			...(unit.description ? { hint: unit.description } : {}),
 			group: CATEGORY_LABELS[unit.category] ?? unit.category,
 			installed: installed.has(unit.id),
+			...(namespace !== undefined ? { namespace } : {}),
 			...(unit.options?.length ? { options: unit.options } : {}),
 			detail,
 		};

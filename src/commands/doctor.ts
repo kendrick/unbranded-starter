@@ -1,5 +1,4 @@
 import type { Pm } from '../detect/pm';
-import type { UnitId } from '../manifest/types';
 import type { StateFile } from '../state/state';
 import type { PackageJson } from '../util/package-json';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -7,7 +6,7 @@ import { join } from 'node:path';
 import { note } from '@clack/prompts';
 import { inspectPm } from '../detect/pm';
 import { effectiveDest, engines, hasDep, hasNodeVersionPin, hasScript } from '../detect/signals';
-import { readStateFile } from '../state/state';
+import { readStateFile, unsupportedStateMessage } from '../state/state';
 import { readPackageJson } from '../util/package-json';
 import { runInit } from './init';
 import { buildCatalog } from './list';
@@ -25,7 +24,7 @@ export interface Finding {
 	// `unbranded --units <id>` command; otherwise it's a plain instruction.
 	fix: string;
 	// Set when a catalog unit resolves the finding, resolved via buildCatalog().
-	unit?: UnitId;
+	unit?: string;
 }
 
 export interface AuditResult {
@@ -78,6 +77,18 @@ export function applySuppression(findings: Finding[], ignore: readonly string[])
 export function readDoctorIgnore(state: StateFile | undefined): string[] {
 	const raw = state?.doctor?.ignore;
 	return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [];
+}
+
+// doctor audits a repo without acting on it, so a state file it can't read costs
+// only the accept-list: findings the user suppressed come back. Noisier is the safe
+// direction to fail here, and the warning says why the noise appeared.
+function readIgnoreOrWarn(cwd: string): string[] {
+	const read = readStateFile(cwd);
+	if (read.kind === 'unsupported') {
+		process.stderr.write(`unbranded doctor: ${unsupportedStateMessage(read.schema)} Ignoring the accept-list for this run.\n`);
+		return [];
+	}
+	return readDoctorIgnore(read.kind === 'ok' ? read.state : undefined);
 }
 
 // Lockfile precedence, copied from pm.ts's lockfileSignal so the "which one would
@@ -223,7 +234,7 @@ export interface RunDoctorOpts {
 export function runDoctor(opts: RunDoctorOpts = {}): number {
 	const cwd = opts.cwd ?? process.cwd();
 	const { findings } = auditRepo({ cwd });
-	const { active, suppressed, unknownIgnored } = applySuppression(findings, readDoctorIgnore(readStateFile(cwd)));
+	const { active, suppressed, unknownIgnored } = applySuppression(findings, readIgnoreOrWarn(cwd));
 
 	if (opts.json) {
 		process.stdout.write(`${JSON.stringify({
@@ -247,8 +258,8 @@ export function runDoctor(opts: RunDoctorOpts = {}): number {
 // catalog remedy the apply pipeline can install; everything else is a repo
 // condition only a human should touch (deleting lockfiles, editing fields).
 // Units keep audit order and dedupe, since two findings can share one remedy.
-export function partitionFixable(findings: Finding[]): { units: UnitId[]; manual: Finding[] } {
-	const units: UnitId[] = [];
+export function partitionFixable(findings: Finding[]): { units: string[]; manual: Finding[] } {
+	const units: string[] = [];
 	for (const f of findings) {
 		if (f.unit !== undefined && !units.includes(f.unit))
 			units.push(f.unit);
@@ -257,6 +268,8 @@ export function partitionFixable(findings: Finding[]): { units: UnitId[]; manual
 }
 
 export interface RunDoctorFixOpts {
+	// Forwarded to runInit so a --fix run can install local units too.
+	unitsDir?: string;
 	cwd?: string;
 	// --yes: apply every fixable finding without the picker or the Apply confirm.
 	yes?: boolean;
@@ -276,7 +289,7 @@ export interface RunDoctorFixOpts {
 export async function runDoctorFix(opts: RunDoctorFixOpts = {}): Promise<number> {
 	const cwd = opts.cwd ?? process.cwd();
 	const { findings } = auditRepo({ cwd });
-	const { active } = applySuppression(findings, readDoctorIgnore(readStateFile(cwd)));
+	const { active } = applySuppression(findings, readIgnoreOrWarn(cwd));
 	const { units, manual } = partitionFixable(active);
 
 	// Manual findings are listed, never executed: their remedies delete or edit
@@ -291,8 +304,8 @@ export async function runDoctorFix(opts: RunDoctorFixOpts = {}): Promise<number>
 
 	const shared = { targetDir: cwd, dryRun: opts.dryRun, diff: opts.diff, force: opts.force };
 	const result = opts.yes
-		? await runInit({ ...shared, inline: { units: units.join(','), pm: opts.pm, yes: true } })
-		: await runInit({ ...shared, inline: { pm: opts.pm }, preselect: units });
+		? await runInit({ ...shared, unitsDir: opts.unitsDir, inline: { units: units.join(','), pm: opts.pm, yes: true } })
+		: await runInit({ ...shared, unitsDir: opts.unitsDir, inline: { pm: opts.pm }, preselect: units });
 	return result.ok ? 0 : 1;
 }
 
@@ -337,24 +350,24 @@ function missingScript(catalog: ReturnType<typeof buildCatalog>, script: string,
 	return { id, message, fix: fixForUnit(unit, `Add a "${script}" script to package.json.`), unit };
 }
 
-function fixForUnit(unit: UnitId | undefined, fallback: string): string {
+function fixForUnit(unit: string | undefined, fallback: string): string {
 	return unit ? `Run \`unbranded --units ${unit}\` to add it.` : fallback;
 }
 
 // Faithful to the public catalog rather than the raw manifest: a finding names a
 // unit only if the catalog advertises a file writing that destination.
-function unitForDest(catalog: ReturnType<typeof buildCatalog>, dest: string): UnitId | undefined {
+function unitForDest(catalog: ReturnType<typeof buildCatalog>, dest: string): string | undefined {
 	return catalog.units.find(u => u.files.some(f => effectiveDest(f) === dest))?.id;
 }
 
-function unitForScript(catalog: ReturnType<typeof buildCatalog>, script: string): UnitId | undefined {
+function unitForScript(catalog: ReturnType<typeof buildCatalog>, script: string): string | undefined {
 	return catalog.units.find(u => u.packageJsonPatch?.scripts && script in u.packageJsonPatch.scripts)?.id;
 }
 
 // For units whose fix isn't discoverable by a destination file — core-node-version
 // computes its output instead of shipping a template, so it has no catalog dest.
 // Verifies the id is really in the catalog rather than trusting a bare string.
-function unitForId(catalog: ReturnType<typeof buildCatalog>, id: UnitId): UnitId | undefined {
+function unitForId(catalog: ReturnType<typeof buildCatalog>, id: string): string | undefined {
 	return catalog.units.find(u => u.id === id)?.id;
 }
 

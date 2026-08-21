@@ -45,6 +45,9 @@ Options:
   --preset <name>                Start from a shipped recipe (node-lib, next-app, cli); --units adds to it
   --target <dir>                 Scaffold against <dir> instead of the current directory
   --units <a,b,c>                Comma-separated unit ids (recipe field: units)
+  --units-dir <dir>              Load your own unit definitions from <dir>; they're referenced as
+                                 <dir-name>/<id> (recipe field: unitsDir). Works with \`diff\`,
+                                 \`remove\`, and \`update\` too, which otherwise read the recorded path
   --pm <npm|pnpm|yarn|bun>       Package manager (recipe field: pm); skips detection, including the workspace-leaf refusal
   --on-conflict <overwrite|skip> How to treat existing files (recipe field: onConflict)
   --post-install <all|none>      Run post-install steps or skip them (recipe field: postInstall)
@@ -81,6 +84,8 @@ Examples:
   unbranded outdated --strict                          # freshness gate: non-zero exit on major-behind pins
   unbranded validate ./my-units                        # check a directory of unit definitions you authored
   unbranded validate ./my-units --json                 # publish gate for a unit pack's CI
+  unbranded --units-dir ./my-units                     # pick from your own units alongside the built-ins
+  unbranded --units-dir ./my-units --units my-units/banner --yes   # install one of them by its namespaced id
   unbranded --config recipe.json                       # reproducible, scriptable run
   unbranded --preset node-lib --pm pnpm                # a shipped recipe; add --units to extend it
   unbranded --units core-eslint,core-vitest --pm pnpm --yes   # fully non-interactive, no recipe file
@@ -109,6 +114,7 @@ const { values, positionals } = parseArgs({
 		'strategy': { type: 'string' },
 		'registry': { type: 'string' },
 		'preset': { type: 'string' },
+		'units-dir': { type: 'string' },
 		'no-color': { type: 'boolean' },
 		'color': { type: 'boolean' },
 		'help': { type: 'boolean', short: 'h' },
@@ -145,12 +151,16 @@ if (values.version) {
 	process.exit(EXIT_OK);
 }
 
+// Resolved against the invocation cwd, like --target. A recipe's own unitsDir
+// resolves against the recipe instead, and this beats it when both are given.
+const unitsDir = values['units-dir'] ? resolve(values['units-dir']) : undefined;
+
 const command = positionals[0];
 
 // `list` needs no target project and no TTY, so it runs and exits before any
 // of the init flow's detection kicks in.
 if (command === 'list') {
-	runList({ json: values.json });
+	runList({ json: values.json, unitsDir });
 	process.exit(EXIT_OK);
 }
 
@@ -169,7 +179,7 @@ if (command === 'validate') {
 // Read-only drift check against .unbranded.json. No target, no TTY; exit code
 // carries the verdict (non-zero on drift) so CI can gate on it directly.
 if (command === 'diff') {
-	process.exit(runDiff({ json: values.json, diff: values.diff }));
+	process.exit(runDiff({ json: values.json, diff: values.diff, unitsDir }));
 }
 
 // Read-only repo audit: guaranteed zero writes, cwd only. Default exit is 0 so a
@@ -188,6 +198,7 @@ if (command === 'doctor') {
 			diff: values.diff,
 			force: values.force,
 			pm: values.pm,
+			unitsDir,
 		}).catch((err: unknown) => {
 			log.error(err instanceof Error ? err.message : String(err));
 			return 1;
@@ -209,6 +220,7 @@ if (command === 'remove') {
 		dryRun: values['dry-run'],
 		force: values.force,
 		cascade: values.cascade,
+		unitsDir,
 	}).catch((err: unknown) => {
 		log.error(err instanceof Error ? err.message : String(err));
 		return EXIT_ERROR;
@@ -243,6 +255,7 @@ if (command === 'update') {
 		diff: values.diff,
 		force: values.force,
 		strategy,
+		unitsDir,
 	}).catch((err: unknown) => {
 		log.error(err instanceof Error ? err.message : String(err));
 		return EXIT_ERROR;
@@ -262,6 +275,7 @@ if (values['dry-run'] && values.json) {
 	process.exit(await runPlanJson({
 		configPath: values.config,
 		preset: values.preset,
+		unitsDir,
 		targetDir: values.target ? resolve(values.target) : undefined,
 		inline: {
 			units: values.units,
@@ -279,6 +293,7 @@ if (values['dry-run'] && values.json) {
 runInit({
 	configPath: values.config,
 	preset: values.preset,
+	unitsDir,
 	// Resolve against the invocation cwd now, before any detection runs, so the
 	// dir is stable even though a relative --config path is still read from here.
 	targetDir: values.target ? resolve(values.target) : undefined,

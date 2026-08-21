@@ -1,12 +1,13 @@
-import type { InlineFlags } from '../config/load';
+import type { Config, InlineFlags } from '../config/load';
 import type { Pm } from '../detect/pm';
 import type { CopyResult, FilePlan, PlanOutcome } from '../fs/copy';
-import type { Unit, UnitId, UnitOption } from '../manifest/types';
-import type { TrackedWrite } from '../state/state';
+import type { Catalog } from '../manifest/catalog';
+import type { AnyUnit, UnitOption } from '../manifest/types';
+import type { StateUnit, TrackedWrite } from '../state/state';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, join, sep } from 'node:path';
+import { basename, join, posix, relative, sep } from 'node:path';
 import { cancel, confirm, intro, isCancel, log, note, outro, select } from '@clack/prompts';
-import { assertValidPm, loadConfig, resolveConfig } from '../config/load';
+import { assertValidPm, peekUnitsDir, readConfigFile, resolveConfig, validate as validateConfig } from '../config/load';
 import { loadPreset, presetNames } from '../config/presets';
 import { buildRecipe, serializeRecipe } from '../config/recipe';
 import { detectInstalledUnits } from '../detect/installed';
@@ -16,9 +17,9 @@ import { copyFileOp, planFileOp, renderPlanDiff } from '../fs/copy';
 import { isDirtyGitTree, maybeInitGit } from '../install/git';
 import { runPostInstalls } from '../install/post';
 import { writeAndInstall } from '../install/run';
+import { loadCatalog } from '../manifest/catalog';
 import { detectEslintFlavor } from '../manifest/eslint-config';
-import { UNITS } from '../manifest/index';
-import { applyUnitOptions, buildOptionSchema } from '../manifest/options';
+import { applyUnitOptions } from '../manifest/options';
 import { resolveSelection } from '../manifest/resolve';
 import { unitPicker } from '../prompts/unit-picker/prompt';
 import { writeStateFile } from '../state/state';
@@ -49,10 +50,14 @@ export interface RunInitOpts {
 	// Open the interactive picker with these units already checked (doctor --fix).
 	// Only the picker path reads it; non-interactive runs carry their selection in
 	// config.units and never see a picker to seed.
-	preselect?: UnitId[];
+	preselect?: string[];
 	// `--preset <name>`: a shipped recipe as the file config, with --units turning
 	// additive. Mutually exclusive with configPath; cli.ts enforces that.
 	preset?: string;
+	// `--units-dir <dir>`: load local unit definitions from here, already resolved
+	// against the invocation cwd in cli.ts. Beats a recipe's own `unitsDir`, which
+	// resolves against the recipe instead.
+	unitsDir?: string;
 }
 
 export interface RunInitResult {
@@ -67,22 +72,85 @@ export interface RunInitResult {
 // shape changes in a way a consumer can't tolerate, like every other surface.
 export const PLAN_SCHEMA = 1;
 
+// A built-in's `src` paths resolve against the package root; a local unit's resolve
+// against its own directory. Every copy and plan call goes through here so a unit
+// can never be rendered from the wrong root — the failure that would cause is a
+// file silently missing rather than an error, since a nonexistent src just doesn't copy.
+function templateRoot(catalog: Catalog, id: string): string {
+	return catalog.templateRoots.get(id) ?? PKG_ROOT;
+}
+
+// A dir source is recorded relative to the project, not as the absolute path this
+// run happened to resolve. The state file gets committed and read on other people's
+// machines, where an absolute path from someone's laptop names nothing.
+function stateUnitsFor(catalog: Catalog, ids: string[], targetDir: string): StateUnit[] {
+	return ids.map((id) => {
+		const source = catalog.sources.get(id) ?? { kind: 'builtin' as const };
+		if (source.kind !== 'dir')
+			return { id, source };
+		const rel = relative(targetDir, source.path).split(sep).join(posix.sep);
+		// A bare directory name reads as ambiguous next to a unit id, so keep the
+		// leading ./ that a user would have typed.
+		return { id, source: { kind: 'dir' as const, path: rel.startsWith('.') ? rel : `./${rel}` } };
+	});
+}
+
+// Invalid definitions don't stop a run: a units directory is a working area, and a
+// half-written unit in it shouldn't block the fifteen that are fine. It does have to
+// be said out loud, though, or the user reads the shorter picker as the whole story.
+function catalogNotices(catalog: Catalog): string[] {
+	return [
+		...catalog.warnings,
+		...catalog.skipped.map((skip) => {
+			const detail = skip.issues.map(i => `${i.path}: expected ${i.expected}, got ${i.got}`).join('; ');
+			return `Skipped ${skip.path}${skip.id ? ` (${skip.id})` : ''} — ${detail}`;
+		}),
+	];
+}
+
+function dirList(dir: string | undefined): string[] {
+	return dir === undefined ? [] : [dir];
+}
+
+// A units directory forces a two-phase load: a recipe can name the very directory
+// that supplies the ids validation is about to check, so the document gets read,
+// the catalog assembled from whatever it names, and only then is the config held to
+// it. The flag beats the recipe field, the same way every other flag does.
+function openCatalog(opts: { configPath?: string; preset?: string; unitsDir?: string }): { catalog: Catalog; fileConfig: Config | null } {
+	if (opts.configPath) {
+		const { raw, dir } = readConfigFile(opts.configPath);
+		const catalog = loadCatalog({ unitsDirs: dirList(opts.unitsDir ?? peekUnitsDir(raw, dir)) });
+		return { catalog, fileConfig: validateConfig(raw, catalog.ids, catalog.optionSchema, { configDir: dir }) };
+	}
+
+	// Shipped presets only ever name built-ins, so there's no second place a units
+	// directory could come from here.
+	const catalog = loadCatalog({ unitsDirs: dirList(opts.unitsDir) });
+	return {
+		catalog,
+		fileConfig: opts.preset ? loadPreset(opts.preset, catalog.ids, catalog.optionSchema).config : null,
+	};
+}
+
 // The machine half of --dry-run. Deliberately a separate path from runInit:
 // that flow narrates through clack from its first line, and one stray chrome
 // line on stdout breaks a JSON consumer. Requires a selection (--units or
 // --config) because there is no picker to drive without a TTY story.
-export async function runPlanJson(opts: { configPath?: string; inline?: InlineFlags; targetDir?: string; preset?: string }): Promise<number> {
+export async function runPlanJson(opts: { configPath?: string; inline?: InlineFlags; targetDir?: string; preset?: string; unitsDir?: string }): Promise<number> {
 	const inline = opts.inline ?? {};
 	if (inline.pm !== undefined)
 		assertValidPm(inline.pm);
 
-	const known = new Set(UNITS.map(u => u.id));
-	const optionSchema = buildOptionSchema(UNITS);
-	const fileConfig = opts.preset
-		? loadPreset(opts.preset, known, optionSchema).config
-		: (opts.configPath ? loadConfig(opts.configPath, known, optionSchema) : null);
+	const { catalog, fileConfig } = openCatalog(opts);
+	// Skipped units go to stderr here rather than through clack: this path's stdout
+	// is a JSON document, and one stray line of chrome breaks the consumer parsing it.
+	for (const notice of catalogNotices(catalog))
+		process.stderr.write(`${notice}\n`);
+
+	const known = catalog.ids;
+	const optionSchema = catalog.optionSchema;
 	const config = fileConfig !== null || inline.units !== undefined
-		? resolveConfig(fileConfig, inline, known, optionSchema, { unitsMode: opts.preset ? 'additive' : 'override' })
+		? resolveConfig(fileConfig, inline, known, optionSchema, { unitsMode: opts.preset ? 'additive' : 'override', unitsDir: opts.unitsDir })
 		: null;
 	if (!config) {
 		process.stderr.write('--dry-run --json needs a selection: pass --units <ids>, --config <file>, or --preset <name>.\n');
@@ -94,7 +162,7 @@ export async function runPlanJson(opts: { configPath?: string; inline?: InlineFl
 	// can't drift: an explicit --pm wins, then the recipe's pm, then detection.
 	const pm = await detectPm(target.dir, { override: (inline.pm as Pm | undefined) ?? fileConfig?.pm, mode: target.mode });
 
-	const resolution = resolveSelection(config.units, UNITS);
+	const resolution = resolveSelection(config.units, catalog.units);
 	if (resolution.kind === 'missing-required') {
 		process.stderr.write(`${resolution.unit} requires ${resolution.needs.join(', ')}, which weren't selected.\n`);
 		return 1;
@@ -104,14 +172,14 @@ export async function runPlanJson(opts: { configPath?: string; inline?: InlineFl
 		return 1;
 	}
 
-	const byId = new Map(UNITS.map(u => [u.id, u]));
-	const selectedUnits = resolution.ids.map(id => byId.get(id)).filter((u): u is Unit => u !== undefined);
+	const byId = new Map<string, AnyUnit>(catalog.units.map(u => [u.id, u]));
+	const selectedUnits = resolution.ids.map(id => byId.get(id)).filter((u): u is AnyUnit => u !== undefined);
 	const optionSelections = await resolveUnitOptions(selectedUnits, config.options, false, target.dir);
 	const units = selectedUnits.map(unit => applyUnitOptions(unit, optionSelections));
 
 	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
 	const plans = units.flatMap(unit =>
-		unit.files.map(file => planFileOp(file, { pkgRoot: PKG_ROOT, targetDir: target.dir, projectName })),
+		unit.files.map(file => planFileOp(file, { pkgRoot: templateRoot(catalog, unit.id), targetDir: target.dir, projectName })),
 	);
 
 	process.stdout.write(`${JSON.stringify({
@@ -144,22 +212,20 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		pmOverride = inline.pm;
 	}
 
-	const known = new Set(UNITS.map(u => u.id));
+	// Loading config first means we fail with a clear error before prompting,
+	// rather than mid-flow after the user already started picking things. The
+	// catalog comes with it, since a recipe may be what names the units directory.
+	const { catalog, fileConfig } = openCatalog(opts);
+	const known = catalog.ids;
 	// The option surface (core-eslint's flavor today) so a recipe's `options` map
 	// and the `--units id:value` inline syntax validate against the manifest.
-	const optionSchema = buildOptionSchema(UNITS);
-
-	// Loading config first means we fail with a clear error before prompting,
-	// rather than mid-flow after the user already started picking things.
-	const fileConfig = opts.preset
-		? loadPreset(opts.preset, known, optionSchema).config
-		: (opts.configPath ? loadConfig(opts.configPath, known, optionSchema) : null);
+	const optionSchema = catalog.optionSchema;
 
 	// A merged config drives every non-interactive path: a recipe file, a shipped
 	// preset, inline --units, or --yes. A bare interactive run leaves it null.
 	const nonInteractive = fileConfig !== null || inline.units !== undefined || Boolean(inline.yes);
 	const config = nonInteractive
-		? resolveConfig(fileConfig, inline, known, optionSchema, { unitsMode: opts.preset ? 'additive' : 'override' })
+		? resolveConfig(fileConfig, inline, known, optionSchema, { unitsMode: opts.preset ? 'additive' : 'override', unitsDir: opts.unitsDir })
 		: null;
 
 	// The flag wins over the recipe field, so `--config r.json --latest` works.
@@ -171,6 +237,9 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	const skipApply = Boolean(opts.configPath) || Boolean(opts.preset) || Boolean(inline.yes);
 
 	intro(config ? 'unbranded (non-interactive)' : 'unbranded');
+
+	for (const notice of catalogNotices(catalog))
+		log.warn(notice);
 
 	const target = await detectTarget({ projectName: config?.projectName, cwd: opts.targetDir });
 	log.info(`Target: ${target.dir} (${target.mode})`);
@@ -206,13 +275,13 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// project has nothing pre-existing to badge, and non-interactive paths never
 	// prompt, so detecting there would be wasted work that changes no output.
 	const installed = config === null && target.mode === 'augment'
-		? detectInstalledUnits({ cwd: target.dir, units: UNITS })
-		: new Set<UnitId>();
+		? detectInstalledUnits({ cwd: target.dir, units: catalog.units })
+		: new Set<string>();
 
 	// The interactive picker returns chosen flavors alongside the ids, so cycling a
 	// flavor inline (←/→) stands in for the old follow-up select prompt. A recipe run
 	// skips the picker entirely and takes its selection from config.
-	let selection: UnitId[];
+	let selection: string[];
 	let pickerFlavors: Record<string, string> = {};
 	if (config) {
 		selection = config.units;
@@ -246,11 +315,11 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 
 		const picked = await unitPicker({
 			message: 'What do you want to install?',
-			units: UNITS,
+			units: catalog.units,
 			installed,
 			// A preset's recorded flavor beats the environment sniff: choosing
 			// next-app should open the picker on the next flavor.
-			initialFlavors: { ...pickerInitialFlavors(target.dir), ...presetFlavors },
+			initialFlavors: { ...pickerInitialFlavors(catalog.units, target.dir), ...presetFlavors },
 			initialSelected,
 		});
 		if (isCancel(picked))
@@ -263,7 +332,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		return { ok: true };
 	}
 
-	const resolution = resolveSelection(selection, UNITS);
+	const resolution = resolveSelection(selection, catalog.units);
 	if (resolution.kind === 'missing-required') {
 		log.error(`${resolution.unit} requires ${resolution.needs.join(', ')}, which weren't selected.`);
 		process.exit(1);
@@ -273,10 +342,10 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		process.exit(1);
 	}
 
-	const byId = new Map(UNITS.map(u => [u.id, u]));
+	const byId = new Map<string, AnyUnit>(catalog.units.map(u => [u.id, u]));
 	const selectedUnits = resolution.ids
 		.map(id => byId.get(id))
-		.filter((u): u is Unit => u !== undefined);
+		.filter((u): u is AnyUnit => u !== undefined);
 
 	// Resolve each selected unit's options (core-eslint's flavor today) to a concrete
 	// value, then bake them in. Precedence: a recipe/inline value wins, then the
@@ -296,7 +365,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// the same whether the selection came from a prompt or a --config recipe.
 	if (opts.dryRun) {
 		const plans = units.flatMap(unit =>
-			unit.files.map(file => planFileOp(file, { pkgRoot: PKG_ROOT, targetDir: target.dir, projectName })),
+			unit.files.map(file => planFileOp(file, { pkgRoot: templateRoot(catalog, unit.id), targetDir: target.dir, projectName })),
 		);
 		note(formatDryRun(plans, opts.diff ?? false), 'Dry run (no files written)');
 		log.success(formatDryRunSummary(plans));
@@ -323,7 +392,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	for (const unit of units) {
 		for (const file of unit.files) {
 			const result = await copyFileOp(file, {
-				pkgRoot: PKG_ROOT,
+				pkgRoot: templateRoot(catalog, unit.id),
 				targetDir: target.dir,
 				projectName,
 				onConflict: config?.onConflict,
@@ -353,7 +422,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// complete file map. A --dry-run returns earlier and never records state.
 	writeStateFile({
 		targetDir: target.dir,
-		units: resolution.ids,
+		units: stateUnitsFor(catalog, resolution.ids, target.dir),
 		writes: [
 			...writes,
 			...installResult.computedWrites.map(w => ({ dest: w.path, unit: w.unit, mode: 'computed' as const })),
@@ -402,7 +471,11 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		if (save) {
 			const version = (JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf-8')) as { version: string }).version;
 			const dest = join(target.dir, 'recipe.json');
-			writeFileSync(dest, serializeRecipe(buildRecipe({ ids: resolution.ids, pm, latest, projectName, options: optionSelections, version })));
+			// The recipe lands in the project root, so a units directory recorded
+			// relative to the target is already relative to the recipe beside it.
+			const recorded = stateUnitsFor(catalog, resolution.ids, target.dir);
+			const unitsDir = recorded.find(u => u.source.kind === 'dir')?.source as { path: string } | undefined;
+			writeFileSync(dest, serializeRecipe(buildRecipe({ ids: resolution.ids, pm, latest, projectName, options: optionSelections, version, unitsDir: unitsDir?.path })));
 			log.success(`Saved ${dest}. Replay it with \`unbranded --config recipe.json\`.`);
 		}
 	}
@@ -421,7 +494,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 // same environment default. Returns the full map so applyUnitOptions can bake it
 // in and save-recipe can record exactly what was chosen.
 async function resolveUnitOptions(
-	units: Unit[],
+	units: AnyUnit[],
 	fromConfig: Record<string, string> | undefined,
 	interactive: boolean,
 	targetDir: string,
@@ -441,7 +514,7 @@ async function resolveUnitOptions(
 
 			const chosen = await select<string>({
 				message: `${unit.label}: ${option.label}`,
-				options: option.choices.map(c => ({ value: c.value, label: c.label, hint: c.hint })),
+				options: option.choices.map((c: UnitOption['choices'][number]) => ({ value: c.value, label: c.label, hint: c.hint })),
 				initialValue: fallback,
 			});
 			if (isCancel(chosen))
@@ -473,9 +546,9 @@ function targetDependencyNames(targetDir: string): string[] {
 // Seed the picker's flavor tags with the same environment-sniffed default the
 // follow-up select prompt used to compute, so the row starts on the right flavor (a
 // repo pulling next/react opens on that flavor) before the user cycles it.
-function pickerInitialFlavors(targetDir: string): Record<string, string> {
+function pickerInitialFlavors(units: AnyUnit[], targetDir: string): Record<string, string> {
 	const flavors: Record<string, string> = {};
-	for (const unit of UNITS) {
+	for (const unit of units) {
 		for (const option of unit.options ?? [])
 			flavors[option.key] = optionDefault(option, targetDir);
 	}
@@ -486,9 +559,9 @@ function pickerInitialFlavors(targetDir: string): Record<string, string> {
 // unit to the unit that pulled it in (resolver's nearest-requirer), so the plan can
 // explain a surprise entry rather than just tagging it "(auto)".
 export function formatPlan(
-	units: Unit[],
-	auto: UnitId[],
-	requiredBy: Partial<Record<UnitId, UnitId>>,
+	units: AnyUnit[],
+	auto: string[],
+	requiredBy: Record<string, string>,
 	pm: Pm | null,
 	latest: boolean,
 ): string {
@@ -558,7 +631,7 @@ function formatDryRunSummary(plans: FilePlan[]): string {
 	);
 }
 
-function formatNoPmNextSteps(targetDir: string, units: Unit[]): string {
+function formatNoPmNextSteps(targetDir: string, units: AnyUnit[]): string {
 	const deps = new Set<string>();
 	const devDeps = new Set<string>();
 	for (const u of units) {

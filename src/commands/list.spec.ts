@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UNITS } from '../manifest/index';
-import { buildCatalog, CATALOG_SCHEMA, formatCatalog } from './list';
+import { buildCatalog, CATALOG_SCHEMA, formatCatalog, runList } from './list';
 
 describe('buildCatalog', () => {
 	it('wraps the units in a versioned envelope', () => {
@@ -59,6 +62,26 @@ describe('buildCatalog', () => {
 	it('is byte-for-byte stable across calls', () => {
 		expect(JSON.stringify(buildCatalog())).toBe(JSON.stringify(buildCatalog()));
 	});
+
+	it('omits source entirely when no sources map is given — doctor\'s buildCatalog() call keeps its old shape', () => {
+		const catalog = buildCatalog();
+		for (const unit of catalog.units)
+			expect(unit).not.toHaveProperty('source');
+	});
+
+	it('stamps each unit with its source when a sources map is threaded in', () => {
+		const sources = new Map([
+			['core-editorconfig', { kind: 'builtin' as const }],
+			['my-units/banner', { kind: 'dir' as const, path: '/abs/my-units' }],
+		]);
+		const units = [...UNITS, { id: 'my-units/banner', category: 'foundation' as const, label: 'Banner', description: 'A local unit.', files: [] }];
+		const catalog = buildCatalog(units, sources);
+		expect(catalog.units.find(u => u.id === 'core-editorconfig')?.source).toEqual({ kind: 'builtin' });
+		expect(catalog.units.find(u => u.id === 'my-units/banner')?.source).toEqual({ kind: 'dir', path: '/abs/my-units' });
+		// A unit the map has no entry for (shouldn't happen in practice, but the lookup
+		// is a plain Map#get) stays source-less rather than crashing.
+		expect(catalog.units.find(u => u.id === 'core-eslint')).not.toHaveProperty('source');
+	});
 });
 
 describe('formatCatalog', () => {
@@ -74,6 +97,19 @@ describe('formatCatalog', () => {
 		const out = formatCatalog();
 		expect(out).toMatch(/eslintFlavor: base \| react \| next/);
 		expect(out).toMatch(/default: base/);
+	});
+
+	it('tags a local unit with its namespace, read straight off the id prefix, and leaves built-ins bare', () => {
+		const units = [...UNITS, { id: 'my-units/banner', category: 'foundation' as const, label: 'Banner', description: 'A local unit.', files: [] }];
+		const out = formatCatalog(units);
+		const lines = out.split('\n');
+		expect(lines.find(l => l.includes('my-units/banner'))).toMatch(/Banner — A local unit\.\s+\[local: my-units\]$/);
+		// A built-in's line is untouched — no bracket marker anywhere on it.
+		expect(lines.find(l => l.includes('core-editorconfig'))).not.toContain('[local:');
+	});
+
+	it('keeps built-ins-only output byte-for-byte unchanged by the local-unit marker code path', () => {
+		expect(formatCatalog()).not.toContain('[local:');
 	});
 });
 
@@ -97,5 +133,92 @@ describe('catalog presets', () => {
 		expect(out).toContain('Presets');
 		expect(out).toContain('node-lib');
 		expect(out).toContain('next-app');
+	});
+});
+
+// A unit whose every field is valid, mirroring load-units.spec.ts's writeUnit — each
+// fixture below only overrides the field it's exercising.
+function writeUnit(dir: string, dirName: string, extra: Record<string, unknown> = {}): void {
+	const unitDir = join(dir, dirName);
+	mkdirSync(unitDir, { recursive: true });
+	writeFileSync(join(unitDir, 'unit.json'), JSON.stringify({
+		schema: 1,
+		id: dirName,
+		category: 'foundation',
+		label: dirName,
+		description: `Fixture unit ${dirName}.`,
+		files: [],
+		...extra,
+	}));
+}
+
+describe('runList', () => {
+	let root: string;
+	let stdout: string[];
+	let stderr: string[];
+
+	beforeEach(() => {
+		root = mkdtempSync(join(tmpdir(), 'unbranded-list-'));
+		stdout = [];
+		stderr = [];
+		vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+			stdout.push(String(chunk));
+			return true;
+		});
+		vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+			stderr.push(String(chunk));
+			return true;
+		});
+	});
+
+	afterEach(() => {
+		rmSync(root, { recursive: true, force: true });
+		vi.restoreAllMocks();
+	});
+
+	it('names an invalid definition on stderr, never on stdout, so a --json consumer stays unaffected', () => {
+		const dir = join(root, 'my-units');
+		mkdirSync(dir);
+		writeUnit(dir, 'good');
+		mkdirSync(join(dir, 'broken'));
+		writeFileSync(join(dir, 'broken', 'unit.json'), '{ not valid json');
+
+		runList({ json: true, unitsDir: dir });
+
+		expect(stderr.join('')).toContain('skipped');
+		expect(stderr.join('')).toContain('broken');
+		// stdout is pure JSON — a stray stderr line concatenated in would break a
+		// --json consumer's parse, which is the whole reason the two are split.
+		expect(() => JSON.parse(stdout.join(''))).not.toThrow();
+		const catalog = JSON.parse(stdout.join('')) as { units: { id: string }[] };
+		expect(catalog.units.some(u => u.id === 'my-units/good')).toBe(true);
+	});
+
+	it('names a warning (shadowing a built-in id) on stderr for the human output too', () => {
+		const dir = join(root, 'my-units');
+		mkdirSync(dir);
+		writeUnit(dir, 'shadow', { id: 'core-eslint' });
+
+		runList({ unitsDir: dir });
+
+		expect(stderr.join('')).toContain('shares its id with the built-in unit');
+		expect(stdout.join('')).not.toContain('shares its id');
+	});
+
+	it('tags a --units-dir unit as local in both list and list --json', () => {
+		const dir = join(root, 'my-units');
+		mkdirSync(dir);
+		writeUnit(dir, 'banner');
+
+		runList({ unitsDir: dir });
+		expect(stdout.join('')).toContain('[local: my-units]');
+
+		stdout = [];
+		runList({ json: true, unitsDir: dir });
+		const catalog = JSON.parse(stdout.join('')) as { units: { id: string; source?: { kind: string; path?: string } }[] };
+		const banner = catalog.units.find(u => u.id === 'my-units/banner');
+		expect(banner?.source).toEqual({ kind: 'dir', path: dir });
+		const editorconfig = catalog.units.find(u => u.id === 'core-editorconfig');
+		expect(editorconfig?.source).toEqual({ kind: 'builtin' });
 	});
 });

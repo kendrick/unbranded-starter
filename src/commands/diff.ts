@@ -1,10 +1,13 @@
 import type { FilePlan } from '../fs/copy';
+import type { Catalog } from '../manifest/catalog';
+import type { AnyUnit } from '../manifest/types';
 import type { StateFile } from '../state/state';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { planFileOp, renderPlanDiff } from '../fs/copy';
+import { loadCatalog, unitsDirsFor } from '../manifest/catalog';
 import { UNITS } from '../manifest/index';
-import { hashBuffer, readStateFile, STATE_FILENAME } from '../state/state';
+import { hashBuffer, readStateFile, STATE_FILENAME, unsupportedStateMessage } from '../state/state';
 import { PKG_ROOT } from '../util/paths';
 
 // Unlike the `--dry-run --diff` preview, which reports what a *fresh* init would
@@ -50,19 +53,27 @@ export interface ComputeDiffOpts {
 	targetDir: string;
 	pkgRoot?: string;
 	projectName?: string;
+	// The assembled catalog when local units are in play. Absent means built-ins
+	// only, which is what every caller wanted before --units-dir existed.
+	catalog?: Catalog;
 }
 
 // Rebuilds each recorded unit's file plans, then walks the recorded file map as
 // the source of truth so even a file whose unit was dropped still gets judged.
 export function computeDiff(opts: ComputeDiffOpts): DiffReport {
-	const pkgRoot = opts.pkgRoot ?? PKG_ROOT;
-	const byId = new Map(UNITS.map(u => [u.id, u]));
+	const fallbackRoot = opts.pkgRoot ?? PKG_ROOT;
+	const units = opts.catalog?.units ?? UNITS;
+	const byId = new Map<string, AnyUnit>(units.map(u => [u.id, u]));
 
 	const planByRel = new Map<string, FilePlan>();
-	for (const id of opts.state.units) {
+	for (const { id } of opts.state.units) {
 		const unit = byId.get(id);
+		// A unit whose definition we can't load leaves its files judged on the user
+		// axis alone: no plan means no template hash, and classify already reads that
+		// as "the template axis can't be judged" rather than as drift.
 		if (!unit)
 			continue;
+		const pkgRoot = opts.catalog?.templateRoots.get(id) ?? fallbackRoot;
 		for (const op of unit.files) {
 			const plan = planFileOp(op, { pkgRoot, targetDir: opts.targetDir, projectName: opts.projectName });
 			planByRel.set(toPosix(plan.rel), plan);
@@ -87,6 +98,9 @@ export interface RunDiffOpts {
 	// Print the unified patch for each drifted file, reusing the init preview's
 	// renderer. Off by default so the plain report stays one line per file.
 	diff?: boolean;
+	// `--units-dir`: load local units from here instead of the paths the scaffold
+	// recorded. The override is for a directory that moved since.
+	unitsDir?: string;
 }
 
 // Thin shell: read state, delegate to the pure core, render, return an exit code.
@@ -94,7 +108,17 @@ export interface RunDiffOpts {
 // the project was never scaffolded, since that's not an error.
 export function runDiff(opts: RunDiffOpts = {}): number {
 	const cwd = opts.cwd ?? process.cwd();
-	const state = readStateFile(cwd);
+	const read = readStateFile(cwd);
+
+	// Refuse rather than report clean. This is the case the version gate exists for:
+	// diff is a CI gate, and answering "no drift" for a project we can't read is
+	// worse than any error. Nothing goes to stdout either, so a --json consumer
+	// fails on empty input instead of parsing a confident, wrong report.
+	if (read.kind === 'unsupported') {
+		process.stderr.write(`unbranded diff: ${unsupportedStateMessage(read.schema)}\n`);
+		return 1;
+	}
+	const state = read.kind === 'ok' ? read.state : undefined;
 
 	if (!state) {
 		if (opts.json) {
@@ -106,7 +130,15 @@ export function runDiff(opts: RunDiffOpts = {}): number {
 		return 0;
 	}
 
-	const report = computeDiff({ state, targetDir: cwd });
+	const catalog = loadCatalog({
+		unitsDirs: unitsDirsFor(state.units.map(u => u.source), cwd, opts.unitsDir),
+		onMissing: 'warn',
+	});
+	// Warnings go to stderr so --json keeps a clean stdout for its consumer.
+	for (const warning of catalog.warnings)
+		process.stderr.write(`unbranded diff: ${warning}\n`);
+
+	const report = computeDiff({ state, targetDir: cwd, catalog });
 
 	if (opts.json) {
 		process.stdout.write(`${JSON.stringify({

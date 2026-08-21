@@ -1,8 +1,14 @@
-import type { Unit, UnitId } from '../../manifest/types';
+import type { AnyUnit, Unit, UnitId } from '../../manifest/types';
 import { describe, expect, it } from 'vitest';
 import { buildUnitPickerOptions } from './options';
 
 function unit(id: UnitId, extras: Partial<Unit> = {}): Unit {
+	return { id, category: 'lint', label: id, description: '', files: [], ...extras };
+}
+
+// A local unit's id is open (not the closed UnitId union) — qualify() namespaces it
+// before it ever reaches this catalog, so its shape only needs AnyUnit.
+function localUnit(id: string, extras: Partial<AnyUnit> = {}): AnyUnit {
 	return { id, category: 'lint', label: id, description: '', files: [], ...extras };
 }
 
@@ -74,5 +80,15 @@ describe('buildUnitPickerOptions', () => {
 		const opt = buildUnitPickerOptions([unit('core-vitest', { label: 'Vitest' })], new Set())[0];
 		expect(opt?.detail.optionNote).toBeUndefined();
 		expect(opt?.options).toBeUndefined();
+	});
+
+	it('reads a local unit\'s namespace off its own id, leaving a built-in\'s unset', () => {
+		const units: AnyUnit[] = [
+			unit('core-vitest', { label: 'Vitest' }),
+			localUnit('my-units/banner', { label: 'Banner' }),
+		];
+		const options = buildUnitPickerOptions(units, new Set());
+		expect(options.find(o => o.value === 'core-vitest')?.namespace).toBeUndefined();
+		expect(options.find(o => o.value === 'my-units/banner')?.namespace).toBe('my-units');
 	});
 });
