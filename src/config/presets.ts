@@ -1,5 +1,4 @@
 import type { OptionSchema } from '../manifest/options';
-import type { UnitId } from '../manifest/types';
 import type { Config } from './load';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -29,7 +28,7 @@ export function presetNames(): string[] {
 // Same validation a recipe gets, so a preset that drifts from the manifest (a
 // renamed unit, a dropped option value) fails loudly here — and in the spec
 // that loads every shipped preset against the live manifest.
-export function loadPreset(name: string, knownUnits: Set<UnitId>, schema?: OptionSchema): Preset {
+export function loadPreset(name: string, knownUnits: ReadonlySet<string>, schema?: OptionSchema): Preset {
 	const path = join(PRESETS_DIR, `${name}.json`);
 	if (!existsSync(path))
 		throw new Error(`Unknown preset "${name}". Shipped presets: ${presetNames().join(', ')}.`);

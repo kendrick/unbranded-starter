@@ -1,4 +1,4 @@
-import type { Unit, UnitId } from '../../manifest/types';
+import type { AnyUnit } from '../../manifest/types';
 import type { PickerOption } from './options';
 import { applyUnitOptions } from '../../manifest/options';
 import { resolveSelection } from '../../manifest/resolve';
@@ -10,7 +10,7 @@ import { buildUnitPickerOptions } from './options';
 export interface PickerState {
 	// The manifest slice, kept so the implies preview can call the real resolver
 	// rather than the picker re-deriving implies/requires/excludes closure itself.
-	units: Unit[];
+	units: AnyUnit[];
 	// Full display model, ordered once at construction. Filtering is derived, never
 	// destructive, so a filtered-out row keeps its selection.
 	options: PickerOption[];
@@ -18,12 +18,12 @@ export interface PickerState {
 	// Index into the FILTERED list, not `options`.
 	cursor: number;
 	// Explicit user picks, keyed by id so a selection survives any filter change.
-	selected: Set<UnitId>;
+	selected: Set<string>;
 	// Implied-in units (preview only), recomputed from the resolver on every toggle.
-	auto: Set<UnitId>;
-	requiredBy: Partial<Record<UnitId, UnitId>>;
+	auto: Set<string>;
+	requiredBy: Record<string, string>;
 	// At most one detail block open at a time.
-	expanded: UnitId | null;
+	expanded: string | null;
 	// optionKey → chosen value (core-eslint's eslintFlavor today).
 	flavors: Record<string, string>;
 }
@@ -39,14 +39,14 @@ export type PickerEvent
 
 export type PickerRow
 	= | { kind: 'header'; group: string; selected: number; total: number }
-		| { kind: 'option'; option: PickerOption; selected: boolean; auto: boolean; requiredBy?: UnitId; active: boolean; flavor?: string }
+		| { kind: 'option'; option: PickerOption; selected: boolean; auto: boolean; requiredBy?: string; active: boolean; flavor?: string }
 		| { kind: 'detail'; option: PickerOption; flavor?: string };
 
 export function createPickerState(
-	units: Unit[],
-	installed: Set<UnitId>,
+	units: AnyUnit[],
+	installed: Set<string>,
 	initialFlavors: Record<string, string> = {},
-	initialSelected: UnitId[] = [],
+	initialSelected: string[] = [],
 ): PickerState {
 	const options = buildUnitPickerOptions(units, installed);
 	const flavors: Record<string, string> = {};
@@ -96,11 +96,11 @@ function applyFilter(state: PickerState, filter: string): PickerState {
 // The resolver is the single source of truth for "what does picking X drag in?".
 // A non-ok selection (conflict/missing) has no clean auto set to preview; the real
 // resolution in init.ts surfaces that error, so the preview just shows nothing.
-function previewAuto(selected: Set<UnitId>, units: Unit[]): Pick<PickerState, 'auto' | 'requiredBy'> {
+function previewAuto(selected: Set<string>, units: AnyUnit[]): Pick<PickerState, 'auto' | 'requiredBy'> {
 	const result = resolveSelection([...selected], units);
 	if (result.kind === 'ok')
 		return { auto: new Set(result.auto), requiredBy: result.requiredBy };
-	return { auto: new Set<UnitId>(), requiredBy: {} };
+	return { auto: new Set<string>(), requiredBy: {} };
 }
 
 export function reducePicker(state: PickerState, event: PickerEvent): PickerState {
@@ -152,7 +152,7 @@ export function reducePicker(state: PickerState, event: PickerEvent): PickerStat
 // applyUnitOptions, so core-eslint's per-flavor files and deps count correctly rather
 // than reading as zero — the same reason formatPlan counts against resolved units.
 export function pickerSummary(state: PickerState): { units: number; files: number; deps: number } {
-	const effective = new Set<UnitId>([...state.selected, ...state.auto]);
+	const effective = new Set<string>([...state.selected, ...state.auto]);
 	const units = state.units.filter(u => effective.has(u.id)).map(u => applyUnitOptions(u, state.flavors));
 	return {
 		units: units.length,

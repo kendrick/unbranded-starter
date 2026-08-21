@@ -1,6 +1,6 @@
 import type { Pm } from '../detect/pm';
 import type { MergeInput } from '../fs/merge-json';
-import type { Unit, UnitId } from '../manifest/types';
+import type { AnyUnit } from '../manifest/types';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -14,7 +14,7 @@ import { buildRecommendations, VSCODE_UNIT_ID } from './vscode-extensions';
 export interface WriteAndInstallOpts {
 	targetDir: string;
 	pm: Pm | null;
-	units: Unit[];
+	units: AnyUnit[];
 	// When true, every dependency spec is rewritten to the `latest` dist-tag
 	// instead of the manifest's pinned version. Off by default (reproducible).
 	latest?: boolean;
@@ -25,7 +25,7 @@ export interface WriteAndInstallOpts {
 // know which unit a computed path came from.
 export interface ComputedWrite {
 	path: string;
-	unit: UnitId;
+	unit: string;
 }
 
 export interface WriteAndInstallResult {
@@ -159,7 +159,7 @@ export function detectIndent(content: string): string {
 // when the user already has one we detect their indent, keep their existing
 // `recommendations` (and any sibling keys like unwantedRecommendations), and
 // only fold our additions in. Returns the path written so the caller can record it.
-function writeVscodeExtensions(targetDir: string, units: Unit[]): string {
+function writeVscodeExtensions(targetDir: string, units: AnyUnit[]): string {
 	const dir = join(targetDir, '.vscode');
 	const path = join(dir, 'extensions.json');
 

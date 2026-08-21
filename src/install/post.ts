@@ -1,5 +1,5 @@
 import type { Pm } from '../detect/pm';
-import type { PostInstall, Unit } from '../manifest/types';
+import type { AnyUnit, PostInstall } from '../manifest/types';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -10,7 +10,7 @@ import { spawnOptions } from './spawn';
 export interface PostInstallOpts {
 	targetDir: string;
 	pm: Pm;
-	units: Unit[];
+	units: AnyUnit[];
 	// Non-interactive answer for every prompt. 'all' runs every hook whose
 	// precondition passes; 'none' skips them. Config-mode wires this in.
 	auto?: 'all' | 'none';

@@ -1,6 +1,6 @@
 import type { Key } from 'node:readline';
 import type { Readable, Writable } from 'node:stream';
-import type { Unit, UnitId } from '../../manifest/types';
+import type { AnyUnit } from '../../manifest/types';
 import type { PickerTheme } from './render';
 import type { PickerEvent, PickerState } from './state';
 import { styleText } from 'node:util';
@@ -57,18 +57,18 @@ const CHROME_ROWS = 6;
 
 export interface UnitPickerOptions {
 	message: string;
-	units: Unit[];
-	installed: Set<UnitId>;
+	units: AnyUnit[];
+	installed: Set<string>;
 	initialFlavors?: Record<string, string>;
 	// Seed the selection (doctor --fix, presets): the picker opens with these checked
 	// and editable, so confirming is one keystroke but nothing applies sight unseen.
-	initialSelected?: UnitId[];
+	initialSelected?: string[];
 	input?: Readable;
 	output?: Writable;
 	signal?: AbortSignal;
 }
 
-class UnitPickerPrompt extends Prompt<UnitId[]> {
+class UnitPickerPrompt extends Prompt<string[]> {
 	// Public so unitPicker() can read the chosen flavors after submit. Named `picker`,
 	// not `state` — the base owns `state` (its ClackState).
 	picker: PickerState;
@@ -125,7 +125,7 @@ class UnitPickerPrompt extends Prompt<UnitId[]> {
 }
 
 export interface UnitPickerResult {
-	ids: UnitId[];
+	ids: string[];
 	flavors: Record<string, string>;
 }
 
@@ -142,7 +142,7 @@ export async function unitPicker(opts: UnitPickerOptions): Promise<UnitPickerRes
 		const result = await prompt.prompt();
 		if (isCancel(result))
 			return result;
-		return { ids: result as UnitId[], flavors: prompt.picker.flavors };
+		return { ids: result as string[], flavors: prompt.picker.flavors };
 	}
 	finally {
 		if (priorEscape !== undefined)

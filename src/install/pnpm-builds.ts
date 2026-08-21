@@ -1,5 +1,5 @@
 import type { Pm } from '../detect/pm';
-import type { Unit, UnitId } from '../manifest/types';
+import type { AnyUnit, UnitId } from '../manifest/types';
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -14,8 +14,11 @@ const MONOREPO_UNIT_ID: UnitId = 'opt-monorepo';
 // contents by installing each preset and allowlisting exactly what pnpm reports.
 // On pnpm 11 an un-allowlisted build fails `pnpm install` outright
 // (ERR_PNPM_IGNORED_BUILDS), so any pnpm scaffold pulling one of these has to
-// carry the approval or its very first install dies.
-export const BUILD_SCRIPT_DEPS: Partial<Record<UnitId, readonly string[]>> = {
+// carry the approval or its very first install dies. Keyed by plain string (not
+// UnitId) because a locally-loaded unit can trigger this just as easily as a
+// built-in one — the map only ever holds built-in ids today, but the lookup
+// has to accept whatever id a selection carries.
+export const BUILD_SCRIPT_DEPS: Partial<Record<string, readonly string[]>> = {
 	'core-vitest': ['esbuild'],
 };
 
@@ -24,11 +27,11 @@ export const BUILD_SCRIPT_DEPS: Partial<Record<UnitId, readonly string[]>> = {
 // the owner is the first offender in selection order, since the file is
 // genuinely cross-unit and the state needs one real id to hang attribution on.
 export function collectBuildScriptDeps(
-	units: Unit[],
-	map: Partial<Record<UnitId, readonly string[]>> = BUILD_SCRIPT_DEPS,
-): { deps: string[]; owner: UnitId | null } {
+	units: AnyUnit[],
+	map: Partial<Record<string, readonly string[]>> = BUILD_SCRIPT_DEPS,
+): { deps: string[]; owner: string | null } {
 	const deps = new Set<string>();
-	let owner: UnitId | null = null;
+	let owner: string | null = null;
 	for (const unit of units) {
 		const pkgs = map[unit.id];
 		if (pkgs?.length) {
@@ -91,7 +94,7 @@ export function buildPnpmWorkspace(deps: readonly string[], opts: { withPackages
 // selection, no opt-monorepo (it ships its own), and no pnpm-workspace.yaml to
 // clobber. Returns the computed write to record, or null when a gate isn't met.
 // Must run BEFORE unbranded's own install spawn so that install sees the file.
-export function seedPnpmWorkspace(opts: { targetDir: string; pm: Pm | null; pmVersion?: string | null; units: Unit[] }): { path: string; unit: UnitId } | null {
+export function seedPnpmWorkspace(opts: { targetDir: string; pm: Pm | null; pmVersion?: string | null; units: AnyUnit[] }): { path: string; unit: string } | null {
 	if (opts.pm !== 'pnpm')
 		return null;
 	if (opts.units.some(unit => unit.id === MONOREPO_UNIT_ID))
