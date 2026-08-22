@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/kendrick/unbranded-starter/compare/v2.0.0...v2.0.1) (2026-08-22)
+
+
+### Bug Fixes
+
+* **manifest,fs:** confine unit template destinations to the project root ([#101](https://github.com/kendrick/unbranded-starter/issues/101)) ([172b5d4](https://github.com/kendrick/unbranded-starter/commit/172b5d47efcd09be97c5e59bd85ddf0548954984))
+
 ## [2.0.0](https://github.com/kendrick/unbranded-starter/compare/v1.0.2...v2.0.0) (2026-08-21)
 
 
