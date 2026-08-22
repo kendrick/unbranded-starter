@@ -131,3 +131,8 @@ _working-memory/activeContext.md
 
 # agent-guild state
 .agent-guild/state/
+
+# The agent-guild check scripts byte-compile on import, so every lint run drops a
+# __pycache__ under .agent-guild/scripts/. Git tracks .agent-guild/scripts/, so
+# the .agent-guild/state/ rule above never covers it.
+__pycache__/
