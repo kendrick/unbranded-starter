@@ -1,7 +1,9 @@
+import type { UnitValidationResult } from './validate-unit';
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { checkContainment } from '../fs/contain';
 import { PKG_ROOT } from '../util/paths';
 import { UNIT_SCHEMA, UNIT_SCHEMA_MIN, validateUnitDefinition } from './validate-unit';
 
@@ -459,5 +461,229 @@ describe('fixture corpus (test/fixtures/units)', () => {
 		if (result.ok)
 			return;
 		expect(result.issues).toContainEqual({ path: 'implies[0]', expected: 'a known unit id', got: '"does-not-exist"' });
+	});
+});
+
+// The containment guard's own regression table. A long series of adversarial
+// variants, written while this guard was being specified, each turned an
+// earlier build green while it still wrote outside the project root — a
+// resolved-against-cwd root, a blocklist that missed UNC paths, a collector
+// scoped to `mode: 'copy'`. Every section below is named for the gap it
+// closes, and every rejection asserts the destination the guard actually
+// reported, not merely that validation failed — a build that reports a
+// generic "escaped" message passes an assertion of the second kind and fails
+// the first, which is the whole reason the weaker assertion is not enough.
+describe('containment guard regression table', () => {
+	// checkContainment reports the *native*-resolved absolute destination
+	// (contain.ts), and validateContainment JSON-quotes it the same way
+	// validateFileSources already quotes `src`. A Windows-flavored probe
+	// therefore arrives with literal backslashes escaped by JSON.stringify —
+	// parsing the reported string back out (rather than substring-matching
+	// the raw `got` text) is what keeps a correct build from failing on those
+	// cells, per the task's own hazard note.
+	function rejectedDestination(result: UnitValidationResult, path: string): string {
+		expect(result.ok).toBe(false);
+		if (result.ok)
+			throw new Error('unreachable: expected a rejection');
+		const issue = result.issues.find(i => i.path === path);
+		expect(issue).toBeDefined();
+		return JSON.parse(issue!.got) as string;
+	}
+
+	// Axis 1: shape x field x op-shape. Six escape shapes, crossed with the
+	// two fields that carry a destination and the two file-op shapes. Every
+	// cell rejects except one: a posix-absolute `dest`, which `resolvePaths`
+	// re-roots under the target directory, so it has always been contained.
+	// Rejecting it would break working units rather than close the hole.
+	// `rename` is never re-rooted, so every `rename` cell rejects regardless
+	// of shape.
+	describe('shape x field x op-shape grid', () => {
+		const SHAPES: { name: string; probe: (marker: string) => string }[] = [
+			// Four hops up: enough to escape the containment root regardless of
+			// whether the field under test resolves relative to the root itself
+			// (`dest`) or to a subdirectory of it (`rename`, relative to
+			// dirname(dest) — one hop only clears a one-segment-deep dest).
+			{ name: 'relative traversal', probe: marker => `../../../../${marker}` },
+			{ name: 'posix-absolute', probe: marker => `/${marker}` },
+			{ name: 'Windows drive-absolute', probe: marker => `C:\\${marker}` },
+			{ name: 'UNC', probe: marker => `\\\\server\\share\\${marker}` },
+			{ name: 'backslash-rooted', probe: marker => `\\${marker}` },
+			{ name: 'backslash traversal', probe: marker => `..\\..\\${marker}` },
+		];
+		const FIELDS = ['dest', 'rename'] as const;
+		const OP_SHAPES = ['content', 'src'] as const;
+
+		for (const { name: shapeName, probe } of SHAPES) {
+			for (const field of FIELDS) {
+				for (const opShape of OP_SHAPES) {
+					const accepts = shapeName === 'posix-absolute' && field === 'dest';
+					const marker = `ESCAPED-${shapeName.replace(/\s+/g, '-')}-${field}-${opShape}.txt`;
+
+					it(`${accepts ? 'accepts' : 'rejects'} ${shapeName} carried by ${field} (${opShape})`, () => {
+						const probeValue = probe(marker);
+						const fileOp: Record<string, unknown> = field === 'dest'
+							? { dest: probeValue }
+							: { dest: 'ok/base.txt', rename: probeValue };
+						fileOp[opShape === 'content' ? 'content' : 'src'] = opShape === 'content' ? 'body\n' : 'template.txt';
+
+						const unit = { ...validBase(), files: [fileOp] };
+						const result = validateUnitDefinition(unit);
+
+						if (accepts) {
+							expect(result.ok).toBe(true);
+							return;
+						}
+						const destination = rejectedDestination(result, 'files[0].dest');
+						expect(destination).toContain(marker);
+					});
+				}
+			}
+		}
+	});
+
+	// Axis 2: the walk. Resolving and comparing flawlessly is worthless if the
+	// build never visits the operation that escapes — these three cases each
+	// hide an otherwise-ordinary escape somewhere the enumeration could
+	// plausibly skip: past the first file, inside a non-default option
+	// choice, and on an op whose mode isn't the bare default.
+	describe('the walk', () => {
+		it('catches an escape in files[1], not just files[0]', () => {
+			const unit = {
+				...validBase(),
+				files: [
+					{ dest: 'ok/a.txt', content: 'fine\n' },
+					{ dest: '../ESCAPED-walk-position.txt', content: 'pwned\n' },
+				],
+			};
+			const result = validateUnitDefinition(unit);
+			const destination = rejectedDestination(result, 'files[1].dest');
+			expect(destination).toContain('ESCAPED-walk-position.txt');
+		});
+
+		it('catches an escape inside a non-default option choice', () => {
+			const unit = {
+				...validBase(),
+				files: [],
+				options: [{
+					key: 'flavor',
+					label: 'Flavor',
+					default: 'safe',
+					choices: [
+						{ value: 'safe', label: 'Safe', files: [{ dest: 'ok.txt', content: 'fine\n' }] },
+						{ value: 'evil', label: 'Evil', files: [{ dest: '../ESCAPED-walk-nondefault-choice.txt', content: 'pwned\n' }] },
+					],
+				}],
+			};
+			const result = validateUnitDefinition(unit);
+			const destination = rejectedDestination(result, 'options[0].choices[1].files[0].dest');
+			expect(destination).toContain('ESCAPED-walk-nondefault-choice.txt');
+		});
+
+		it('catches an escape on an op carrying mode: "append-if-missing"', () => {
+			const unit = {
+				...validBase(),
+				files: [{ dest: '../ESCAPED-walk-mode.txt', content: 'pwned\n', mode: 'append-if-missing' }],
+			};
+			const result = validateUnitDefinition(unit);
+			const destination = rejectedDestination(result, 'files[0].dest');
+			expect(destination).toContain('ESCAPED-walk-mode.txt');
+		});
+	});
+
+	// The comparison rule itself, tested against the shared helper
+	// directly rather than through validateUnitDefinition — these two cells
+	// are what makes the "both tests, not either one" requirement
+	// executable instead of merely stated. Read this pair twice: each one
+	// alone leaves half the comparison rule unchecked, and a guard passing
+	// only that half still accepts a real escape.
+	describe('sibling-prefix (the comparison rule)', () => {
+		// A root of the test's own choosing — every probe below is derived
+		// from this value, not hand-written against a guessed root, per the
+		// task's own instruction.
+		const root = '/home/dev/my-proj';
+
+		it('rejects a sibling reached absolutely: the root\'s own value with EVIL/x appended', () => {
+			// Strip any trailing separator before concatenating, or the probe
+			// lands inside the root and proves nothing — root has none here,
+			// but the strip is what makes this correct for any root a future
+			// edit might swap in.
+			const strippedRoot = root.endsWith('/') ? root.slice(0, -1) : root;
+			const sibling = `${strippedRoot}EVIL/x`;
+			const result = checkContainment(root, { dest: 'ok.txt', rename: sibling });
+			expect(result.contained).toBe(false);
+		});
+
+		it('rejects the same sibling reached relatively: ../<basename-of-root>EVIL/x', () => {
+			const rootBasename = root.split('/').filter(Boolean).pop()!;
+			const sibling = `../${rootBasename}EVIL/x`;
+			const result = checkContainment(root, { dest: 'ok.txt', rename: sibling });
+			expect(result.contained).toBe(false);
+		});
+
+		// Self-check for whoever edits this file next: swapping the guard's
+		// comparison for a bare `resolved.startsWith(root)` should redden
+		// both cells above and nothing else in this describe block.
+	});
+
+	// Two further rejection cases outside both axes. The walk's non-default-
+	// choice case above already proves every choice is visited regardless of
+	// default-ness; this one is simpler on purpose — it proves
+	// options[].choices[].files is a recognized destination source at all,
+	// independent of that enumeration property, using the *default* choice
+	// so the two cases don't collapse into duplicate coverage of the same
+	// gap. (The matching direct-copyFileOp rejection lives in
+	// src/fs/copy.spec.ts rather than being duplicated here.)
+	describe('further rejection cases', () => {
+		it('catches an escape through options[].choices[].files on the default choice', () => {
+			const unit = {
+				...validBase(),
+				files: [],
+				options: [{
+					key: 'flavor',
+					label: 'Flavor',
+					default: 'evil',
+					choices: [
+						{ value: 'evil', label: 'Evil', files: [{ dest: '../ESCAPED-default-choice.txt', content: 'pwned\n' }] },
+					],
+				}],
+			};
+			const result = validateUnitDefinition(unit);
+			const destination = rejectedDestination(result, 'options[0].choices[0].files[0].dest');
+			expect(destination).toContain('ESCAPED-default-choice.txt');
+		});
+	});
+
+	// Three acceptance cases. The posix-absolute `dest` is the shape grid's
+	// one accepted cell above; the other two are named here.
+	describe('acceptance cases', () => {
+		it('accepts a conforming relative dest', () => {
+			const unit = { ...validBase(), files: [{ dest: 'src/components/Button.tsx', content: 'export const Button = () => null;\n' }] };
+			expect(validateUnitDefinition(unit).ok).toBe(true);
+		});
+
+		it('accepts a rename that stays inside the root, written relative', () => {
+			// Written relative on purpose, sidestepping the separate question of how
+			// an absolute-but-contained `rename` should be read.
+			const unit = { ...validBase(), files: [{ dest: 'sub/original.template', content: 'x', rename: 'renamed.txt' }] };
+			expect(validateUnitDefinition(unit).ok).toBe(true);
+		});
+	});
+
+	// What the in-process table can honestly assert about roots: the helper
+	// takes its root as a parameter rather than reading a module-level
+	// constant. Root-agnosticism itself — a spawned process behaving
+	// identically whichever directory it's invoked from — can't be shown
+	// in-process (see test/e2e/containment.spec.ts); this is the narrower,
+	// still-worth-asserting property that can.
+	it('checkContainment takes its root as a parameter, not a module-level constant', () => {
+		const op = { dest: 'ok.txt', rename: '../ESCAPED-param-root.txt' };
+		const containedHere = checkContainment('/somewhere/deep/proj', op);
+		const containedThere = checkContainment('/', op);
+		// Under root '/somewhere/deep/proj', '../ESCAPED-param-root.txt' escapes.
+		// Under root '/', there is nowhere further up to escape to, so the same
+		// op is contained — the verdict changes with the root argument, which a
+		// guard reading a fixed constant could never produce.
+		expect(containedHere.contained).toBe(false);
+		expect(containedThere.contained).toBe(true);
 	});
 });

@@ -5,6 +5,7 @@ import { isCancel, log, select } from '@clack/prompts';
 import { createPatch } from 'diff';
 import { cancelAndExit } from '../util/cancel';
 import { colorEnabled } from '../util/color';
+import { checkContainment } from './contain';
 
 // 'merged' and 'appended' are the non-clobbering outcomes the two structured
 // modes produce: a merge-json write that folded new keys in, or an
@@ -31,6 +32,18 @@ export interface CopyOptions {
 }
 
 export async function copyFileOp(op: FileOp, opts: CopyOptions): Promise<CopyResult> {
+	// The write path's own authority, independent of validateUnitDefinition's
+	// guard: once that guard lands, load-units.ts drops an escaping unit
+	// before this function ever sees it, so no end-to-end route reaches this
+	// check today. That is exactly why it can't be skipped — an unreachable
+	// guard is invisible to end-to-end testing and easy to delete by accident
+	// in a later refactor, which is why it has its own direct test in
+	// copy.spec.ts. Same helper as the validate-time guard, never a second
+	// containment implementation.
+	const containment = checkContainment(opts.targetDir, op);
+	if (!containment.contained)
+		throw new Error(`refusing to write outside the project root: ${containment.destination}`);
+
 	const { srcPath, destPath } = resolvePaths(op, opts);
 
 	// Read as buffer, not string. Writing through a string round-trips through

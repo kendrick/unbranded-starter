@@ -159,6 +159,7 @@
 					"minLength": 1
 				},
 				"rename": {
+					"description": "Replaces the filename `dest` chose, resolved against `dest`'s own directory, for a template whose shipped name can't be its installed name. Must resolve inside the target project root, the same rule `dest` carries: a `..`-traversing, absolute, Windows drive-absolute, or UNC value that resolves outside that root is rejected. Unlike a `/`-absolute `dest`, an absolute `rename` is never re-rooted under the project, so it escapes where the same value in `dest` would not. JSON Schema cannot express containment, so `unbranded validate` decides it by resolving the destination rather than by matching a pattern here.",
 					"type": "string"
 				},
 				"mode": {

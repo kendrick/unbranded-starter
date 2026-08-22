@@ -1,6 +1,7 @@
-import type { UnitDefinition } from './types';
+import type { FileOp, UnitDefinition } from './types';
 import { existsSync } from 'node:fs';
 import { join, posix } from 'node:path';
+import { checkContainment } from '../fs/contain';
 
 // The published contract's version. UNIT_SCHEMA_MIN stays separate from
 // UNIT_SCHEMA (both 1 today) because a future breaking bump will want to keep
@@ -63,6 +64,18 @@ const ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 // unit.schema.json's pinnedDeps $def.
 const PIN_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Z-.]+)?(?:\+[0-9A-Z-.]+)?$/i;
 
+// A synthetic, always-absolute root for the containment guard below.
+// `validate <path>` takes no `--target`, so no real project root exists at
+// validation time — the property being checked is root-agnostic (rejected
+// when resolved against ANY root, it would land outside it), and resolving
+// against a fixed notional root is the equivalent, checkable form of that.
+// It must never be `process.cwd()`: a guard that captured the process's
+// working directory would accept or reject the same unit differently
+// depending on where the binary was invoked from, which no test run from a
+// single directory can see. This string resolves identically under both
+// path.posix and path.win32 regardless of the host's cwd or drive.
+const CONTAINMENT_ROOT = '/__unbranded_containment_root__';
+
 export function validateUnitDefinition(
 	value: unknown,
 	opts: { baseDir?: string; knownIds?: ReadonlySet<string> } = {},
@@ -76,6 +89,11 @@ export function validateUnitDefinition(
 
 	validateSchemaVersion(value, issues);
 	validateStructure(value, issues);
+	// Unconditional, unlike the two passes below: an escaping `dest`/`rename`
+	// is a vulnerability regardless of whether the caller also happens to pass
+	// baseDir or knownIds, and validateUnitDefinition is the one entry point
+	// every route into the catalog already passes through.
+	validateContainment(value, issues);
 	// baseDir and knownIds are opt-in: a caller checking a definition that was
 	// never read off disk (e.g. one assembled in memory) has neither a
 	// directory to resolve `src` against nor a catalog to check relations
@@ -306,28 +324,67 @@ function validateFileSources(obj: Record<string, unknown>, baseDir: string, issu
 }
 
 function collectFileSrcs(obj: Record<string, unknown>): { path: string; src: string }[] {
-	const found: { path: string; src: string }[] = [];
-	collectSrcsFromArray(obj.files, 'files', found);
+	return collectFileEntries(obj)
+		.filter((entry): entry is { path: string; file: Record<string, unknown> & { src: string } } => typeof entry.file.src === 'string')
+		.map(({ path, file }) => ({ path: `${path}.src`, src: file.src }));
+}
+
+// Every file-operation object a unit can contribute, wherever it's declared:
+// the top-level `files` array at every index, and `options[].choices[].files`
+// for every choice — including a non-default one, which `applyUnitOptions`
+// splices into `unit.files` only once that choice is picked (options.ts:46-47),
+// so a guard that only walked the default choice would leave a live route
+// open. One walk shared by every pass that needs "every destination the unit
+// can contribute" (containment below, and the `src`-escape check above) is
+// deliberate: a second, independently-written walk is how one pass covers a
+// shape the other misses. The specific near-miss: a collector scoped to
+// `mode: 'copy'`, which resolves and compares correctly and simply never
+// visits the operation that escapes.
+function collectFileEntries(obj: Record<string, unknown>): { path: string; file: Record<string, unknown> }[] {
+	const found: { path: string; file: Record<string, unknown> }[] = [];
+	collectFileEntriesFromArray(obj.files, 'files', found);
 	if (Array.isArray(obj.options)) {
 		obj.options.forEach((option, i) => {
 			if (!isPlainObject(option) || !Array.isArray(option.choices))
 				return;
 			option.choices.forEach((choice, j) => {
 				if (isPlainObject(choice))
-					collectSrcsFromArray(choice.files, `options[${i}].choices[${j}].files`, found);
+					collectFileEntriesFromArray(choice.files, `options[${i}].choices[${j}].files`, found);
 			});
 		});
 	}
 	return found;
 }
 
-function collectSrcsFromArray(value: unknown, prefix: string, found: { path: string; src: string }[]): void {
+function collectFileEntriesFromArray(value: unknown, prefix: string, found: { path: string; file: Record<string, unknown> }[]): void {
 	if (!Array.isArray(value))
 		return;
 	value.forEach((file, i) => {
-		if (isPlainObject(file) && typeof file.src === 'string')
-			found.push({ path: `${prefix}[${i}].src`, src: file.src });
+		if (isPlainObject(file))
+			found.push({ path: `${prefix}[${i}]`, file });
 	});
+}
+
+// The write-path guard (copy.ts's copyFileOp) refuses independently, but this
+// is what stops an escaping unit from ever reaching it: every destination the
+// unit can contribute — whatever `mode` the op carries, since copyFileOp
+// writes through writeBuffer whenever the destination doesn't exist yet,
+// regardless of mode — resolved and compared by the same function the
+// write-path guard calls, never a second implementation of its own.
+function validateContainment(obj: Record<string, unknown>, issues: UnitIssue[]): void {
+	for (const { path, file } of collectFileEntries(obj)) {
+		// A non-string dest/rename is already reported by checkNonEmptyString /
+		// checkPlainString in validateFile; nothing more to check here.
+		if (typeof file.dest !== 'string')
+			continue;
+		const op: FileOp = {
+			dest: file.dest,
+			...(typeof file.rename === 'string' ? { rename: file.rename } : {}),
+		};
+		const { contained, destination } = checkContainment(CONTAINMENT_ROOT, op);
+		if (!contained)
+			issues.push({ path: `${path}.dest`, expected: 'a destination that resolves inside the project root', got: JSON.stringify(destination) });
+	}
 }
 
 function validateRelations(obj: Record<string, unknown>, knownIds: ReadonlySet<string>, issues: UnitIssue[]): void {
