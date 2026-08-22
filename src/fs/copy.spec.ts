@@ -1,5 +1,5 @@
 import type { FilePlan } from './copy';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { select } from '@clack/prompts';
@@ -120,6 +120,35 @@ describe('copyFileOp', () => {
 			{ pkgRoot, targetDir },
 		);
 		expect(result.action).toBe('copied');
+	});
+
+	// The write-path guard's own direct test: unreachable once the
+	// validate-time guard lands (load-units.ts drops an escaping unit before
+	// copyFileOp ever sees it), so this is the only thing that would notice
+	// the guard getting deleted in a later refactor. The escape is pointed at
+	// a venue this test owns and cleans up, not at the shared OS tmp root — a
+	// relative escape from a temp project lands one level up from
+	// `targetDir`, and an auditor on the parked job left a stray file in the
+	// shared tmp root exactly that way.
+	it('refuses a resolved destination outside the project root, naming it and writing nothing', async () => {
+		const venue = mkdtempSync(join(tmpdir(), 'unbranded-copy-escape-'));
+		const escapingTargetDir = join(venue, 'project');
+		mkdirSync(escapingTargetDir);
+		try {
+			await expect(copyFileOp(
+				{ content: 'pwned\n', dest: 'ok.txt', rename: '../evil.txt' },
+				{ pkgRoot, targetDir: escapingTargetDir },
+			)).rejects.toThrow(/evil\.txt/);
+
+			const escapedPath = join(venue, 'evil.txt');
+			expect(existsSync(escapedPath)).toBe(false);
+			// Nothing else appeared in the venue either — the guard fired before
+			// any write, not just before this one specific path.
+			expect(readdirSync(venue)).toEqual(['project']);
+		}
+		finally {
+			rmSync(venue, { recursive: true, force: true });
+		}
 	});
 });
 

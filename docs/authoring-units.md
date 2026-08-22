@@ -69,6 +69,39 @@ Use `content` when the payload is short enough to inline:
 
 `dest` is relative to the target project root and understands `{projectName}`. `mode` is `copy` (the default), `merge-json`, or `append-if-missing`. Set `rename` when the shipped filename can't match the destination. The built-ins need it because npm strips a top-level `.gitignore` out of tarballs.
 
+### Destinations Stay Inside the Project
+
+Every destination a unit writes has to resolve inside the target project root. `validate` composes each file entry's destination the way an install would, and rejects any that lands outside. Both fields that carry a destination can put one there, but they do not compose the same way, and the difference decides which values escape.
+
+`dest` resolves against the project root. A `..` segment that climbs out of the root escapes, so `"dest": "../../secrets.txt"` is rejected. An absolute `dest` is the other way around: it is re-rooted under the project instead of escaping, so `"dest": "/etc/passwd"` writes to `<project>/etc/passwd`, which is inside the project. That validates, and it always has. An absolute `dest` does not need rewriting as a relative path.
+
+`rename` resolves against the directory `dest` chose, and nothing re-roots it. An absolute `rename` therefore escapes where an absolute `dest` would not, and that asymmetry is the one to remember. `validate` rejects all of these:
+
+- `"rename": "../../payload.txt"`, traversal out of the directory `dest` chose
+- `"rename": "/tmp/payload.txt"`, absolute, and carrying no `..` at all
+- `"rename": "C:\\Windows\\payload.txt"`, drive-absolute under Windows path rules
+- `"rename": "\\\\server\\share\\payload.txt"`, a UNC path
+
+The last two are rejected on Linux and macOS as well, and so are the same two shapes written into `dest`. Re-rooting only applies to a `/`-absolute `dest`. A definition is portable data, and the project it installs into may sit on any platform, so `validate` decides containment under posix and Windows path rules alike and refuses a destination that escapes under either.
+
+A `rename` that stays inside the project is fine, subdirectories included. `"dest": "config/.gitignore.template"` with `"rename": ".gitignore"` is what the built-ins do, and it validates.
+
+The rule covers every file entry a unit can contribute, not only the top-level `files` array. An entry under `options[].choices[].files` is checked in every choice rather than in the default one alone.
+
+A rejection names the destination it resolved to:
+
+```
+my-units/banner/unit.json (banner):
+  files[0].dest: expected a destination that resolves inside the project root (got "/tmp/payload.txt")
+
+1 issue in 1 of 1 unit definition.
+Unit schema 1 is documented in docs/authoring-units.md.
+```
+
+That line points at the file entry, so an escape carried by `rename` still reports under `files[0].dest`. Read the `got` value to see where the destination actually resolved, and which of the two fields put it there.
+
+`validate` is not the only place the rule holds. The copy step that installs a unit's files checks it again on its own authority and refuses to write, so an escaping unit gets no further even when `validate` never ran.
+
 ## 4. Dependencies
 
 Pin exact versions:
@@ -214,6 +247,7 @@ The day-2 commands degrade instead of failing. `diff`, `remove`, and `update` wa
 
 - Pin dependencies exactly. A range breaks reproducibility, and `validate` rejects it.
 - Keep every `src` inside the unit's own directory. `validate` rejects an absolute path or a `..` segment.
+- Keep every destination inside the target project root. A `/`-absolute `dest` is re-rooted there and stays legal. `rename` is never re-rooted, and `validate` rejects any destination that resolves outside the project.
 - Reusing a built-in's id is legal, since the namespace keeps the two apart, but it warns and it usually means you meant to override the built-in instead.
 - Point relations at ids that exist, whether built-in or a sibling in the same directory. Write them bare; the loader attaches the namespace.
 - Templates are inert data. A unit copies them and never executes them. Only `postInstall` runs anything, and every step prompts first.
