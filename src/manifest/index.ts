@@ -144,8 +144,8 @@ export const UNITS: Unit[] = [
 	{
 		id: 'core-postcss',
 		category: 'style',
-		label: 'PostCSS',
-		description: 'One-line PostCSS config that loads @tailwindcss/postcss.',
+		label: 'PostCSS (non-Vite Tailwind)',
+		description: 'Loads Tailwind v4 in Next.js and other non-Vite bundlers. On Vite (Astro, SvelteKit, Nuxt) use @tailwindcss/vite instead.',
 		files: [
 			{ src: 'postcss.config.mjs', dest: 'postcss.config.mjs' },
 		],
