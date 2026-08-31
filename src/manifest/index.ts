@@ -163,7 +163,7 @@ export const UNITS: Unit[] = [
 			{ src: 'vitest.config.ts', dest: 'vitest.config.ts' },
 		],
 		devDependencies: {
-			vitest: '4.1.10',
+			vitest: '4.1.11',
 			jsdom: '30.0.1',
 		},
 		packageJsonPatch: {
