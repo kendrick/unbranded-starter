@@ -172,7 +172,7 @@ describe('runRemove', () => {
 	function scaffoldShadcn(): void {
 		writeFileSync(join(tmp, 'package.json'), `${JSON.stringify({
 			name: 'fixture',
-			devDependencies: { 'tailwindcss': '4.3.0', '@tailwindcss/postcss': '4.3.0' },
+			devDependencies: { tailwindcss: '4.3.0' },
 			dependencies: { 'clsx': '2.1.1', 'tailwind-merge': '3.6.0' },
 		}, null, '\t')}\n`);
 		writeFileSync(join(tmp, 'components.json'), '{}\n');
@@ -209,6 +209,34 @@ describe('runRemove', () => {
 		// Last tracked units gone: envelope and sidecar go with them.
 		expect(existsSync(join(tmp, '.unbranded.json'))).toBe(false);
 		expect(existsSync(join(tmp, '.unbranded'))).toBe(false);
+	});
+
+	// Both units tracked, so the two packages have different claimants. That is
+	// what the ref-count has to get right: the adapter goes, tailwindcss stays.
+	function scaffoldPostcss(): void {
+		writeFileSync(join(tmp, 'package.json'), `${JSON.stringify({
+			name: 'fixture',
+			devDependencies: { 'tailwindcss': '4.3.0', '@tailwindcss/postcss': '4.3.0' },
+		}, null, '\t')}\n`);
+		writeFileSync(join(tmp, 'postcss.config.mjs'), 'export default {};\n');
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-postcss', 'core-tailwind']),
+			writes: [
+				{ dest: join(tmp, 'postcss.config.mjs'), unit: 'core-postcss', mode: 'copy' },
+			],
+		});
+	}
+
+	it('drops @tailwindcss/postcss on removal while tailwindcss survives on core-tailwind\'s claim', async () => {
+		scaffoldPostcss();
+
+		expect(await runRemove('core-postcss', { cwd: tmp, yes: true })).toBe(0);
+
+		expect(existsSync(join(tmp, 'postcss.config.mjs'))).toBe(false);
+		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as { devDependencies: Record<string, string> };
+		expect(pkg.devDependencies['@tailwindcss/postcss']).toBeUndefined();
+		expect(pkg.devDependencies.tailwindcss).toBe('4.3.0');
 	});
 
 	it('keeps a modified file under --yes and still succeeds', async () => {
