@@ -114,7 +114,7 @@ Fifteen units, grouped by category. Selecting one can pull in others: ESLint imp
 
 - **Stylelint** — standard config with a Tailwind-aware preset.
 - **Tailwind v4** — no JS config; add `@import "tailwindcss";` to your stylesheet.
-- **PostCSS** — a one-line config that loads `@tailwindcss/postcss`.
+- **PostCSS (non-Vite Tailwind)** — a one-line `postcss.config.mjs` that loads `@tailwindcss/postcss`. Next.js and other non-Vite bundlers pick up Tailwind v4 through that config. Vite projects (Astro, SvelteKit, Nuxt) use `@tailwindcss/vite` instead; adding this unit on top of it processes Tailwind twice.
 
 **Testing**
 
