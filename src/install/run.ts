@@ -1,11 +1,12 @@
 import type { Pm } from '../detect/pm';
-import type { MergeInput } from '../fs/merge-json';
+import type { DepCollision, MergeInput } from '../fs/merge-json';
 import type { AnyUnit } from '../manifest/types';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { spinner } from '@clack/prompts';
-import { mergePackageJson } from '../fs/merge-json';
+import { isCancel, log, select, spinner } from '@clack/prompts';
+import { collectDepCollisions, depKey, mergePackageJson } from '../fs/merge-json';
+import { cancelAndExit } from '../util/cancel';
 import { computeNodeVersion, NODE_VERSION_UNIT_ID, queryPmVersion } from './node-version';
 import { seedPnpmWorkspace } from './pnpm-builds';
 import { spawnOptions } from './spawn';
@@ -18,6 +19,10 @@ export interface WriteAndInstallOpts {
 	// When true, every dependency spec is rewritten to the `latest` dist-tag
 	// instead of the manifest's pinned version. Off by default (reproducible).
 	latest?: boolean;
+	// How to settle a dependency whose existing spec differs from the manifest's
+	// pin. A set value means the run never prompts, the same contract
+	// `--on-conflict` has for files, and what keeps a `--yes` run off a picker.
+	onConflict?: 'overwrite' | 'skip';
 }
 
 // A file written outside the copy loop, tagged with the unit it belongs to so
@@ -26,6 +31,11 @@ export interface WriteAndInstallOpts {
 export interface ComputedWrite {
 	path: string;
 	unit: string;
+}
+
+// A dependency collision and how the run settled it.
+export interface DepResolution extends DepCollision {
+	resolution: 'overwrite' | 'keep';
 }
 
 export interface WriteAndInstallResult {
@@ -38,6 +48,10 @@ export interface WriteAndInstallResult {
 	// into .unbranded.json; nothing else in the run knows they exist. These land
 	// before the install spawn, so the list is complete even on a cancelled install.
 	computedWrites: ComputedWrite[];
+	// Every dependency whose existing spec differed from the manifest's pin, and
+	// which way the run settled it. The run reports these, and keeps them here so
+	// a caller can read the outcomes without scraping stdout.
+	depResolutions?: DepResolution[];
 }
 
 export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteAndInstallResult> {
@@ -109,11 +123,36 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 	if (pnpmWorkspace)
 		computedWrites.push(pnpmWorkspace);
 
-	const merged = mergePackageJson(existing, patches);
+	// A spec the user already chose is a decision, so replacing it in silence is
+	// a downgrade they discover by reading the diff: a project pinned to
+	// typescript@^6 comes out a major back. Settle each collision before the
+	// write, then report every one, the default overwrites included (#113).
+	const keepExisting = new Set<string>();
+	const depResolutions: DepResolution[] = [];
+	for (const collision of collectDepCollisions(existing, patches)) {
+		// `--latest` is already the instruction to move every spec, so prompting
+		// per package would only ask the user to re-confirm the flag they typed.
+		const resolution = opts.latest
+			? 'overwrite' as const
+			: await resolveDepConflict(collision, opts.onConflict);
+		depResolutions.push({ ...collision, resolution });
+		if (resolution === 'keep')
+			keepExisting.add(depKey(collision));
+	}
+
+	const report = formatDepResolutions(depResolutions, Boolean(opts.latest));
+	if (report)
+		log.info(report);
+	// Manifest pins are chosen and tested as a set, so a kept spec leaves
+	// package.json holding a combination nobody has run.
+	if (depResolutions.some(r => r.resolution === 'keep'))
+		log.warn('Kept pins may not match the versions the other manifest deps were tested against.');
+
+	const merged = mergePackageJson(existing, patches, keepExisting);
 	writeFileSync(pkgPath, `${JSON.stringify(merged, null, indent)}\n`);
 
 	if (!opts.pm) {
-		return { wrote: true, installed: false, cancelled: false, computedWrites };
+		return { wrote: true, installed: false, cancelled: false, computedWrites, depResolutions };
 	}
 
 	const s = spinner();
@@ -122,14 +161,63 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 
 	if (result.cancelled) {
 		s.stop('Install interrupted.');
-		return { wrote: true, installed: false, cancelled: true, computedWrites };
+		return { wrote: true, installed: false, cancelled: true, computedWrites, depResolutions };
 	}
 	if (result.success) {
 		s.stop('Dependencies installed.');
-		return { wrote: true, installed: true, cancelled: false, computedWrites };
+		return { wrote: true, installed: true, cancelled: false, computedWrites, depResolutions };
 	}
 	s.stop(`Install failed (exit ${result.code}).`);
-	return { wrote: true, installed: false, cancelled: false, error: result.error, computedWrites };
+	return { wrote: true, installed: false, cancelled: false, error: result.error, computedWrites, depResolutions };
+}
+
+// The prompt a file conflict gets, minus the diff view: a version collision is
+// one line on each side, so both specs fit in the message and a diff would have
+// nothing left to show.
+async function promptDepConflict(collision: DepCollision): Promise<'overwrite' | 'keep'> {
+	const choice = await select<'overwrite' | 'keep'>({
+		message: `Conflict: ${collision.section}.${collision.name} is ${collision.existing}, manifest pins ${collision.incoming}`,
+		options: [
+			{ value: 'overwrite', label: `Overwrite with ${collision.incoming}` },
+			{ value: 'keep', label: `Keep ${collision.existing}`, hint: 'may not match sibling manifest pins' },
+		],
+	});
+	if (isCancel(choice))
+		return cancelAndExit();
+	return choice;
+}
+
+// `--on-conflict` says `skip` because that's the vocabulary files use; a
+// resolution says `keep` because that's what happened to the dependency. An
+// unset policy is the interactive case, and the only one that prompts.
+async function resolveDepConflict(
+	collision: DepCollision,
+	onConflict: 'overwrite' | 'skip' | undefined,
+): Promise<'overwrite' | 'keep'> {
+	if (onConflict === undefined)
+		return promptDepConflict(collision);
+	return onConflict === 'skip' ? 'keep' : 'overwrite';
+}
+
+// Pure and clack-free, so tests can call it directly. Plain ASCII on purpose:
+// nothing here is colorized, so `--no-color` has nothing to strip.
+export function formatDepResolutions(resolutions: DepResolution[], latest: boolean): string | null {
+	if (resolutions.length === 0)
+		return null;
+
+	// Under `--latest` every incoming spec is the same word, so a per-package
+	// column would print `latest` N times. The summary counts them instead.
+	if (latest)
+		return `--latest: rewrote ${resolutions.length} existing dependency spec(s) to 'latest'.`;
+
+	const width = Math.max(...resolutions.map(r => `${r.section}.${r.name}`.length));
+	const lines = resolutions.map((r) => {
+		const name = `${r.section}.${r.name}`.padEnd(width);
+		return r.resolution === 'overwrite'
+			? `  overwrote  ${name}  ${r.existing} -> ${r.incoming}`
+			: `  kept       ${name}  ${r.existing}  (manifest pins ${r.incoming})`;
+	});
+	return `package.json dependency conflicts:\n${lines.join('\n')}`;
 }
 
 // The `--latest` escape hatch rewrites every pinned spec to the `latest`

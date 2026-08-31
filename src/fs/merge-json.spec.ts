@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergePackageJson, removePackageJsonEntries } from './merge-json';
+import { collectDepCollisions, depKey, mergePackageJson, removePackageJsonEntries } from './merge-json';
 
 describe('mergePackageJson', () => {
 	it('returns existing unchanged when no patches apply', () => {
@@ -9,7 +9,7 @@ describe('mergePackageJson', () => {
 		});
 	});
 
-	it('merges dependencies, letting patch win on key collision', () => {
+	it('merges dependencies, letting patch win on key collision by default (no keep-set)', () => {
 		const result = mergePackageJson(
 			{ name: 'foo', dependencies: { eslint: '^9.0.0' } },
 			[{ dependencies: { eslint: '9.39.4', diff: '9.0.0' } }],
@@ -130,6 +130,117 @@ describe('mergePackageJson', () => {
 			],
 		);
 		expect(result.dependencies).toEqual({ a: '3.0.0', b: '2.0.0' });
+	});
+
+	describe('keep-set resolution', () => {
+		it('keeps the user spec for a resolved dep while its siblings still land at their pins', () => {
+			const result = mergePackageJson(
+				{ dependencies: { typescript: '^6.0.3', diff: '9.0.0' } },
+				[{ dependencies: { typescript: '5.9.3', diff: '9.1.0' } }],
+				new Set([depKey({ section: 'dependencies', name: 'typescript' })]),
+			);
+			// No-cascade guarantee: resolving typescript must not touch diff.
+			expect(result.dependencies).toEqual({ typescript: '^6.0.3', diff: '9.1.0' });
+		});
+
+		it('scopes a kept key to its section—devDependencies does not shield dependencies', () => {
+			const result = mergePackageJson(
+				{
+					dependencies: { react: '^18.0.0' },
+					devDependencies: { react: '^18.0.0' },
+				},
+				[{
+					dependencies: { react: '19.0.0' },
+					devDependencies: { react: '19.0.0' },
+				}],
+				new Set([depKey({ section: 'devDependencies', name: 'react' })]),
+			);
+			expect(result.dependencies).toEqual({ react: '19.0.0' });
+			expect(result.devDependencies).toEqual({ react: '^18.0.0' });
+		});
+
+		it('behaves exactly as before with an omitted or empty keep-set', () => {
+			const base = { dependencies: { typescript: '^6.0.3' } };
+			const patches = [{ dependencies: { typescript: '5.9.3' } }];
+			const omitted = mergePackageJson(base, patches);
+			const empty = mergePackageJson(base, patches, new Set());
+			expect(omitted.dependencies).toEqual({ typescript: '5.9.3' });
+			expect(empty.dependencies).toEqual({ typescript: '5.9.3' });
+		});
+	});
+});
+
+describe('collectDepCollisions', () => {
+	it('detects collisions across both sections with the correct existing/incoming specs', () => {
+		const collisions = collectDepCollisions(
+			{
+				dependencies: { diff: '9.0.0' },
+				devDependencies: { vitest: '^2.0.0' },
+			},
+			[{
+				dependencies: { diff: '9.1.0' },
+				devDependencies: { vitest: '3.0.0' },
+			}],
+		);
+		expect(collisions).toEqual([
+			{ section: 'dependencies', name: 'diff', existing: '9.0.0', incoming: '9.1.0' },
+			{ section: 'devDependencies', name: 'vitest', existing: '^2.0.0', incoming: '3.0.0' },
+		]);
+	});
+
+	it('reports no collision when the existing and incoming specs are equal', () => {
+		const collisions = collectDepCollisions(
+			{ dependencies: { diff: '9.0.0' } },
+			[{ dependencies: { diff: '9.0.0' } }],
+		);
+		expect(collisions).toEqual([]);
+	});
+
+	it('tolerates a section that is not a string record instead of throwing', () => {
+		expect(() =>
+			collectDepCollisions(
+				{ dependencies: ['not', 'a', 'record'] as unknown as Record<string, unknown> },
+				[{ dependencies: { diff: '9.0.0' } }],
+			),
+		).not.toThrow();
+		const collisions = collectDepCollisions(
+			{ dependencies: ['not', 'a', 'record'] as unknown as Record<string, unknown> },
+			[{ dependencies: { diff: '9.0.0' } }],
+		);
+		expect(collisions).toEqual([]);
+	});
+
+	it('uses the last patch that pins a dep as the incoming spec', () => {
+		const collisions = collectDepCollisions(
+			{ devDependencies: { typescript: '^6.0.3' } },
+			[
+				{ devDependencies: { typescript: '5.9.3' } },
+				{ devDependencies: { typescript: '5.9.5' } },
+			],
+		);
+		expect(collisions).toEqual([
+			{ section: 'devDependencies', name: 'typescript', existing: '^6.0.3', incoming: '5.9.5' },
+		]);
+	});
+
+	// Required by issue #113's acceptance criteria: a manifest patch that
+	// would walk a major-version pin backward has to be detectable, not just
+	// silently applied.
+	it('flags a major-version downgrade as a single collision', () => {
+		const collisions = collectDepCollisions(
+			{ devDependencies: { typescript: '^6.0.3' } },
+			[{ devDependencies: { typescript: '5.9.3' } }],
+		);
+		expect(collisions).toEqual([
+			{ section: 'devDependencies', name: 'typescript', existing: '^6.0.3', incoming: '5.9.3' },
+		]);
+	});
+});
+
+describe('depKey', () => {
+	it('keys by section and name so the same package name resolves independently per section', () => {
+		expect(depKey({ section: 'dependencies', name: 'react' })).toBe('dependencies:react');
+		expect(depKey({ section: 'devDependencies', name: 'react' })).toBe('devDependencies:react');
 	});
 });
 

@@ -413,6 +413,10 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		pm,
 		units,
 		latest,
+		// Undefined on an interactive run, which is what makes dependency
+		// collisions prompt. resolveConfig defaults it to 'overwrite' on every
+		// non-interactive path, so a --yes run never reaches a picker.
+		onConflict: config?.onConflict,
 	});
 
 	// Record what landed so `unbranded diff` can later tell a user's edits from a

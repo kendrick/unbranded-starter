@@ -35,7 +35,7 @@ But most of the repos you touch already exist, and the tooling questions never r
 
 ### What sets it apart
 
-- **It works on repos that already exist.** Point it at a live project and it augments in place, folding into your `package.json` and config files rather than clobbering them. A real conflict stops for an overwrite-or-skip prompt with a diff.
+- **It works on repos that already exist.** Point it at a live project and it augments in place, folding into your `package.json` and config files rather than clobbering them. A real conflict stops for an overwrite-or-skip prompt with a diff. A dependency you've already pinned to something else is a conflict too, and it prompts the same way with both specs on screen.
 - **It uses your package manager.** npm, pnpm, yarn, or bun, detected from your lockfile. No tool forces its own on you.
 - **À la carte, not a monolith.** Pick the units you want and a resolver pulls in whatever they depend on, showing you the full set before it writes anything. No eject, no all-or-nothing template.
 - **Reproducible by default.** Every version is pinned; `--latest` opts out per run, and any interactive run saves as a recipe to replay in CI or on the next project. Automation re-checks the pins weekly with `unbranded outdated` and opens per-unit bump PRs gated on that unit's tests, so reproducible never quietly goes stale.
@@ -154,7 +154,7 @@ Three shipped recipes bundle the common answers, and the interactive flow offers
 - **next-app** — everything node-lib has plus the front-end stack: Tailwind v4, PostCSS, Stylelint, shadcn/ui, Playwright with axe, and a shared VS Code workspace, with ESLint on the next flavor.
 - **cli** — node-lib without the git hooks, for command-line tools.
 
-`--preset <name>` behaves like `--config` pointed at the bundled file, with one twist: `--units` _adds_ to a preset instead of replacing its list, because a preset is a starting point. Presets default to the safe run (no install, no overwrites); pass `--pm` to install and `--on-conflict overwrite` to clobber. The files live in [presets/](presets/) as plain recipe JSON, so they double as documentation.
+`--preset <name>` behaves like `--config` pointed at the bundled file, with one twist: `--units` _adds_ to a preset instead of replacing its list, because a preset is a starting point. Presets default to the safe run (no install, no overwrites, your existing dependency specs kept); pass `--pm` to install and `--on-conflict overwrite` to clobber. The files live in [presets/](presets/) as plain recipe JSON, so they double as documentation.
 
 ## Beyond Day One
 
@@ -215,7 +215,7 @@ unbranded --config recipe.json
 }
 ```
 
-`units`, `pm` (or `null` to skip install), `onConflict`, and `postInstall` are required; `projectName` only in new-project mode, and an unknown unit id fails validation immediately. Config mode skips the Apply confirmation, and inline flags like `--units`/`--pm` override the matching recipe field when both are set.
+`units`, `pm` (or `null` to skip install), `onConflict` (which settles file and dependency version collisions alike), and `postInstall` are required; `projectName` only in new-project mode, and an unknown unit id fails validation immediately. Config mode skips the Apply confirmation, and inline flags like `--units`/`--pm` override the matching recipe field when both are set.
 
 Don't want to hand-write the JSON? Finish an interactive run and it offers to save your choices as `recipe.json`, so you explore once and replay everywhere. The full recipe schema and the exit-code contract (`0` success, `1` any error or `--strict` gate, `130` for Ctrl-C at a prompt) are documented in [AGENTS.md](AGENTS.md).
 
@@ -236,7 +236,7 @@ Every file gets one verdict: `would create`, `would merge`, `would append`, `ide
 2. **Package manager detection.** It walks up for a lockfile, then falls back to the `packageManager` field, then `npm_config_user_agent`, then a prompt. With no `package.json` at all, it writes files, skips install, and prints a next-steps block.
 3. **Selection and resolution.** A category-grouped multiselect feeds a resolver that closes the set under `implies`, validates `requires`, and fails fast on an `excludes` violation.
 4. **Guardrails.** In a git repo with a dirty working tree it warns before writing anything, since a clean tree is your undo button (`git checkout .`). `--force` skips the check.
-5. **Apply.** Existing files prompt for overwrite or skip with a colored diff. Structured units fold into `package.json`, `settings.json`, and ignore files rather than overwriting, and the run records what landed in `.unbranded.json`.
+5. **Apply.** Existing files prompt for overwrite or skip with a colored diff, and a dependency whose spec differs from the manifest's pin prompts the same way. The run reports every conflict either way, so a pin that replaces yours is never silent. Keeping your own spec instead can leave it out of step with the sibling versions the manifest pins as a tested set. Structured units fold into `package.json`, `settings.json`, and ignore files rather than overwriting, and the run records what landed in `.unbranded.json`.
 6. **Install and hooks.** The detected package manager runs under a Ctrl-C trap, then per-unit post-install steps (like `husky init`, gated on a real `.git/`) prompt with sensible defaults.
 
 ## Requirements

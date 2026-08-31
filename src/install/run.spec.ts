@@ -2,8 +2,19 @@ import type { Unit } from '../manifest/types';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { writeAndInstall } from './run';
+import { isCancel, select } from '@clack/prompts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { formatDepResolutions, writeAndInstall } from './run';
+
+// `select` is the one TTY prompt a dependency collision drives, so it's the only
+// export stubbed; `spinner` and `log` are silent to a test runner and stay real.
+// `isCancel` is wrapped rather than replaced so it keeps checking the real cancel
+// symbol by default—the one cancel test below overrides it for the case a mocked
+// `select` can't produce that symbol on its own.
+vi.mock('@clack/prompts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('@clack/prompts')>();
+	return { ...actual, select: vi.fn(), isCancel: vi.fn(actual.isCancel) };
+});
 
 const NODE_MAJOR = process.versions.node.split('.')[0];
 
@@ -135,5 +146,143 @@ describe('writeAndInstall vscode extensions', () => {
 		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [ESLINT_REC] });
 		expect(existsSync(join(tmp, '.vscode', 'extensions.json'))).toBe(false);
 		expect(result.computedWrites).toEqual([]);
+	});
+});
+
+describe('writeAndInstall dependency conflicts (#113)', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-run-conflict-'));
+		// `mockClear` only, not `mockReset`—`isCancel` keeps delegating to the real
+		// implementation from the module factory unless a test overrides it below.
+		vi.mocked(select).mockReset();
+		vi.mocked(isCancel).mockClear();
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	function writtenPkg(): { dependencies: Record<string, string>; devDependencies: Record<string, string> } {
+		return JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8'));
+	}
+
+	function seedConflict(devDependencies: Record<string, string> = { typescript: '^6.0.3' }): void {
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', devDependencies }));
+	}
+
+	it('overwrites a conflicting pin under onConflict:"overwrite", reporting the resolution', async () => {
+		seedConflict();
+		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT], onConflict: 'overwrite' });
+		expect(writtenPkg().devDependencies.typescript).toBe('5.9.3');
+		expect(result.depResolutions).toEqual([
+			{ section: 'devDependencies', name: 'typescript', existing: '^6.0.3', incoming: '5.9.3', resolution: 'overwrite' },
+		]);
+		expect(select).not.toHaveBeenCalled();
+	});
+
+	it('keeps a conflicting pin under onConflict:"skip", without disturbing sibling deps', async () => {
+		seedConflict();
+		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT], onConflict: 'skip' });
+		expect(writtenPkg().devDependencies.typescript).toBe('^6.0.3');
+		expect(result.depResolutions).toEqual([
+			{ section: 'devDependencies', name: 'typescript', existing: '^6.0.3', incoming: '5.9.3', resolution: 'keep' },
+		]);
+		expect(select).not.toHaveBeenCalled();
+		// No-cascade guarantee: settling the typescript collision must never touch
+		// eslint or clsx, which weren't collisions and so still land at their pins.
+		expect(writtenPkg().devDependencies.eslint).toBe('9.39.4');
+		expect(writtenPkg().dependencies.clsx).toBe('2.1.1');
+	});
+
+	it('prompts per colliding dep when onConflict is unset, and applies the chosen resolution', async () => {
+		seedConflict();
+		vi.mocked(select).mockResolvedValueOnce('keep');
+		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT] });
+		expect(select).toHaveBeenCalledTimes(1);
+		expect(writtenPkg().devDependencies.typescript).toBe('^6.0.3');
+		expect(result.depResolutions).toEqual([
+			{ section: 'devDependencies', name: 'typescript', existing: '^6.0.3', incoming: '5.9.3', resolution: 'keep' },
+		]);
+	});
+
+	it('exits 130 and writes nothing when the conflict prompt is cancelled', async () => {
+		const original = JSON.stringify({ name: 'x', devDependencies: { typescript: '^6.0.3' } });
+		writeFileSync(join(tmp, 'package.json'), original);
+
+		// Driving `select` to resolve the real clack cancel symbol means driving an
+		// actual prompt; mocking `isCancel` true for this one case is the documented
+		// fallback for exercising the cancel path without a TTY.
+		vi.mocked(isCancel).mockReturnValueOnce(true);
+
+		// Unlike detectTarget's cancel test, this collision loop doesn't `return` on
+		// cancel—resolveDepConflict's resolved value just flows on as data—so a
+		// non-throwing exit stub would let the loop fall through and still write
+		// package.json. Throwing reproduces process.exit's real never-returns
+		// behavior, which is what actually stops the write in production.
+		const exit = vi.spyOn(process, 'exit').mockImplementation(() => {
+			throw new Error('process.exit');
+		});
+
+		// Restore in `finally`: this suite has no restoreMocks, so a failed
+		// assertion here would otherwise leave process.exit throwing for the
+		// rest of the file.
+		try {
+			await expect(writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT] })).rejects.toThrow('process.exit');
+
+			expect(exit).toHaveBeenCalledWith(130);
+			expect(readFileSync(join(tmp, 'package.json'), 'utf-8')).toBe(original);
+		}
+		finally {
+			exit.mockRestore();
+		}
+	});
+
+	it('auto-resolves every existing pin to overwrite under --latest, no prompt', async () => {
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({
+			name: 'x',
+			dependencies: { clsx: '2.0.0' },
+			devDependencies: { typescript: '^6.0.3' },
+		}));
+		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT], latest: true });
+		expect(select).not.toHaveBeenCalled();
+		expect(result.depResolutions).toEqual([
+			{ section: 'dependencies', name: 'clsx', existing: '2.0.0', incoming: 'latest', resolution: 'overwrite' },
+			{ section: 'devDependencies', name: 'typescript', existing: '^6.0.3', incoming: 'latest', resolution: 'overwrite' },
+		]);
+	});
+
+	it('is idempotent—a rerun with the same unit reports no collisions and never prompts', async () => {
+		await writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT] });
+		// Equal specs aren't collisions (collectDepCollisions), so without that a
+		// rerun of the same units would re-prompt and re-report pins that never moved.
+		const second = await writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT] });
+		expect(second.depResolutions).toEqual([]);
+		expect(select).not.toHaveBeenCalled();
+	});
+});
+
+describe('formatDepResolutions', () => {
+	it('returns null for an empty resolution list', () => {
+		expect(formatDepResolutions([], false)).toBeNull();
+	});
+
+	it('renders both overwrote and kept lines for a mixed set', () => {
+		const out = formatDepResolutions([
+			{ section: 'devDependencies', name: 'typescript', existing: '^6.0.3', incoming: '5.9.3', resolution: 'overwrite' },
+			{ section: 'dependencies', name: 'clsx', existing: '2.0.0', incoming: '2.1.1', resolution: 'keep' },
+		], false);
+		expect(out).toContain('package.json dependency conflicts:');
+		expect(out).toMatch(/overwrote\s+devDependencies\.typescript\s+\^6\.0\.3 -> 5\.9\.3/);
+		expect(out).toMatch(/kept\s+dependencies\.clsx\s+2\.0\.0\s+\(manifest pins 2\.1\.1\)/);
+	});
+
+	it('renders the one-line --latest summary with the resolution count', () => {
+		const out = formatDepResolutions([
+			{ section: 'devDependencies', name: 'typescript', existing: '^6.0.3', incoming: 'latest', resolution: 'overwrite' },
+			{ section: 'dependencies', name: 'clsx', existing: '2.0.0', incoming: 'latest', resolution: 'overwrite' },
+		], true);
+		expect(out).toBe('--latest: rewrote 2 existing dependency spec(s) to \'latest\'.');
 	});
 });

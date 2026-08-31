@@ -49,7 +49,7 @@ Options:
                                  <dir-name>/<id> (recipe field: unitsDir). Works with \`diff\`,
                                  \`remove\`, and \`update\` too, which otherwise read the recorded path
   --pm <npm|pnpm|yarn|bun>       Package manager (recipe field: pm); skips detection, including the workspace-leaf refusal
-  --on-conflict <overwrite|skip> How to treat existing files (recipe field: onConflict)
+  --on-conflict <overwrite|skip> How to treat existing files and dependency version conflicts (recipe field: onConflict)
   --post-install <all|none>      Run post-install steps or skip them (recipe field: postInstall)
   --yes                          Apply without the confirmation prompt; needs --units (or --config)
   --force                        Skip the dirty-tree guard even if the target repo has uncommitted changes (recipe field: force)

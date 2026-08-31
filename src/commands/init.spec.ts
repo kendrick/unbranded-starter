@@ -13,9 +13,11 @@ vi.mock('../prompts/unit-picker/prompt', () => ({ unitPicker: vi.fn() }));
 
 // The start-from-a-preset select now runs ahead of the picker; answering
 // "start empty" keeps these tests on the flow they've always exercised.
+// `confirm` is stubbed too so a full (non-dry-run, non---yes) interactive pass can
+// answer "Apply?" without a real TTY—everything else stays real.
 vi.mock('@clack/prompts', async (importOriginal) => {
 	const mod = await importOriginal<typeof import('@clack/prompts')>();
-	return { ...mod, select: vi.fn(async () => '') };
+	return { ...mod, select: vi.fn(async () => ''), confirm: vi.fn() };
 });
 
 // The install spawn is the other boundary (same seam run.spec mocks): stubbing it
@@ -100,6 +102,45 @@ describe('runInit result', () => {
 		const result = await runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'pnpm', yes: true } });
 
 		expect(result).toEqual({ ok: false });
+	});
+});
+
+describe('runInit onConflict threading (#113)', () => {
+	let tmp: string;
+
+	afterEach(async () => {
+		rmSync(tmp, { recursive: true, force: true });
+		vi.mocked(unitPicker).mockReset();
+		vi.mocked(writeAndInstall).mockReset();
+		const { confirm } = await import('@clack/prompts');
+		vi.mocked(confirm).mockReset();
+	});
+
+	it('passes onConflict "skip" through to writeAndInstall when the resolved config says skip', async () => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-onconflict-skip-'));
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		vi.mocked(writeAndInstall).mockResolvedValue({ wrote: true, installed: true, cancelled: false, computedWrites: [] });
+
+		// --yes plus an explicit --units skips the picker and the Apply confirm
+		// entirely, so config.onConflict comes straight from the inline flag.
+		await runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'pnpm', onConflict: 'skip', yes: true } });
+
+		expect(vi.mocked(writeAndInstall).mock.calls[0]?.[0]?.onConflict).toBe('skip');
+	});
+
+	it('passes onConflict undefined on an interactive run, which is what makes collisions prompt', async () => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-onconflict-interactive-'));
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		vi.mocked(unitPicker).mockResolvedValue({ ids: ['core-editorconfig'], flavors: {} });
+		vi.mocked(writeAndInstall).mockResolvedValue({ wrote: true, installed: true, cancelled: false, computedWrites: [] });
+		const { confirm } = await import('@clack/prompts');
+		// Only "Apply?" fires here: inline.pm already set makes usedInlineFlags true,
+		// so runInit skips its own "save this as a recipe?" confirm afterward.
+		vi.mocked(confirm).mockResolvedValueOnce(true);
+
+		await runInit({ targetDir: tmp, inline: { pm: 'pnpm' } });
+
+		expect(vi.mocked(writeAndInstall).mock.calls[0]?.[0]?.onConflict).toBeUndefined();
 	});
 });
 
