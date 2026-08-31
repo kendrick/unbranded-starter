@@ -39,7 +39,7 @@ describe('cli runs a real package-manager install', () => {
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		// npm writes a lockfile on any successful install. Its presence proves the
 		// spawn actually executed rather than failing before it started; a failed
-		// spawn is only logged (the run still exits 0), so the lockfile, not the
+		// install now rolls back and exits 1 (#114), so the lockfile, not the
 		// exit code, is what catches a Windows regression here.
 		expect(existsSync(join(tmp, 'package-lock.json'))).toBe(true);
 	});

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { select } from '@clack/prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { copyFileOp, planFileOp, renderPlanDiff } from './copy';
+import { createJournal } from './journal';
 
 // The merge-json conflict fallback re-uses the raw-copy `select` prompt. Stub
 // just that export so we can assert the interactive path fires without a TTY;
@@ -428,6 +429,114 @@ describe('planFileOp (dry-run classification)', () => {
 
 		writeFileSync(join(targetDir, '.gitignore'), 'node_modules\ndist\n');
 		expect(planFileOp({ src: '.gitignore', dest: '.gitignore', mode: 'append-if-missing' }, { pkgRoot, targetDir }).outcome).toBe('skip');
+	});
+});
+
+// The journal is optional and every writeBuffer call site threads it through,
+// so this exercises the real createJournal() contract rather than a stub—
+// a mock recordBefore would happily accept a call ordered after the write.
+describe('copyFileOp journal integration', () => {
+	let pkgRoot: string;
+	let targetDir: string;
+
+	beforeEach(() => {
+		pkgRoot = mkdtempSync(join(tmpdir(), 'unbranded-journal-pkg-'));
+		targetDir = mkdtempSync(join(tmpdir(), 'unbranded-journal-target-'));
+		vi.mocked(select).mockReset();
+	});
+
+	afterEach(() => {
+		rmSync(pkgRoot, { recursive: true, force: true });
+		rmSync(targetDir, { recursive: true, force: true });
+	});
+
+	it('journals the destination\'s prior bytes on an overwrite', async () => {
+		writeFileSync(join(pkgRoot, 'a.txt'), 'new\n');
+		writeFileSync(join(targetDir, 'a.txt'), 'old\n');
+		const journal = createJournal();
+		await copyFileOp(
+			{ src: 'a.txt', dest: 'a.txt' },
+			{ pkgRoot, targetDir, onConflict: 'overwrite', journal },
+		);
+		expect(journal.entries()).toHaveLength(1);
+		expect(journal.entries()[0]!.before).toEqual(Buffer.from('old\n'));
+	});
+
+	it('journals `before: null` and the intermediate dirs it had to make on a fresh create', async () => {
+		writeFileSync(join(pkgRoot, 'cn.ts'), 'export const cn = () => {}\n');
+		const journal = createJournal();
+		await copyFileOp(
+			{ src: 'cn.ts', dest: 'src/components/ui/cn.ts' },
+			{ pkgRoot, targetDir, journal },
+		);
+		const entries = journal.entries();
+		expect(entries).toHaveLength(1);
+		expect(entries[0]!.before).toBeNull();
+		expect(entries[0]!.dirsCreated).toEqual([
+			join(targetDir, 'src', 'components', 'ui'),
+			join(targetDir, 'src', 'components'),
+			join(targetDir, 'src'),
+		]);
+	});
+
+	it('journals the pre-merge bytes on a merge-json write', async () => {
+		writeFileSync(join(pkgRoot, 'c.json'), JSON.stringify({ b: 2 }));
+		const before = `${JSON.stringify({ a: 1 }, null, 2)}\n`;
+		writeFileSync(join(targetDir, 'c.json'), before);
+		const journal = createJournal();
+		await copyFileOp(
+			{ src: 'c.json', dest: 'c.json', mode: 'merge-json' },
+			{ pkgRoot, targetDir, journal },
+		);
+		expect(journal.entries()).toHaveLength(1);
+		expect(journal.entries()[0]!.before).toEqual(Buffer.from(before));
+	});
+
+	it('journals the pre-append bytes on an append-if-missing write', async () => {
+		writeFileSync(join(pkgRoot, '.gitignore'), 'node_modules\ndist\n');
+		const before = 'node_modules\n.env\n';
+		writeFileSync(join(targetDir, '.gitignore'), before);
+		const journal = createJournal();
+		await copyFileOp(
+			{ src: '.gitignore', dest: '.gitignore', mode: 'append-if-missing' },
+			{ pkgRoot, targetDir, journal },
+		);
+		expect(journal.entries()).toHaveLength(1);
+		expect(journal.entries()[0]!.before).toEqual(Buffer.from(before));
+	});
+
+	it('journals nothing on an identical-content skip', async () => {
+		writeFileSync(join(pkgRoot, 'a.txt'), 'same\n');
+		writeFileSync(join(targetDir, 'a.txt'), 'same\n');
+		const journal = createJournal();
+		const result = await copyFileOp(
+			{ src: 'a.txt', dest: 'a.txt' },
+			{ pkgRoot, targetDir, journal },
+		);
+		expect(result).toMatchObject({ action: 'skipped', reason: 'identical' });
+		expect(journal.entries()).toEqual([]);
+	});
+
+	it('journals nothing on a user-skip', async () => {
+		writeFileSync(join(pkgRoot, 'a.txt'), 'new\n');
+		writeFileSync(join(targetDir, 'a.txt'), 'old\n');
+		const journal = createJournal();
+		const result = await copyFileOp(
+			{ src: 'a.txt', dest: 'a.txt' },
+			{ pkgRoot, targetDir, onConflict: 'skip', journal },
+		);
+		expect(result).toMatchObject({ action: 'skipped', reason: 'user-skip' });
+		expect(journal.entries()).toEqual([]);
+	});
+
+	it('writes normally when no journal is provided', async () => {
+		writeFileSync(join(pkgRoot, 'a.txt'), 'hello\n');
+		const result = await copyFileOp(
+			{ src: 'a.txt', dest: 'a.txt' },
+			{ pkgRoot, targetDir },
+		);
+		expect(result.action).toBe('copied');
+		expect(readFileSync(join(targetDir, 'a.txt'), 'utf-8')).toBe('hello\n');
 	});
 });
 

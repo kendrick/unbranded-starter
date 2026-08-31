@@ -14,6 +14,8 @@ import { detectInstalledUnits } from '../detect/installed';
 import { detectPm } from '../detect/pm';
 import { detectTarget } from '../detect/target';
 import { copyFileOp, planFileOp, renderPlanDiff } from '../fs/copy';
+import { createJournal, formatRollbackReport, rollbackJournal } from '../fs/journal';
+import { formatInstallFailure, formatKeepLine, resolveInstallFailure } from '../install/failure';
 import { isDirtyGitTree, maybeInitGit } from '../install/git';
 import { runPostInstalls } from '../install/post';
 import { writeAndInstall } from '../install/run';
@@ -385,6 +387,12 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		}
 	}
 
+	// Opened ahead of the first write, because the only bytes worth restoring are
+	// the ones that stood before this run touched anything. A failed install can
+	// then be undone exactly, rather than leaving the user with config for a
+	// toolchain that never installed (#114).
+	const journal = createJournal();
+
 	const copyResults: CopyResult[] = [];
 	// This loop is the one place that knows which unit each write belongs to, so
 	// attribution and the file's mode are captured here for the state file.
@@ -396,6 +404,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 				targetDir: target.dir,
 				projectName,
 				onConflict: config?.onConflict,
+				journal,
 			});
 			copyResults.push(result);
 			writes.push({ dest: result.dest, unit: unit.id, mode: file.mode ?? 'copy' });
@@ -417,22 +426,64 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		// collisions prompt. resolveConfig defaults it to 'overwrite' on every
 		// non-interactive path, so a --yes run never reaches a picker.
 		onConflict: config?.onConflict,
+		journal,
 	});
 
 	// Record what landed so `unbranded diff` can later tell a user's edits from a
 	// stale template. Runs after writeAndInstall so the files it computes outside
 	// the copy loop (.nvmrc, .vscode/extensions.json) get hashed too; those land
-	// before the install spawn, so a cancelled or failed install still leaves a
-	// complete file map. A --dry-run returns earlier and never records state.
-	writeStateFile({
-		targetDir: target.dir,
-		units: stateUnitsFor(catalog, resolution.ids, target.dir),
-		writes: [
-			...writes,
-			...installResult.computedWrites.map(w => ({ dest: w.path, unit: w.unit, mode: 'computed' as const })),
-		],
-		options: optionSelections,
-	});
+	// before the install spawn, so a cancelled install still leaves a complete
+	// file map. A --dry-run returns earlier and never records state, and a
+	// rolled-back install skips it deliberately: with the files gone, a state
+	// file describing them would be a map to nothing.
+	const recordState = (): void => {
+		writeStateFile({
+			targetDir: target.dir,
+			units: stateUnitsFor(catalog, resolution.ids, target.dir),
+			writes: [
+				...writes,
+				...installResult.computedWrites.map(w => ({ dest: w.path, unit: w.unit, mode: 'computed' as const })),
+			],
+			options: optionSelections,
+		});
+	};
+
+	// `failed` implies a package manager actually ran, so pm is non-null here;
+	// testing it keeps that provable rather than asserted.
+	if (pm && installResult.failed) {
+		log.error(formatInstallFailure(pm, installResult.installExitCode, installResult.addedScripts));
+
+		// Only a fully interactive run gets the choice. Everything else rolls
+		// back, because nobody is watching to make the call and a half-applied
+		// toolchain is the worse thing to walk away from: lint config pointing at
+		// a binary that isn't there, and lifecycle scripts armed to fire on the
+		// next install. Same gate dependency collisions use, so one run never
+		// prompts for one and not the other.
+		const action = await resolveInstallFailure(config === null ? undefined : 'rollback');
+
+		if (action === 'rollback') {
+			const rollback = rollbackJournal(journal);
+			const rolledBack = formatRollbackReport(rollback, target.dir);
+			if (rollback.failures.length > 0)
+				log.warn(rolledBack);
+			else
+				log.success(rolledBack);
+			outro('Rolled back.');
+			return { ok: false };
+		}
+
+		// Ctrl-C still leaves the written files behind, so state has to be
+		// recorded anyway. Skipping it would orphan them from `diff` and
+		// `remove`, which is the one thing worse than keeping them.
+		if (action === 'cancel') {
+			recordState();
+			return cancelAndExit('Cancelled. Files kept.');
+		}
+
+		log.warn(formatKeepLine(pm, target.dir));
+	}
+
+	recordState();
 
 	if (installResult.cancelled) {
 		log.warn(`Install interrupted. Re-run \`${pm} install\` in ${target.dir} to finish.`);
@@ -488,8 +539,11 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 
 	// An interrupted install stays ok: the files and state are already on disk and
 	// the warn above tells the user how to finish, which is a different situation
-	// from an install that ran and failed.
-	return { ok: !installResult.error };
+	// from an install that ran and failed. A failure that got here chose to keep
+	// its files, and keeping them doesn't make the run a success: the scaffold
+	// still isn't installed, and cli.ts turns this flag into the exit code CI
+	// reads (#114).
+	return { ok: !installResult.failed };
 }
 
 // Resolve every selected unit's options to a concrete value. Precedence: a value

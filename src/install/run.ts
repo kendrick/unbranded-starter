@@ -1,4 +1,5 @@
 import type { Pm } from '../detect/pm';
+import type { WriteJournal } from '../fs/journal';
 import type { DepCollision, MergeInput } from '../fs/merge-json';
 import type { AnyUnit } from '../manifest/types';
 import { spawn } from 'node:child_process';
@@ -23,6 +24,10 @@ export interface WriteAndInstallOpts {
 	// pin. A set value means the run never prompts, the same contract
 	// `--on-conflict` has for files, and what keeps a `--yes` run off a picker.
 	onConflict?: 'overwrite' | 'skip';
+	// Records pre-run bytes for every path this run writes, so a caller that
+	// wants byte-exact rollback on a failed install can offer one. Optional
+	// because a caller that isn't offering rollback shouldn't have to build one.
+	journal?: WriteJournal;
 }
 
 // A file written outside the copy loop, tagged with the unit it belongs to so
@@ -42,7 +47,16 @@ export interface WriteAndInstallResult {
 	wrote: boolean;
 	installed: boolean;
 	cancelled: boolean;
+	// True on a non-zero pm exit as well as a spawn error, the two ways an
+	// install genuinely fails. `installed: false` alone can't carry that: it
+	// also describes a run that skipped the install, and `error` is set only
+	// when the spawn itself never started, so a plain non-zero exit needs its
+	// own flag to be visible to the caller at all (#114).
+	failed: boolean;
 	error?: string;
+	// The pm's exit code on a failed run, so a caller can name it in a failure
+	// report instead of scraping it back out of terminal output.
+	installExitCode?: number;
 	// Files written outside the copy loop: the computed .nvmrc and
 	// .vscode/extensions.json. Threaded back so writeStateFile can hash them
 	// into .unbranded.json; nothing else in the run knows they exist. These land
@@ -52,6 +66,13 @@ export interface WriteAndInstallResult {
 	// which way the run settled it. The run reports these, and keeps them here so
 	// a caller can read the outcomes without scraping stdout.
 	depResolutions?: DepResolution[];
+	// Scripts this run added to package.json that weren't there before—
+	// never the user's own, since script merging is existing-wins. package.json
+	// is written before the install spawn, so on a failed install these are
+	// still sitting live in the file: a lifecycle script like "prepare": "husky"
+	// fires unasked on the user's next plain install unless the caller names it
+	// (#114).
+	addedScripts?: Record<string, string>;
 }
 
 export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteAndInstallResult> {
@@ -103,6 +124,7 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 		// file we didn't write would make diff flag the user's own .nvmrc as drift
 		// against a hash we never laid down.
 		if (!existsSync(nvmrcPath)) {
+			opts.journal?.recordBefore(nvmrcPath);
 			writeFileSync(nvmrcPath, pins.nvmrc);
 			computedWrites.push({ path: nvmrcPath, unit: NODE_VERSION_UNIT_ID });
 		}
@@ -113,13 +135,13 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 	// so it can't be a static template. Generate it here and union it into any
 	// file the user already has.
 	if (opts.units.some(u => u.id === VSCODE_UNIT_ID))
-		computedWrites.push({ path: writeVscodeExtensions(opts.targetDir, opts.units), unit: VSCODE_UNIT_ID });
+		computedWrites.push({ path: writeVscodeExtensions(opts.targetDir, opts.units, opts.journal), unit: VSCODE_UNIT_ID });
 
 	// A pnpm scaffold that pulls a native-build dependency (esbuild, via Vitest)
 	// has to allowlist the build or `pnpm install` fails on pnpm 11. Seed the
 	// approval before the install spawn below, so our own install sees it, and
 	// record it for the state file. All the gating lives in seedPnpmWorkspace.
-	const pnpmWorkspace = seedPnpmWorkspace({ targetDir: opts.targetDir, pm: opts.pm, pmVersion, units: opts.units });
+	const pnpmWorkspace = seedPnpmWorkspace({ targetDir: opts.targetDir, pm: opts.pm, pmVersion, units: opts.units, journal: opts.journal });
 	if (pnpmWorkspace)
 		computedWrites.push(pnpmWorkspace);
 
@@ -149,10 +171,17 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 		log.warn('Kept pins may not match the versions the other manifest deps were tested against.');
 
 	const merged = mergePackageJson(existing, patches, keepExisting);
+	// Lifecycle scripts (prepare, postinstall) run unasked on the user's next
+	// plain install, so a caller reporting a failure needs to name exactly
+	// which ones this run put there—computed against `existing` now, before
+	// the write below, since that's the last point either side is still cheap
+	// to diff.
+	const addedScripts = collectAddedScripts(existing, merged);
+	opts.journal?.recordBefore(pkgPath);
 	writeFileSync(pkgPath, `${JSON.stringify(merged, null, indent)}\n`);
 
 	if (!opts.pm) {
-		return { wrote: true, installed: false, cancelled: false, computedWrites, depResolutions };
+		return { wrote: true, installed: false, cancelled: false, failed: false, computedWrites, depResolutions, addedScripts };
 	}
 
 	const s = spinner();
@@ -161,14 +190,26 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 
 	if (result.cancelled) {
 		s.stop('Install interrupted.');
-		return { wrote: true, installed: false, cancelled: true, computedWrites, depResolutions };
+		return { wrote: true, installed: false, cancelled: true, failed: false, computedWrites, depResolutions, addedScripts };
 	}
 	if (result.success) {
 		s.stop('Dependencies installed.');
-		return { wrote: true, installed: true, cancelled: false, computedWrites, depResolutions };
+		return { wrote: true, installed: true, cancelled: false, failed: false, computedWrites, depResolutions, addedScripts };
 	}
-	s.stop(`Install failed (exit ${result.code}).`);
-	return { wrote: true, installed: false, cancelled: false, error: result.error, computedWrites, depResolutions };
+	// Just closes the spinner. The exit code rides out on the result instead, so
+	// the caller's failure report can carry it without saying it twice in a row.
+	s.stop('Install failed.');
+	return {
+		wrote: true,
+		installed: false,
+		cancelled: false,
+		failed: true,
+		error: result.error,
+		installExitCode: result.code,
+		computedWrites,
+		depResolutions,
+		addedScripts,
+	};
 }
 
 // The prompt a file conflict gets, minus the diff view: a version collision is
@@ -197,6 +238,31 @@ async function resolveDepConflict(
 	if (onConflict === undefined)
 		return promptDepConflict(collision);
 	return onConflict === 'skip' ? 'keep' : 'overwrite';
+}
+
+// Pure, so it's unit-testable without a whole run. Diffs the merged manifest
+// against what package.json had before rather than reading the patches:
+// script merging is existing-wins (mergeAdditive in merge-json.ts), so a
+// script both a unit and the user already had counts as the user's, and
+// reporting it as ours would be wrong regardless of which unit also wanted it.
+export function collectAddedScripts(
+	existing: Record<string, unknown>,
+	merged: Record<string, unknown>,
+): Record<string, string> {
+	const before = asScripts(existing.scripts);
+	const after = asScripts(merged.scripts);
+	const added: Record<string, string> = {};
+	for (const [name, script] of Object.entries(after)) {
+		if (!(name in before))
+			added[name] = script;
+	}
+	return added;
+}
+
+function asScripts(value: unknown): Record<string, string> {
+	return value && typeof value === 'object' && !Array.isArray(value)
+		? value as Record<string, string>
+		: {};
 }
 
 // Pure and clack-free, so tests can call it directly. Plain ASCII on purpose:
@@ -247,7 +313,7 @@ export function detectIndent(content: string): string {
 // when the user already has one we detect their indent, keep their existing
 // `recommendations` (and any sibling keys like unwantedRecommendations), and
 // only fold our additions in. Returns the path written so the caller can record it.
-function writeVscodeExtensions(targetDir: string, units: AnyUnit[]): string {
+function writeVscodeExtensions(targetDir: string, units: AnyUnit[], journal?: WriteJournal): string {
 	const dir = join(targetDir, '.vscode');
 	const path = join(dir, 'extensions.json');
 
@@ -266,6 +332,7 @@ function writeVscodeExtensions(targetDir: string, units: AnyUnit[]): string {
 	// overwrites in place (or appends if the file never had it).
 	const out = { ...base, recommendations: buildRecommendations(units, existing) };
 	mkdirSync(dir, { recursive: true });
+	journal?.recordBefore(path);
 	writeFileSync(path, `${JSON.stringify(out, null, indent)}\n`);
 	return path;
 }

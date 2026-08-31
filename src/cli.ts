@@ -308,6 +308,12 @@ runInit({
 		postInstall: values['post-install'],
 		yes: values.yes,
 	},
+}).then((result) => {
+	// A scaffold that wrote its files but couldn't install them hasn't done its
+	// job, and the exit code is the only part of that CI reads (#114). Set the
+	// code rather than calling process.exit, so the failure report queued on a
+	// piped stdout still flushes.
+	process.exitCode = result.ok ? EXIT_OK : EXIT_ERROR;
 }).catch((err: unknown) => {
 	// Top-level catch so an exception surfaces as a friendly clack error
 	// instead of a raw stack trace. detectPm throws for workspace-leaf and

@@ -1,4 +1,5 @@
 import type { FileOp } from '../manifest/types';
+import type { WriteJournal } from './journal';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join as joinNative, posix, relative, resolve as resolveNative } from 'node:path';
 import { isCancel, log, select } from '@clack/prompts';
@@ -29,6 +30,9 @@ export interface CopyOptions {
 	// Non-interactive override for conflicts. Set by --config mode so E2E
 	// runs don't hang on a prompt.
 	onConflict?: 'overwrite' | 'skip';
+	// Optional because `--dry-run` and the plan path never write, and callers
+	// that don't intend to offer rollback shouldn't have to build one.
+	journal?: WriteJournal;
 }
 
 export async function copyFileOp(op: FileOp, opts: CopyOptions): Promise<CopyResult> {
@@ -54,7 +58,7 @@ export async function copyFileOp(op: FileOp, opts: CopyOptions): Promise<CopyRes
 	// Nothing to merge or append into yet, so every mode collapses to a plain
 	// write of the source. Keeps first-time scaffolding identical across modes.
 	if (!existsSync(destPath)) {
-		writeBuffer(destPath, srcBuf);
+		writeBuffer(destPath, srcBuf, opts.journal);
 		return { src: srcPath, dest: destPath, action: 'copied' };
 	}
 
@@ -68,16 +72,16 @@ export async function copyFileOp(op: FileOp, opts: CopyOptions): Promise<CopyRes
 
 	const mode = op.mode ?? 'copy';
 	if (mode === 'merge-json') {
-		return mergeJsonOp(srcPath, destPath, srcBuf, destBuf, opts.onConflict);
+		return mergeJsonOp(srcPath, destPath, srcBuf, destBuf, opts.onConflict, opts.journal);
 	}
 	if (mode === 'append-if-missing') {
-		return appendIfMissingOp(srcPath, destPath, srcBuf, destBuf);
+		return appendIfMissingOp(srcPath, destPath, srcBuf, destBuf, opts.journal);
 	}
 
 	const resolution = opts.onConflict ?? await promptConflict(destPath, srcBuf, destBuf);
 
 	if (resolution === 'overwrite') {
-		writeBuffer(destPath, srcBuf);
+		writeBuffer(destPath, srcBuf, opts.journal);
 		return { src: srcPath, dest: destPath, action: 'overwrote' };
 	}
 	return { src: srcPath, dest: destPath, action: 'skipped', reason: 'user-skip' };
@@ -120,6 +124,7 @@ async function mergeJsonOp(
 	srcBuf: Buffer,
 	destBuf: Buffer,
 	onConflict: CopyOptions['onConflict'],
+	journal?: WriteJournal,
 ): Promise<CopyResult> {
 	const existingText = destBuf.toString('utf-8');
 	const existing = JSON.parse(existingText) as unknown;
@@ -137,7 +142,7 @@ async function mergeJsonOp(
 		if (deepEqual(merged, existing)) {
 			return { src: srcPath, dest: destPath, action: 'skipped', reason: 'identical' };
 		}
-		writeBuffer(destPath, proposedBuf);
+		writeBuffer(destPath, proposedBuf, journal);
 		return { src: srcPath, dest: destPath, action: 'merged' };
 	}
 
@@ -147,18 +152,18 @@ async function mergeJsonOp(
 	// it without a prompt so CI never blocks.
 	const resolution = onConflict ?? await promptConflict(destPath, proposedBuf, destBuf);
 	if (resolution === 'overwrite') {
-		writeBuffer(destPath, proposedBuf);
+		writeBuffer(destPath, proposedBuf, journal);
 		return { src: srcPath, dest: destPath, action: 'merged' };
 	}
 	return { src: srcPath, dest: destPath, action: 'skipped', reason: 'user-skip' };
 }
 
-function appendIfMissingOp(srcPath: string, destPath: string, srcBuf: Buffer, destBuf: Buffer): CopyResult {
+function appendIfMissingOp(srcPath: string, destPath: string, srcBuf: Buffer, destBuf: Buffer, journal?: WriteJournal): CopyResult {
 	const { content, changed } = appendMissingLines(destBuf, srcBuf);
 	if (!changed) {
 		return { src: srcPath, dest: destPath, action: 'skipped', reason: 'identical' };
 	}
-	writeBuffer(destPath, content);
+	writeBuffer(destPath, content, journal);
 	return { src: srcPath, dest: destPath, action: 'appended' };
 }
 
@@ -229,7 +234,12 @@ export function renderPlanDiff(plan: FilePlan, enabled = colorEnabled()): string
 	return colorizeDiff(createPatch(plan.rel, plan.diff.existing, plan.diff.proposed, 'existing', 'proposed'), enabled);
 }
 
-function writeBuffer(path: string, buf: Buffer): void {
+function writeBuffer(path: string, buf: Buffer, journal?: WriteJournal): void {
+	// Must record before the write touches disk—the journal exists to
+	// capture pre-run bytes, and recording after mkdirSync/writeFileSync would
+	// journal the bytes we're about to write instead of what was there before.
+	journal?.recordBefore(path);
+
 	// Intermediate dirs may not exist when the manifest writes into a fresh
 	// project (e.g. dest='src/components/ui/cn.ts' in a brand-new repo).
 	mkdirSync(dirname(path), { recursive: true });

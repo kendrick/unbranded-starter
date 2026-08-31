@@ -1,4 +1,5 @@
 import type { Pm } from '../detect/pm';
+import type { WriteJournal } from '../fs/journal';
 import type { AnyUnit, UnitId } from '../manifest/types';
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -94,7 +95,7 @@ export function buildPnpmWorkspace(deps: readonly string[], opts: { withPackages
 // selection, no opt-monorepo (it ships its own), and no pnpm-workspace.yaml to
 // clobber. Returns the computed write to record, or null when a gate isn't met.
 // Must run BEFORE unbranded's own install spawn so that install sees the file.
-export function seedPnpmWorkspace(opts: { targetDir: string; pm: Pm | null; pmVersion?: string | null; units: AnyUnit[] }): { path: string; unit: string } | null {
+export function seedPnpmWorkspace(opts: { targetDir: string; pm: Pm | null; pmVersion?: string | null; units: AnyUnit[]; journal?: WriteJournal }): { path: string; unit: string } | null {
 	if (opts.pm !== 'pnpm')
 		return null;
 	if (opts.units.some(unit => unit.id === MONOREPO_UNIT_ID))
@@ -111,6 +112,7 @@ export function seedPnpmWorkspace(opts: { targetDir: string; pm: Pm | null; pmVe
 	// gets it too, since the stub form is the one that works on every pnpm.
 	const major = pnpmMajor(opts.pmVersion);
 	const withPackages = major === null || major < 11;
+	opts.journal?.recordBefore(dest);
 	writeFileSync(dest, buildPnpmWorkspace(deps, { withPackages }));
 	return { path: dest, unit: owner };
 }
