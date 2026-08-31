@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createJournal, formatRollbackReport, rollbackJournal } from './journal';
 
@@ -184,18 +184,25 @@ describe('formatRollbackReport', () => {
 	});
 
 	it('lists a failure line relative to targetDir', () => {
+		// Build both the input path and the expected output with join/relative
+		// rather than literal slashes: `relative` hands back a backslash
+		// separator on Windows, so a hardcoded `src/blocked.txt` only matches
+		// on POSIX.
+		const targetDir = join(tmpdir(), 'unbranded-report-target');
+		const blocked = join(targetDir, 'src', 'blocked.txt');
+		const rel = relative(targetDir, blocked);
 		const report = {
 			restored: [],
 			deleted: [],
 			prunedDirs: [],
-			failures: [{ path: '/target/src/blocked.txt', message: 'EISDIR: illegal operation on a directory' }],
+			failures: [{ path: blocked, message: 'EISDIR: illegal operation on a directory' }],
 		};
-		const output = formatRollbackReport(report, '/target');
+		const output = formatRollbackReport(report, targetDir);
 
-		expect(output).toContain('  could not restore src/blocked.txt: EISDIR: illegal operation on a directory');
+		expect(output).toContain(`  could not restore ${rel}: EISDIR: illegal operation on a directory`);
 		expect(output.split('\n')).toEqual([
 			'Rolled back: 0 file(s) restored, 0 created file(s) deleted.',
-			'  could not restore src/blocked.txt: EISDIR: illegal operation on a directory',
+			`  could not restore ${rel}: EISDIR: illegal operation on a directory`,
 			'`node_modules` and the lockfile are untouched: the package manager owns those, and rollback does not reach them.',
 		]);
 	});
