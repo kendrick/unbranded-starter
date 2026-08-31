@@ -44,4 +44,15 @@ describe('manifest', () => {
 		expect(base?.devDependencies).not.toHaveProperty('@eslint-react/eslint-plugin');
 		expect(base?.devDependencies).not.toHaveProperty('@next/eslint-plugin-next');
 	});
+
+	it('core-tailwind carries only the CSS-only package, never the PostCSS adapter', () => {
+		// The exact key set is the point (#112): the adapter must not ride along
+		// with every core-tailwind install, and an absence check would not say so.
+		const tailwind = UNITS.find(u => u.id === 'core-tailwind');
+		expect(Object.keys(tailwind?.devDependencies ?? {})).toEqual(['tailwindcss']);
+
+		const postcss = UNITS.find(u => u.id === 'core-postcss');
+		expect(postcss?.devDependencies).toHaveProperty('@tailwindcss/postcss');
+		expect(postcss?.implies).toEqual(['core-tailwind']);
+	});
 });

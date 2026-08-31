@@ -137,8 +137,7 @@ export const UNITS: Unit[] = [
 		// Tailwind v4 ships zero config files. Manifest is deps-only.
 		files: [],
 		devDependencies: {
-			'tailwindcss': '4.3.3',
-			'@tailwindcss/postcss': '4.3.3',
+			tailwindcss: '4.3.3',
 		},
 		recommendedExtensions: ['bradlc.vscode-tailwindcss'],
 	},
@@ -150,6 +149,14 @@ export const UNITS: Unit[] = [
 		files: [
 			{ src: 'postcss.config.mjs', dest: 'postcss.config.mjs' },
 		],
+		// PostCSS is only one of Tailwind v4's entry points. A Vite project (Astro,
+		// SvelteKit, Nuxt) reaches Tailwind through @tailwindcss/vite and never
+		// loads the adapter, so it belongs to the unit that ships the config. On
+		// core-tailwind it would follow every Tailwind install, and `remove` would
+		// credit it to the wrong unit.
+		devDependencies: {
+			'@tailwindcss/postcss': '4.3.3',
+		},
 		// The shipped config refers to @tailwindcss/postcss; without Tailwind
 		// installed, builds break at PostCSS plugin resolution time.
 		implies: ['core-tailwind'],
