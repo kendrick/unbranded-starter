@@ -14,6 +14,14 @@ Each entry follows this shape:
 **Alternatives considered:** What was rejected, and why.
 ```
 
+## 2026-08-31: Dependency version collisions obey `--on-conflict` (issue #113)
+
+**Source:** issue #113
+
+**Context:** A dependency the target project had already pinned lost to the manifest's pin without a word. A project on `typescript@^6.0.3` that picked up `core-typescript` came out at `5.9.3`, a major back, and the only clue was the diff. File collisions had prompted for overwrite or skip from the start, and scripts and `engines` had always been existing-wins, so dependencies were the one collision kind with no rule a user could name.
+**Decision:** A dependency spec that differs from the manifest's pin is a conflict, and it runs through the same `--on-conflict` setting files use. Interactive runs prompt Overwrite or Keep per package with both specs in the message; there is no "show diff" option, because the diff is the one line already on screen. Non-interactive runs take the flag's answer, and `overwrite` stays the default, so existing recipes and CI produce the tree they produced before. Either way the run reports every conflict with the package, the previous spec, the new spec, and which way it went. That report is the part that fixes the silence, the default overwrite path included. `--latest` is exempt from the prompt: the flag is already an instruction to move every spec, so it prints one line saying how many it rewrote. Scripts, `engines`, and `packageManager` stay existing-wins, now on the record as a decision rather than an accident. Reporting happens at apply time only, so `--dry-run`, its JSON envelope, and `schemas/plan.schema.json` are untouched. One consequence worth naming: the three shipped presets set `onConflict: "skip"`, so a preset run against a repo that already pins a dependency keeps the repo's spec. That is the outcome the reporter wanted, and the `kept` report line plus the sibling-pins caution keeps it visible.
+**Alternatives considered:** Semver-aware merging that keeps the higher version—rejected as an explicit non-goal, since it trades a rule you can state for one that varies per package. Defaulting to `skip` now that the collision is visible—rejected; it would change what every existing recipe and CI job produces, and pins landing by default is the feature. Prompting per package under `--latest`—rejected; the flag already answered that question. A second knob so a preset could skip files but still take the manifest's pins—rejected; it splits one collision model back into two.
+
 ## 2026-07-06: `unbranded update` — baselines advance even on keep-mine, plus the no-baseline ladder (issue #34, PR #63)
 
 **Source:** PR #63 (commits 974b652, 0cef4ce, 180c558), closing #34; parts 1 and 2 of the arc are the schema-2 and merge3 entries below.

@@ -64,7 +64,7 @@ unbranded --dry-run --json --units core-editorconfig,opt-shadcn --pm pnpm
 }
 ```
 
-`auto` names what `implies` dragged in (shadcn needs tailwind). The per-file `action` vocabulary is `create`, `merge`, `append`, `skip`, and `conflict`—a `conflict` means an existing file differs and a real run would prompt, so resolve it up front with `--on-conflict overwrite` or `--on-conflict skip`.
+`auto` names what `implies` dragged in (shadcn needs tailwind). The per-file `action` vocabulary is `create`, `merge`, `append`, `skip`, and `conflict`—a `conflict` means an existing file differs and a real run would prompt, so resolve it up front with `--on-conflict overwrite` or `--on-conflict skip`. `--on-conflict` settles dependency version collisions on the same terms: `overwrite` takes the manifest's pin, `skip` keeps the repo's existing specs. The plan doesn't list those, but the apply run reports every one it hit.
 
 ## 3. Apply
 

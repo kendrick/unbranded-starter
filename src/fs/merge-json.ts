@@ -74,18 +74,74 @@ const ALPHABETIZE_NESTED = new Set([
 	'engines',
 ]);
 
+// The two dependency sections, kept as a literal tuple (rather than derived
+// from MergeInput's keys) so collectDepCollisions and mergePackageJson can
+// both iterate it and agree on order.
+const DEP_SECTIONS = ['dependencies', 'devDependencies'] as const;
+
+export type DepSection = typeof DEP_SECTIONS[number];
+
+export interface DepCollision {
+	section: DepSection;
+	name: string;
+	existing: string; // the spec already in the user's package.json
+	incoming: string; // the spec the patches would land (last patch wins)
+}
+
+export function depKey(c: Pick<DepCollision, 'section' | 'name'>): string {
+	return `${c.section}:${c.name}`;
+}
+
+// Pure detection pass, separate from the merge itself, so a caller can ask
+// "what would change and clash" before committing to a resolution—the
+// merge alone can't answer that without silently picking manifest-wins.
+export function collectDepCollisions(
+	existing: Record<string, unknown>,
+	patches: MergeInput[],
+): DepCollision[] {
+	const collisions: DepCollision[] = [];
+
+	for (const section of DEP_SECTIONS) {
+		const existingSection = isStringRecord(existing[section]) ? existing[section] : {};
+
+		// Same last-patch-wins fold mergePackageJson uses below. If this fold
+		// order ever drifts from the merge's, detection and the merge disagree
+		// about what "incoming" even means.
+		const incoming: Record<string, string> = {};
+		for (const patch of patches) {
+			const patchSection = patch[section];
+			if (patchSection)
+				Object.assign(incoming, patchSection);
+		}
+
+		for (const name of Object.keys(incoming).sort()) {
+			const existingSpec = existingSection[name];
+			const incomingSpec = incoming[name]!;
+			// Equal specs aren't collisions: re-running the same recipe would
+			// otherwise re-prompt and re-report every pin that hasn't actually
+			// moved.
+			if (existingSpec !== undefined && existingSpec !== incomingSpec) {
+				collisions.push({ section, name, existing: existingSpec, incoming: incomingSpec });
+			}
+		}
+	}
+
+	return collisions;
+}
+
 export function mergePackageJson(
 	existing: Record<string, unknown>,
 	patches: MergeInput[],
+	keepExisting?: ReadonlySet<string>,
 ): Record<string, unknown> {
 	const merged: Record<string, unknown> = { ...existing };
 
 	for (const patch of patches) {
 		if (patch.dependencies) {
-			merged.dependencies = mergeDepLike(merged.dependencies, patch.dependencies);
+			merged.dependencies = mergeDepLike(merged.dependencies, patch.dependencies, 'dependencies', keepExisting);
 		}
 		if (patch.devDependencies) {
-			merged.devDependencies = mergeDepLike(merged.devDependencies, patch.devDependencies);
+			merged.devDependencies = mergeDepLike(merged.devDependencies, patch.devDependencies, 'devDependencies', keepExisting);
 		}
 		if (patch.scripts) {
 			// Additive only. The user may already have a `lint` or `test` script
@@ -160,16 +216,37 @@ function setOrDrop(pkg: Record<string, unknown>, key: string, map: Record<string
 		pkg[key] = map;
 }
 
+// Manifest-wins is the default here, not because deps are less the user's
+// than scripts or engines, but because a version pin isn't standalone—the
+// unit tested and shipped its dependencies as a set, so overwriting is the
+// only default that keeps that set coherent. Unlike mergeAdditive below,
+// this isn't the end of the story: collectDepCollisions surfaces every case
+// where the default would move a spec, and a caller can override any one
+// entry through `keepExisting` without disturbing its siblings.
 function mergeDepLike(
 	existing: unknown,
 	addition: Record<string, string>,
+	section: DepSection,
+	keepExisting: ReadonlySet<string> | undefined,
 ): Record<string, string> {
 	const base = isStringRecord(existing) ? existing : {};
-	// Patch wins on key collision. Manifest versions are pinned by design;
-	// the whole point of `unbranded` is that the CLI's version choices land.
-	return { ...base, ...addition };
+	const result: Record<string, string> = { ...base };
+	for (const [name, spec] of Object.entries(addition)) {
+		// Keeping one dep must never touch its siblings, and `addition` isn't
+		// ours to touch either—in the real caller it aliases the unit
+		// catalog's own dependency object, so we build the result entry by
+		// entry instead of filtering or mutating `addition` directly.
+		if (keepExisting?.has(depKey({ section, name })) && name in base)
+			continue;
+		result[name] = spec;
+	}
+	return result;
 }
 
+// Existing-wins here, opposite of mergeDepLike above, because scripts and
+// engines aren't version coordinates a manifest curates as a group—they're
+// the user's own logic (a custom `lint` script, a node floor they chose), so
+// there's nothing for us to second-guess and nothing to report.
 function mergeAdditive(
 	existing: unknown,
 	addition: Record<string, string>,

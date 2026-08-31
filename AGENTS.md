@@ -29,7 +29,7 @@ No command below needs a TTY. Anything interactive has a flag that answers it.
 
 ### Recipes
 
-`--config <file>` drives a full run from JSON—schema in `schemas/recipe.schema.json`. Required: `units`, `pm` (`null` skips the install), `onConflict`, `postInstall`. Optional: `options`, `versions`, `projectName` (new-project mode), `git`, `force`. Unknown extra keys are tolerated. Inline flags override the matching recipe field per field, and `--units` accepts an `id:value` suffix for unit options (`core-eslint:react`).
+`--config <file>` drives a full run from JSON—schema in `schemas/recipe.schema.json`. Required: `units`, `pm` (`null` skips the install), `onConflict` (files and dependency version collisions alike), `postInstall`. Optional: `options`, `versions`, `projectName` (new-project mode), `git`, `force`. Unknown extra keys are tolerated. Inline flags override the matching recipe field per field, and `--units` accepts an `id:value` suffix for unit options (`core-eslint:react`).
 
 ### JSON Envelopes
 

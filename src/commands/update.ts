@@ -159,9 +159,11 @@ export function planUpdate(opts: { targetDir: string; state: StateFile; units: A
 }
 
 // package.json isn't a tracked file — it's re-derived: run the same structured
-// merge a scaffold would and see whether anything comes out different. The
-// existing-wins rules mean user customizations hold; what changes is whatever
-// the units ship that the file lost (or never had).
+// merge a scaffold would and see whether anything comes out different. Scripts,
+// engines, and packageManager are existing-wins, so what the user wrote holds.
+// Dependency pins are not, and shouldn't be: moving pins is the point of
+// update, so a drifted spec belongs in the plan the user accepts rather than
+// in a prompt. Hence no keep-set here, where init passes one (#113).
 function planPkgUpdate(targetDir: string, units: AnyUnit[]): UpdatePkgPlan {
 	const pkgPath = join(targetDir, 'package.json');
 	if (!existsSync(pkgPath) || units.length === 0)
