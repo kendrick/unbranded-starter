@@ -421,7 +421,7 @@ describe('fixture corpus (test/fixtures/units)', () => {
 		if (!entry.isDirectory())
 			continue;
 		const dir = join(fixturesDir, entry.name);
-		const unit = JSON.parse(readFileSync(join(dir, 'unit.json'), 'utf-8'));
+		const unit: unknown = JSON.parse(readFileSync(join(dir, 'unit.json'), 'utf-8'));
 
 		if (entry.name.startsWith('valid-')) {
 			it(`accepts ${entry.name}`, () => {
@@ -439,7 +439,7 @@ describe('fixture corpus (test/fixtures/units)', () => {
 
 	it('invalid-newer-schema carries the unsupported-schema code', () => {
 		const dir = join(fixturesDir, 'invalid-newer-schema');
-		const unit = JSON.parse(readFileSync(join(dir, 'unit.json'), 'utf-8'));
+		const unit: unknown = JSON.parse(readFileSync(join(dir, 'unit.json'), 'utf-8'));
 		const result = validateUnitDefinition(unit, { baseDir: dir });
 		expect(result.ok).toBe(false);
 		if (result.ok)
@@ -454,7 +454,7 @@ describe('fixture corpus (test/fixtures/units)', () => {
 
 	it('invalid-unknown-relation only fails once knownIds is supplied', () => {
 		const dir = join(fixturesDir, 'invalid-unknown-relation');
-		const unit = JSON.parse(readFileSync(join(dir, 'unit.json'), 'utf-8'));
+		const unit: unknown = JSON.parse(readFileSync(join(dir, 'unit.json'), 'utf-8'));
 		expect(validateUnitDefinition(unit, { baseDir: dir }).ok).toBe(true);
 		const result = validateUnitDefinition(unit, { baseDir: dir, knownIds: new Set(['fixture-minimal']) });
 		expect(result.ok).toBe(false);

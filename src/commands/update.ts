@@ -389,8 +389,8 @@ function deepEqualJson(a: unknown, b: unknown): boolean {
 	if (Array.isArray(a) && Array.isArray(b))
 		return a.length === b.length && a.every((v, i) => deepEqualJson(v, b[i]));
 	if (a !== null && b !== null && typeof a === 'object' && typeof b === 'object' && !Array.isArray(a) && !Array.isArray(b)) {
-		const ka = Object.keys(a as Record<string, unknown>);
-		const kb = Object.keys(b as Record<string, unknown>);
+		const ka = Object.keys(a);
+		const kb = Object.keys(b);
 		return ka.length === kb.length && ka.every(k => k in (b as Record<string, unknown>) && deepEqualJson((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
 	}
 	return false;

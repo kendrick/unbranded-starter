@@ -69,7 +69,7 @@ export function readConfigFile(path: string): { raw: unknown; dir: string } {
 // names travel together, so a path relative to the invoking cwd would break the
 // moment someone ran it from anywhere but the repo root.
 export function peekUnitsDir(raw: unknown, configDir: string): string | undefined {
-	if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+	if (raw === null || typeof raw !== 'object' || Array.isArray(raw))
 		return undefined;
 	const value = (raw as Record<string, unknown>).unitsDir;
 	if (value === undefined)
@@ -178,7 +178,7 @@ export function resolveConfig(
 }
 
 export function validate(raw: unknown, knownUnits: ReadonlySet<string>, schema?: OptionSchema, opts: { configDir?: string } = {}): Config {
-	if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+	if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
 		throw new Error('Config must be a JSON object.');
 	}
 	const obj = raw as Record<string, unknown>;
@@ -236,13 +236,13 @@ export function validate(raw: unknown, knownUnits: ReadonlySet<string>, schema?:
 
 	return {
 		units: obj.units as string[],
-		pm: obj.pm as Pm | null,
+		pm: obj.pm,
 		onConflict: obj.onConflict as 'overwrite' | 'skip',
 		postInstall: obj.postInstall as 'all' | 'none',
 		versions: (obj.versions as 'pinned' | 'latest') ?? 'pinned',
-		projectName: obj.projectName as string | undefined,
+		projectName: obj.projectName,
 		git: (obj.git as 'init' | 'init-commit' | 'none') ?? 'none',
-		force: obj.force as boolean | undefined,
+		force: obj.force,
 		...(typeof obj.unitsDir === 'string' ? { unitsDir: resolve(opts.configDir ?? '.', obj.unitsDir) } : {}),
 		...(options ? { options } : {}),
 	};

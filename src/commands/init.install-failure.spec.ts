@@ -122,7 +122,10 @@ describe('runInit real install failure (#114)', () => {
 		// a part of "pre-run state" as any file's bytes.
 		expect(existsSync(join(tmp, STATE_FILENAME))).toBe(false);
 
-		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8'));
+		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as {
+			devDependencies: Record<string, string>;
+			scripts: Record<string, string>;
+		};
 		expect(pkg.devDependencies.husky).toBe('8.0.0');
 		expect(pkg.scripts).toEqual({ 'my-script': 'echo mine' });
 		// husky's own file and the directory the copy loop created for it must

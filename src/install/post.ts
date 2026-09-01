@@ -84,7 +84,7 @@ interface RunResult {
 	error: string;
 }
 
-function runOne(cwd: string, pm: Pm, pi: PostInstall): Promise<RunResult> {
+async function runOne(cwd: string, pm: Pm, pi: PostInstall): Promise<RunResult> {
 	const { bin, args } = buildCommand(pm, pi.command);
 	// log.step renders a small marker before the child writes its own output.
 	// We deliberately don't wrap this in a spinner — post-install commands

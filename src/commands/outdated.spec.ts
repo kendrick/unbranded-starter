@@ -98,12 +98,12 @@ describe('runOutdated', () => {
 	// Serves every real manifest pin back verbatim, except the overrides.
 	function echoRegistry(overrides: Record<string, string> = {}): typeof fetch {
 		const pins = new Map(collectManifestPins(UNITS).map(p => [p.name, p.pin]));
-		return (async (input: RequestInfo | URL) => {
+		return async (input: RequestInfo | URL) => {
 			const url = String(input);
 			const name = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1));
 			const latest = overrides[name] ?? pins.get(name);
 			return new Response(JSON.stringify({ 'dist-tags': { latest } }), { status: 200 });
-		}) as typeof fetch;
+		};
 	}
 
 	it('exits 0 and says so when every pin is current, even under --strict', async () => {

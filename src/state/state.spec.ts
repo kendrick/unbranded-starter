@@ -231,7 +231,7 @@ describe('writeStateFile / readStateFile', () => {
 
 		// Simulate the user accepting a finding by editing .unbranded.json.
 		const path = join(tmp, STATE_FILENAME);
-		const edited = { ...JSON.parse(readFileSync(path, 'utf-8')), doctor: { ignore: ['missing-editorconfig'] } };
+		const edited = { ...(JSON.parse(readFileSync(path, 'utf-8')) as StateFile), doctor: { ignore: ['missing-editorconfig'] } };
 		writeFileSync(path, `${JSON.stringify(edited, null, 2)}\n`);
 
 		// A second scaffold must not clobber it.
@@ -372,7 +372,7 @@ describe('applyRemovalToState', () => {
 	it('preserves doctor.ignore and option keys it was not told to drop', () => {
 		seed();
 		const path = join(tmp, STATE_FILENAME);
-		const edited = { ...JSON.parse(readFileSync(path, 'utf-8')), doctor: { ignore: ['missing-editorconfig'] } };
+		const edited = { ...(JSON.parse(readFileSync(path, 'utf-8')) as StateFile), doctor: { ignore: ['missing-editorconfig'] } };
 		writeFileSync(path, `${JSON.stringify(edited, null, '\t')}\n`);
 
 		applyRemovalToState({ targetDir: tmp, removeUnits: ['core-typescript'], removeFiles: ['b.txt'] });

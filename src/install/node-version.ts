@@ -40,7 +40,7 @@ export function computeNodeVersion(input: NodeVersionInput): NodeVersionPins {
 // Ask the running package manager its own version. Returns null on any failure
 // (binary missing, non-zero exit, empty output) so the caller falls back to
 // omitting packageManager rather than pinning a guess.
-export function queryPmVersion(pm: Pm | null, cwd: string): Promise<string | null> {
+export async function queryPmVersion(pm: Pm | null, cwd: string): Promise<string | null> {
 	if (!pm)
 		return Promise.resolve(null);
 	return new Promise((resolve) => {

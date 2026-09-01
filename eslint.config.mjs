@@ -8,7 +8,39 @@ export default antfu(
 		// Node-only CLI with no JSX or CSS. The react/next/jsx-a11y config this
 		// repo scaffolds for other projects lives in the core-eslint flavors
 		// (src/manifest/eslint-config.ts), never on the repo itself.
-		typescript: true,
+		// antfu gates its whole type-aware block on `isTypeAware = !!tsconfigPath`,
+		// so the bare `typescript: true` silently registers none of it—no
+		// type-aware parser, no rules-type-aware config, and none of the rules
+		// inside it. The path is what turns them on.
+		typescript: {
+			tsconfigPath: './tsconfig.json',
+			// This list replaces antfu's default rather than extending it, so the
+			// markdown-fence entry has to come back or fenced code blocks join the
+			// TS program and fail to parse. The rest are linted but live outside
+			// tsconfig.json's `include`; type-aware rules would only report that
+			// the project service can't find them. opt-in/ can never join, since
+			// its templates import deps this repo doesn't install.
+			ignoresTypeAware: [
+				'**/*.md/**',
+				'test/e2e/**',
+				'vitest.config.ts',
+				'vitest.e2e.config.ts',
+				'opt-in/**',
+			],
+			overridesTypeAware: {
+				// Spread over antfu's own options, which carry only the boolean and
+				// object allowances, so all four are spelled out to keep those two.
+				// Nullable strings and numbers in a conditional are idiomatic here
+				// (`if (someOptionalString)`) and account for most of what the rule
+				// would otherwise report.
+				'ts/strict-boolean-expressions': ['error', {
+					allowNullableBoolean: true,
+					allowNullableObject: true,
+					allowNullableString: true,
+					allowNullableNumber: true,
+				}],
+			},
+		},
 
 		// ============================================
 		// Formatting (handled by ESLint, not Prettier)

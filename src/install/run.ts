@@ -260,7 +260,7 @@ export function collectAddedScripts(
 }
 
 function asScripts(value: unknown): Record<string, string> {
-	return value && typeof value === 'object' && !Array.isArray(value)
+	return value !== null && typeof value === 'object' && !Array.isArray(value)
 		? value as Record<string, string>
 		: {};
 }
@@ -344,7 +344,7 @@ interface InstallResult {
 	error?: string;
 }
 
-function runInstall(cwd: string, pm: Pm): Promise<InstallResult> {
+async function runInstall(cwd: string, pm: Pm): Promise<InstallResult> {
 	return new Promise((resolve) => {
 		const child = spawn(pm, ['install'], spawnOptions(cwd));
 		let cancelled = false;

@@ -153,7 +153,7 @@ export function mergePackageJson(
 			// node 22 and a unit wants >=20, we leave 22 in place.
 			merged.engines = mergeAdditive(merged.engines, patch.engines);
 		}
-		if (patch.packageManager && !merged.packageManager) {
+		if (patch.packageManager && merged.packageManager === undefined) {
 			// Existing wins: a user who pinned yarn keeps it even if we detected
 			// pnpm running. We only fill the field in when it's genuinely absent.
 			merged.packageManager = patch.packageManager;
@@ -185,7 +185,7 @@ export function removePackageJsonEntries(
 		const names = removal[section];
 		if (!names || !isStringRecord(pkg[section]))
 			continue;
-		const map = { ...pkg[section] as Record<string, string> };
+		const map = { ...pkg[section] };
 		for (const name of names)
 			delete map[name];
 		setOrDrop(pkg, section, map);
@@ -259,7 +259,7 @@ function mergeAdditive(
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {
-	if (!value || typeof value !== 'object' || Array.isArray(value))
+	if (value === null || typeof value !== 'object' || Array.isArray(value))
 		return false;
 	return Object.values(value).every(v => typeof v === 'string');
 }
@@ -280,7 +280,7 @@ function sortPackageJson(pkg: Record<string, unknown>): Record<string, unknown> 
 function sortNested(parentKey: string, value: unknown): unknown {
 	if (!ALPHABETIZE_NESTED.has(parentKey))
 		return value;
-	if (!value || typeof value !== 'object' || Array.isArray(value))
+	if (value === null || typeof value !== 'object' || Array.isArray(value))
 		return value;
 	const obj = value as Record<string, unknown>;
 	const result: Record<string, unknown> = {};

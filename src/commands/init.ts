@@ -162,7 +162,7 @@ export async function runPlanJson(opts: { configPath?: string; inline?: InlineFl
 	const target = await detectTarget({ projectName: config.projectName, cwd: opts.targetDir });
 	// Mirrors runInit's override expression exactly so the two dry-run flavors
 	// can't drift: an explicit --pm wins, then the recipe's pm, then detection.
-	const pm = await detectPm(target.dir, { override: (inline.pm as Pm | undefined) ?? fileConfig?.pm, mode: target.mode });
+	const pm = await detectPm(target.dir, { override: inline.pm ?? fileConfig?.pm, mode: target.mode });
 
 	const resolution = resolveSelection(config.units, catalog.units);
 	if (resolution.kind === 'missing-required') {

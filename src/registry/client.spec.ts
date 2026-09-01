@@ -10,7 +10,7 @@ function fakeRegistry(latest: Record<string, string>): typeof fetch {
 		if (version === undefined)
 			return new Response('not found', { status: 404 });
 		return new Response(JSON.stringify({ 'dist-tags': { latest: version } }), { status: 200 });
-	}) as unknown as typeof fetch;
+	});
 }
 
 describe('fetchLatestVersions', () => {
@@ -64,7 +64,7 @@ describe('fetchLatestVersions', () => {
 	it('turns a hung request into a timeout error instead of hanging', async () => {
 		// A fetch that only settles when its signal aborts — the shape of a
 		// firewalled or blackholed registry.
-		const fetchImpl = ((_url: RequestInfo | URL, init?: RequestInit) =>
+		const fetchImpl = (async (_url: RequestInfo | URL, init?: RequestInit) =>
 			new Promise((_resolve, reject) => {
 				init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
 			})) as unknown as typeof fetch;

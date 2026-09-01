@@ -189,7 +189,9 @@ describe('runList', () => {
 		expect(stderr.join('')).toContain('broken');
 		// stdout is pure JSON — a stray stderr line concatenated in would break a
 		// --json consumer's parse, which is the whole reason the two are split.
-		expect(() => JSON.parse(stdout.join(''))).not.toThrow();
+		expect(() => {
+			JSON.parse(stdout.join(''));
+		}).not.toThrow();
 		const catalog = JSON.parse(stdout.join('')) as { units: { id: string }[] };
 		expect(catalog.units.some(u => u.id === 'my-units/good')).toBe(true);
 	});
