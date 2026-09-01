@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.0.2](https://github.com/kendrick/unbranded-starter/compare/v2.0.1...v2.0.2) (2026-09-01)
+
+
+### Bug Fixes
+
+* **eslint:** run the type-aware rules the config already declares ([#128](https://github.com/kendrick/unbranded-starter/issues/128)) ([a702718](https://github.com/kendrick/unbranded-starter/commit/a702718e76454d6c74d0541eb6a402e868385106))
+* **fs,install:** settle dependency collisions through --on-conflict ([#124](https://github.com/kendrick/unbranded-starter/issues/124)) ([1fb5431](https://github.com/kendrick/unbranded-starter/commit/1fb5431d1b4cb90399483702bb137c6e31c763b0)), closes [#113](https://github.com/kendrick/unbranded-starter/issues/113)
+* **install,fs:** undo a failed install instead of leaving it half-applied ([#126](https://github.com/kendrick/unbranded-starter/issues/126)) ([550bba9](https://github.com/kendrick/unbranded-starter/commit/550bba9dfc388f25cc16ee7af82bffe58e09fcd1))
+* **manifest:** bump core-eslint pins ([#106](https://github.com/kendrick/unbranded-starter/issues/106)) ([8c6387d](https://github.com/kendrick/unbranded-starter/commit/8c6387da67341c798b3d924c5bbab7714c28d1c8))
+* **manifest:** bump core-vitest pins ([#109](https://github.com/kendrick/unbranded-starter/issues/109)) ([f98f261](https://github.com/kendrick/unbranded-starter/commit/f98f261c8ca39b01becb2c560d24e47fcc3cf9a9))
+* **manifest:** bump opt-husky pins ([#111](https://github.com/kendrick/unbranded-starter/issues/111)) ([533e00a](https://github.com/kendrick/unbranded-starter/commit/533e00abe6e65c00affe9235aad3f52d5e7fd7f1))
+* **manifest:** bump opt-monorepo pins ([#108](https://github.com/kendrick/unbranded-starter/issues/108)) ([0334696](https://github.com/kendrick/unbranded-starter/commit/03346961d732caab5e8109732a92ea86fb1d7d01))
+* **manifest:** name the PostCSS unit for the bundlers it serves ([#123](https://github.com/kendrick/unbranded-starter/issues/123)) ([e623449](https://github.com/kendrick/unbranded-starter/commit/e6234495bc803b4532ce7d30e1d509989bd27126))
+* **manifest:** stop shipping the PostCSS adapter to every Tailwind project ([#116](https://github.com/kendrick/unbranded-starter/issues/116)) ([8200b1a](https://github.com/kendrick/unbranded-starter/commit/8200b1aab9bd5cac2c5d37cbc569771f75975411)), closes [#112](https://github.com/kendrick/unbranded-starter/issues/112)
+* **scripts,deps:** bump the repo's own pins alongside the ones it ships ([#127](https://github.com/kendrick/unbranded-starter/issues/127)) ([610f15a](https://github.com/kendrick/unbranded-starter/commit/610f15a9632a247a35a3047e39dc750487ff6aa1))
+
 ## [2.0.1](https://github.com/kendrick/unbranded-starter/compare/v2.0.0...v2.0.1) (2026-08-22)
 
 
