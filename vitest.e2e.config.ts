@@ -14,7 +14,11 @@ export default defineConfig({
 		testTimeout: 60_000,
 		// Spawning child processes per test means parallel runs trip over
 		// each other (cwd, ports, etc.). Single-threaded is fine here.
+		// `fileParallelism: false` pins maxWorkers to 1; it replaces the
+		// `poolOptions.forks.singleFork` that vitest 4 removed, and the
+		// removal is silent, so a stale spelling reads as green while the
+		// suite races itself.
 		pool: 'forks',
-		poolOptions: { forks: { singleFork: true } },
+		fileParallelism: false,
 	},
 });
