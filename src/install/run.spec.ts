@@ -1,10 +1,21 @@
+// jsdom (the project default) runs test code in a separate VM context, and
+// Vitest's node-builtin mocking hooks the main-realm module loader—under
+// jsdom a mocked `spawn` silently falls through to the real binary instead of
+// the stub below, so the install-outcome tests would shell out to a real pm.
+// This file is pure Node logic with no DOM, so node is also the correct
+// environment on its own merits, not just a workaround.
+// @vitest-environment node
+import type { ChildProcess } from 'node:child_process';
 import type { Unit } from '../manifest/types';
+import { spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isCancel, select } from '@clack/prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { formatDepResolutions, writeAndInstall } from './run';
+import { createJournal } from '../fs/journal';
+import { collectAddedScripts, formatDepResolutions, writeAndInstall } from './run';
 
 // `select` is the one TTY prompt a dependency collision drives, so it's the only
 // export stubbed; `spinner` and `log` are silent to a test runner and stay real.
@@ -15,6 +26,48 @@ vi.mock('@clack/prompts', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('@clack/prompts')>();
 	return { ...actual, select: vi.fn(), isCancel: vi.fn(actual.isCancel) };
 });
+
+// Only `spawn` is stubbed, so `spawnOptions` and every other export stay real.
+// Every pre-existing test passes `pm: null`, which returns before this is ever
+// called—the mock exists purely for the install-outcome tests below, and its
+// default no-op implementation would surface as a hang, not a false pass, if
+// some other test path started reaching it.
+vi.mock('node:child_process', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('node:child_process')>();
+	return { ...actual, spawn: vi.fn() };
+});
+
+// A minimal stand-in for the ChildProcess runInstall and queryPmVersion read:
+// `exit`/`error` events and an optional stdout stream. Both callers attach
+// their listeners synchronously before this ever fires, so emitting from a
+// microtask (after `spawn` returns) is safe.
+function fakeChildProcess(): ChildProcess {
+	const child = new EventEmitter() as unknown as ChildProcess;
+	Object.assign(child, { kill: vi.fn(), killed: false, stdout: new EventEmitter() });
+	return child;
+}
+
+// Drives both spawn calls a real install makes: queryPmVersion's `pm --version`
+// probe (answered with a harmless exit 0, empty stdout, so it never blocks the
+// install path under test) and the actual `pm install` spawn, which resolves
+// per `outcome`.
+function mockInstallSpawn(outcome: { code?: number; error?: string }): void {
+	vi.mocked(spawn).mockImplementation((_command, args) => {
+		const child = fakeChildProcess();
+		const isVersionQuery = Array.isArray(args) && args.includes('--version');
+		queueMicrotask(() => {
+			if (isVersionQuery) {
+				child.emit('exit', 0);
+				return;
+			}
+			if (outcome.error !== undefined)
+				child.emit('error', new Error(outcome.error));
+			else
+				child.emit('exit', outcome.code ?? 0);
+		});
+		return child;
+	});
+}
 
 const NODE_MAJOR = process.versions.node.split('.')[0];
 
@@ -284,5 +337,95 @@ describe('formatDepResolutions', () => {
 			{ section: 'dependencies', name: 'clsx', existing: '2.0.0', incoming: 'latest', resolution: 'overwrite' },
 		], true);
 		expect(out).toBe('--latest: rewrote 2 existing dependency spec(s) to \'latest\'.');
+	});
+});
+
+describe('writeAndInstall install outcome (#114)', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-run-install-'));
+		vi.mocked(spawn).mockReset();
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	it('reports the failure and exit code when the pm exits non-zero, instead of an all-clear', async () => {
+		mockInstallSpawn({ code: 2 });
+		const result = await writeAndInstall({ targetDir: tmp, pm: 'npm', units: [UNIT] });
+		expect(result).toMatchObject({ failed: true, installExitCode: 2, installed: false, cancelled: false });
+	});
+
+	it('reports the failure and the spawn error when the pm binary cannot even run', async () => {
+		mockInstallSpawn({ error: 'spawn npm ENOENT' });
+		const result = await writeAndInstall({ targetDir: tmp, pm: 'npm', units: [UNIT] });
+		expect(result.failed).toBe(true);
+		expect(result.error).toBe('spawn npm ENOENT');
+	});
+
+	it('reports failed:false and installed:true on a clean install', async () => {
+		mockInstallSpawn({ code: 0 });
+		const result = await writeAndInstall({ targetDir: tmp, pm: 'npm', units: [UNIT] });
+		expect(result.failed).toBe(false);
+		expect(result.installed).toBe(true);
+	});
+});
+
+describe('collectAddedScripts', () => {
+	it('reports a script the merge added', () => {
+		const existing = { scripts: { build: 'tsc' } };
+		const merged = { scripts: { build: 'tsc', lint: 'eslint .' } };
+		expect(collectAddedScripts(existing, merged)).toEqual({ lint: 'eslint .' });
+	});
+
+	it('does not report a script the user already had—existing-wins means it was never ours to add', () => {
+		const existing = { scripts: { prepare: 'my-own-hook' } };
+		// mergePackageJson's mergeAdditive leaves a pre-existing script untouched,
+		// so this is what the merged manifest actually looks like in that case.
+		const merged = { scripts: { prepare: 'my-own-hook' } };
+		expect(collectAddedScripts(existing, merged)).toEqual({});
+	});
+
+	it('returns empty when the merge adds no scripts', () => {
+		const existing = { scripts: { build: 'tsc' } };
+		const merged = { scripts: { build: 'tsc' } };
+		expect(collectAddedScripts(existing, merged)).toEqual({});
+	});
+});
+
+describe('writeAndInstall journal integration (#114)', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-run-journal-'));
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	it('journals the exact prior bytes of an existing package.json on an augment run', async () => {
+		const original = JSON.stringify({ name: 'x', version: '1.0.0' });
+		writeFileSync(join(tmp, 'package.json'), original);
+		const journal = createJournal();
+		await writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT], journal });
+		const entry = journal.entries().find(e => e.path === join(tmp, 'package.json'));
+		expect(entry?.before?.toString('utf-8')).toBe(original);
+	});
+
+	it('journals before:null for package.json on a new-project run', async () => {
+		const journal = createJournal();
+		await writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT], journal });
+		const entry = journal.entries().find(e => e.path === join(tmp, 'package.json'));
+		expect(entry?.before).toBeNull();
+	});
+
+	it('journals a written .nvmrc', async () => {
+		const journal = createJournal();
+		await writeAndInstall({ targetDir: tmp, pm: null, units: [NODE_UNIT], journal });
+		const entry = journal.entries().find(e => e.path === join(tmp, '.nvmrc'));
+		expect(entry?.before).toBeNull();
 	});
 });

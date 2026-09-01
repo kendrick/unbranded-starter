@@ -238,6 +238,7 @@ Every file gets one verdict: `would create`, `would merge`, `would append`, `ide
 4. **Guardrails.** In a git repo with a dirty working tree it warns before writing anything, since a clean tree is your undo button (`git checkout .`). `--force` skips the check.
 5. **Apply.** Existing files prompt for overwrite or skip with a colored diff, and a dependency whose spec differs from the manifest's pin prompts the same way. The run reports every conflict either way, so a pin that replaces yours is never silent. Keeping your own spec instead can leave it out of step with the sibling versions the manifest pins as a tested set. Structured units fold into `package.json`, `settings.json`, and ignore files rather than overwriting, and the run records what landed in `.unbranded.json`.
 6. **Install and hooks.** The detected package manager runs under a Ctrl-C trap, then per-unit post-install steps (like `husky init`, gated on a real `.git/`) prompt with sensible defaults.
+7. **Failed installs.** An install that exits non-zero undoes the run: every file it changed goes back to its pre-run contents, every file it created is deleted, and the exit code is 1. An interactive run offers to keep the files instead, so you can fix the install by hand. The failure report names any lifecycle script the run added to `package.json`, because a `prepare` left behind by a half-finished run fires on your next install whether or not you remember it.
 
 ## Requirements
 
