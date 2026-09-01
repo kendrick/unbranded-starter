@@ -1,3 +1,4 @@
+import type { InlineFlags } from '../config/load';
 import type { UnitId } from '../manifest/types';
 import type { StateFile } from '../state/state';
 import type { Finding } from './doctor';
@@ -271,7 +272,7 @@ describe('runDoctorFix', () => {
 		await runDoctorFix({ cwd: tmp, yes: true });
 		expect(runInit).toHaveBeenCalledWith(expect.objectContaining({
 			targetDir: tmp,
-			inline: expect.objectContaining({ units: 'core-editorconfig', yes: true }),
+			inline: expect.objectContaining({ units: 'core-editorconfig', yes: true }) as InlineFlags,
 		}));
 	});
 
@@ -282,7 +283,7 @@ describe('runDoctorFix', () => {
 		writeJson(join(tmp, '.unbranded.json'), { doctor: { ignore: ['missing-editorconfig'] } });
 		await runDoctorFix({ cwd: tmp, yes: true });
 		expect(runInit).toHaveBeenCalledWith(expect.objectContaining({
-			inline: expect.objectContaining({ units: 'core-gitattributes' }),
+			inline: expect.objectContaining({ units: 'core-gitattributes' }) as InlineFlags,
 		}));
 	});
 
@@ -301,7 +302,7 @@ describe('runDoctorFix', () => {
 			dryRun: true,
 			diff: true,
 			force: true,
-			inline: expect.objectContaining({ pm: 'npm' }),
+			inline: expect.objectContaining({ pm: 'npm' }) as InlineFlags,
 		}));
 	});
 });

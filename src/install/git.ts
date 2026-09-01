@@ -62,7 +62,7 @@ export async function maybeInitGit(opts: MaybeInitGitOpts): Promise<void> {
 // Resolves to whether git exited cleanly. The 'error' branch (ENOENT when git
 // isn't on PATH) resolves false rather than rejecting, so the caller's warn-and-
 // continue path handles both a missing binary and a non-zero exit the same way.
-function runGit(cwd: string, args: string[]): Promise<boolean> {
+async function runGit(cwd: string, args: string[]): Promise<boolean> {
 	return new Promise((resolve) => {
 		const child = spawn('git', args, spawnOptions(cwd));
 		child.on('exit', code => resolve(code === 0));
@@ -75,7 +75,7 @@ function runGit(cwd: string, args: string[]): Promise<boolean> {
 // so this pipes stdout while keeping spawnOptions' win32 shell handling. Resolves
 // null on a non-zero exit or a missing binary — same warn-and-continue posture as
 // runGit's false, so a broken git can never mask itself as a clean tree.
-export function gitCapture(cwd: string, args: string[]): Promise<string | null> {
+export async function gitCapture(cwd: string, args: string[]): Promise<string | null> {
 	return new Promise((resolve) => {
 		const child = spawn('git', args, { ...spawnOptions(cwd), stdio: 'pipe' });
 		let out = '';

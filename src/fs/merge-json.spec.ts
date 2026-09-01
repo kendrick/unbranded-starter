@@ -199,12 +199,12 @@ describe('collectDepCollisions', () => {
 	it('tolerates a section that is not a string record instead of throwing', () => {
 		expect(() =>
 			collectDepCollisions(
-				{ dependencies: ['not', 'a', 'record'] as unknown as Record<string, unknown> },
+				{ dependencies: ['not', 'a', 'record'] as unknown },
 				[{ dependencies: { diff: '9.0.0' } }],
 			),
 		).not.toThrow();
 		const collisions = collectDepCollisions(
-			{ dependencies: ['not', 'a', 'record'] as unknown as Record<string, unknown> },
+			{ dependencies: ['not', 'a', 'record'] as unknown },
 			[{ dependencies: { diff: '9.0.0' } }],
 		);
 		expect(collisions).toEqual([]);

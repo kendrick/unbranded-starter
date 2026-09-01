@@ -103,7 +103,7 @@ export function planRemoval(opts: { targetDir: string; state: StateFile; removeU
 	// does corepack); silently unpinning node is the kind of surprise remove
 	// exists to avoid. Named as manual steps instead.
 	const manualPkg = removed
-		.filter(u => u.packageJsonPatch?.engines || u.packageJsonPatch?.packageManager || u.id === 'core-node-version')
+		.filter(u => u.packageJsonPatch?.engines !== undefined || u.packageJsonPatch?.packageManager !== undefined || u.id === 'core-node-version')
 		.map(u => `${u.id} contributed engines/packageManager pins to package.json; drop them by hand if you no longer want them.`);
 
 	return {

@@ -32,6 +32,7 @@ export function translateKey(_char: string | undefined, key: Pick<Key, 'name' | 
 		case 'return':
 		case 'enter': return { kind: 'submit' };
 		case 'escape': return { kind: 'escape' };
+		case undefined: break;
 	}
 
 	const seq = key.sequence;

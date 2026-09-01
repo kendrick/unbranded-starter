@@ -101,7 +101,10 @@ describe('writeAndInstall version policy', () => {
 	});
 
 	function writtenPkg(): { dependencies: Record<string, string>; devDependencies: Record<string, string> } {
-		return JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8'));
+		return JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as {
+			dependencies: Record<string, string>;
+			devDependencies: Record<string, string>;
+		};
 	}
 
 	it('keeps the manifest pins by default', async () => {
@@ -122,7 +125,10 @@ describe('writeAndInstall version policy', () => {
 		// is node-only — exactly the "no package.json to detect a pm from" case.
 		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [NODE_UNIT] });
 		expect(readFileSync(join(tmp, '.nvmrc'), 'utf-8')).toBe(`${NODE_MAJOR}\n`);
-		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8'));
+		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as {
+			engines?: { node?: string };
+			packageManager?: string;
+		};
 		expect(pkg.engines).toEqual({ node: `>=${NODE_MAJOR}` });
 		expect(pkg.packageManager).toBeUndefined();
 		// Reported back for the state file: this computed file lands after the copy
@@ -169,7 +175,10 @@ describe('writeAndInstall vscode extensions', () => {
 	});
 
 	function readExtensions(): { recommendations: string[]; [k: string]: unknown } {
-		return JSON.parse(readFileSync(join(tmp, '.vscode', 'extensions.json'), 'utf-8'));
+		return JSON.parse(readFileSync(join(tmp, '.vscode', 'extensions.json'), 'utf-8')) as {
+			recommendations: string[];
+			[k: string]: unknown;
+		};
 	}
 
 	it('generates .vscode/extensions.json from the selected units when opt-vscode is chosen', async () => {
@@ -218,7 +227,10 @@ describe('writeAndInstall dependency conflicts (#113)', () => {
 	});
 
 	function writtenPkg(): { dependencies: Record<string, string>; devDependencies: Record<string, string> } {
-		return JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8'));
+		return JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as {
+			dependencies: Record<string, string>;
+			devDependencies: Record<string, string>;
+		};
 	}
 
 	function seedConflict(devDependencies: Record<string, string> = { typescript: '^6.0.3' }): void {

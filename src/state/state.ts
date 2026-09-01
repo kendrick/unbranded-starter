@@ -219,7 +219,7 @@ export function applyRemovalToState(opts: {
 }
 
 function dropKeys<V extends string>(record: Record<string, V>, gone: ReadonlySet<string>): Record<string, V> {
-	return Object.fromEntries(Object.entries(record).filter(([k]) => !gone.has(k))) as Record<string, V>;
+	return Object.fromEntries(Object.entries(record).filter(([k]) => !gone.has(k)));
 }
 
 // `unbranded update`'s state door: refresh hashes for what's now on disk and
