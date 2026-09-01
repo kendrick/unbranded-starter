@@ -1,20 +1,27 @@
 // Maintainer-side half of the freshness policy (#35): consume `unbranded
-// outdated --json`, rewrite the pin literals in the manifest sources, and open
+// outdated --json`, rewrite the pin literals in the manifest sources and this
+// repo's own package.json (the manifest pins what we ship, package.json pins
+// what we build with, and both have to move together), and open
 // one PR per unit so each bump is gated by that unit's own e2e. Runs from the
 // weekly workflow (.github/workflows/pin-bumps.yml) or by hand:
 //
 //   node dist/cli.js outdated --json > /tmp/outdated.json
 //   node scripts/bump-pins.mjs /tmp/outdated.json [--dry-run]
 //
-// The pure pieces (planBumps, groupByUnit, rewritePins) are unit-tested; main()
-// is thin git/gh glue that --dry-run bypasses entirely.
+// The pure pieces (planBumps, groupByUnit, rewritePins, rewritePackageJson)
+// are unit-tested; main() is thin git/gh glue that --dry-run bypasses
+// entirely.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 
-// Every file that carries version pins. eslint's live in the flavor tables of
-// eslint-config.ts, not the unit registry, so both files get the rewrite.
+// Every manifest file that carries version pins. eslint's live in the flavor
+// tables of eslint-config.ts, not the unit registry, so both files get the
+// rewrite. package.json is handled separately (rewritePackageJson)—it's not
+// a manifest source and its misses aren't a build-breaking signal the way a
+// missing manifest pin is, so it stays out of this list and out of the
+// missed-union hard-fail below.
 const MANIFEST_FILES = ['src/manifest/index.ts', 'src/manifest/eslint-config.ts'];
 
 // outdated's JSON → the actionable subset: anything the registry is ahead of.
@@ -61,6 +68,38 @@ export function rewritePins(source, bumps) {
 	return { source: out, applied, missed };
 }
 
+// package.json can't go through rewritePins: it's double-quoted where the
+// manifest sources are single-quoted, and its ranges carry a `^`/`~` prefix
+// the manifest's exact pins never do—an exact `from` match would never hit.
+// So this keys on `name` and lets JSON.parse settle both what's present and
+// the exact current range string, then splices only that substring back into
+// the raw text. That's what keeps tab indentation and key order byte-for-byte
+// outside the version itself, and it's why the rewrite fires independent of
+// whether the existing range would already admit `to`—a caret range often
+// would, and letting that suppress the bump is how a major-version gap hides.
+export function rewritePackageJson(source, bumps) {
+	const applied = [];
+	const missed = [];
+	let out = source;
+	const pkg = JSON.parse(source);
+	for (const { name, to } of bumps) {
+		let hit = false;
+		for (const map of ['dependencies', 'devDependencies']) {
+			const current = pkg[map]?.[name];
+			if (current === undefined)
+				continue;
+			// The repo mixes range styles per entry (ajv pins exact) so the
+			// prefix has to be read off this entry, not assumed.
+			const prefix = /^[\^~]/.test(current) ? current[0] : '';
+			const pattern = new RegExp(`("${escapeRegExp(name)}":\\s*")${escapeRegExp(current)}(")`, 'g');
+			out = out.replace(pattern, (_m, pre, post) => `${pre}${prefix}${to}${post}`);
+			hit = true;
+		}
+		(hit ? applied : missed).push(name);
+	}
+	return { source: out, applied, missed };
+}
+
 function escapeRegExp(text) {
 	return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -91,8 +130,23 @@ function main() {
 
 	for (const [unit, bumps] of groups) {
 		const lines = bumps.map(b => `${b.name} ${b.from} → ${b.to}`);
+
 		if (dryRun) {
+			// Runs both rewrites in memory so a dry run surfaces the same
+			// per-file misses the real run would, without writing anything.
 			process.stdout.write(`bump/${unit}\n${lines.map(l => `  ${l}`).join('\n')}\n`);
+			const missed = new Set(bumps.map(b => b.name));
+			for (const path of MANIFEST_FILES) {
+				const result = rewritePins(readFileSync(path, 'utf-8'), bumps);
+				for (const name of result.applied) missed.delete(name);
+				process.stdout.write(`  ${path}: ${result.applied.length > 0 ? result.applied.join(', ') : '(none)'}\n`);
+			}
+			const pkgResult = rewritePackageJson(readFileSync('package.json', 'utf-8'), bumps);
+			process.stdout.write(`  package.json: ${pkgResult.applied.length > 0 ? pkgResult.applied.join(', ') : '(none)'}\n`);
+			if (missed.size > 0) {
+				process.stderr.write(`bump/${unit}: no pin literal found for ${[...missed].join(', ')} — manifest moved since outdated ran?\n`);
+				missedAny = true;
+			}
 			continue;
 		}
 
@@ -110,6 +164,19 @@ function main() {
 			missedAny = true;
 			sh('git', ['checkout', base]);
 			continue;
+		}
+
+		// package.json is an opportunistic extra target, not a manifest source:
+		// its misses are expected (turbo, husky, @playwright/test carry no
+		// devDependencies counterpart) and don't join missedAny above.
+		const pkgResult = rewritePackageJson(readFileSync('package.json', 'utf-8'), bumps);
+		if (pkgResult.applied.length > 0) {
+			writeFileSync('package.json', pkgResult.source);
+			// CI installs with --frozen-lockfile, so a package.json bump with
+			// no matching pnpm-lock.yaml update would open a PR that can't
+			// pass its own gate. `git commit -am` below already stages the
+			// tracked lockfile this produces.
+			sh('pnpm', ['install', '--lockfile-only']);
 		}
 
 		const title = `fix(manifest): bump ${unit} pins`;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupByUnit, planBumps, rewritePins } from './bump-pins.mjs';
+import { groupByUnit, planBumps, rewritePackageJson, rewritePins } from './bump-pins.mjs';
 
 describe('planBumps', () => {
 	it('keeps only pins the registry is ahead of, mapping pin→from and latest→to', () => {
@@ -70,5 +70,77 @@ describe('rewritePins', () => {
 		expect(source).toBe(SOURCE);
 		expect(applied).toEqual([]);
 		expect(missed).toEqual(['ghost']);
+	});
+});
+
+describe('rewritePackageJson', () => {
+	const PKG = `{
+	"name": "unbranded",
+	"dependencies": {
+		"kleur": "^4.1.5"
+	},
+	"devDependencies": {
+		"@antfu/eslint-config": "^8.2.0",
+		"ajv": "8.20.0"
+	}
+}
+`;
+
+	it('preserves a caret range and an exact pin, byte-for-byte outside the version', () => {
+		const expected = `{
+	"name": "unbranded",
+	"dependencies": {
+		"kleur": "^4.1.5"
+	},
+	"devDependencies": {
+		"@antfu/eslint-config": "^9.3.0",
+		"ajv": "8.21.0"
+	}
+}
+`;
+		const { source, applied } = rewritePackageJson(PKG, [
+			{ name: '@antfu/eslint-config', to: '9.3.0' },
+			{ name: 'ajv', to: '8.21.0' },
+		]);
+		expect(source).toBe(expected);
+		expect(applied.sort()).toEqual(['@antfu/eslint-config', 'ajv']);
+	});
+
+	it('rewrites a dependencies entry, not just devDependencies', () => {
+		const expected = PKG.replace('"kleur": "^4.1.5"', '"kleur": "^5.0.0"');
+		const { source, applied } = rewritePackageJson(PKG, [
+			{ name: 'kleur', to: '5.0.0' },
+		]);
+		expect(source).toBe(expected);
+		expect(applied).toEqual(['kleur']);
+	});
+
+	it('leaves a name in neither map as a miss and the source untouched', () => {
+		const { source, applied, missed } = rewritePackageJson(PKG, [
+			{ name: 'turbo', to: '3.0.0' },
+		]);
+		expect(source).toBe(PKG);
+		expect(applied).toEqual([]);
+		expect(missed).toEqual(['turbo']);
+	});
+
+	it('applies what it finds and misses what it does not, in one call', () => {
+		const { applied, missed } = rewritePackageJson(PKG, [
+			{ name: 'ajv', to: '8.21.0' },
+			{ name: 'husky', to: '9.0.0' },
+		]);
+		expect(applied).toEqual(['ajv']);
+		expect(missed).toEqual(['husky']);
+	});
+
+	it('counts a package already at the target version as applied, not missed', () => {
+		// A refreshed branch re-running the same bump must be idempotent: the
+		// pin is present and matches, so it's a no-op splice, not a failure to find it.
+		const { source, applied, missed } = rewritePackageJson(PKG, [
+			{ name: 'ajv', to: '8.20.0' },
+		]);
+		expect(source).toBe(PKG);
+		expect(applied).toEqual(['ajv']);
+		expect(missed).toEqual([]);
 	});
 });
