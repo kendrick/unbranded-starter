@@ -219,7 +219,7 @@ export const UNITS: Unit[] = [
 		],
 		dependencies: {
 			'clsx': '2.1.1',
-			'tailwind-merge': '3.6.0',
+			'tailwind-merge': '3.7.0',
 		},
 		// cn() uses tailwind-merge, which only earns its keep if Tailwind is
 		// actually doing the styling. Without it the utility runs but does
