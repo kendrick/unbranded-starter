@@ -237,7 +237,7 @@ export const UNITS: Unit[] = [
 		],
 		devDependencies: {
 			'husky': '9.1.7',
-			'lint-staged': '17.4.1',
+			'lint-staged': '17.5.1',
 		},
 		packageJsonPatch: {
 			// `prepare` is npm's lifecycle hook for fresh clones — running it
