@@ -12,6 +12,9 @@
 # unbranded
 
 [![npm version](https://img.shields.io/npm/v/unbranded.svg)](https://www.npmjs.com/package/unbranded)
+[![CI](https://github.com/kendrick/unbranded-starter/actions/workflows/ci.yml/badge.svg)](https://github.com/kendrick/unbranded-starter/actions/workflows/ci.yml)
+[![node](https://img.shields.io/node/v/unbranded)](https://nodejs.org)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 Add your preferred tooling to any project, new or existing, using the package manager you already have.
 
@@ -26,6 +29,8 @@ Fifteen à la carte units, pinned for reproducibility, that merge into what's al
 - [Preview a Run](#preview-a-run)
 - [How It Works](#how-it-works)
 - [Philosophy](#philosophy)
+- [Development](#development)
+- [License](#license)
 
 ## Why unbranded
 
@@ -44,6 +49,8 @@ But most of the repos you touch already exist, and the tooling questions never r
 The name is the point: no framework lock-in, no house brand.
 
 ## Quickstart
+
+Node 22 or newer, plus whichever package manager you already use: npm, pnpm, yarn, or bun.
 
 ```bash
 npm create unbranded@latest     # or: pnpm create unbranded · bun create unbranded
@@ -240,10 +247,6 @@ Every file gets one verdict: `would create`, `would merge`, `would append`, `ide
 6. **Install and hooks.** The detected package manager runs under a Ctrl-C trap, then per-unit post-install steps (like `husky init`, gated on a real `.git/`) prompt with sensible defaults.
 7. **Failed installs.** An install that exits non-zero undoes the run: every file it changed goes back to its pre-run contents, every file it created is deleted, and the exit code is 1. An interactive run offers to keep the files instead, so you can fix the install by hand. The failure report names any lifecycle script the run added to `package.json`, because a `prepare` left behind by a half-finished run fires on your next install whether or not you remember it.
 
-## Requirements
-
-Node 22 or newer.
-
 ## Philosophy
 
 - **`@antfu/eslint-config` over `eslint-config-next`** alone. @antfu gives uniform style, a11y, and formatting across every kind of project, not just Next ones.
@@ -251,15 +254,21 @@ Node 22 or newer.
 - **Strict TypeScript is non-negotiable.** `noUncheckedIndexedAccess` catches the bugs the basic `strict` flag misses.
 - **`.vscode/` is committed**, and there's a unit for it. If you work in VS Code, a clone should just work.
 
-## Manual Clone
-
-The CLI is the recommended path, but the repo doubles as a template if you'd rather hand-pick files:
+## Development
 
 ```bash
-pnpm dlx degit kendrick/unbranded-starter new-project
+pnpm install
+pnpm build        # tsup
+pnpm test         # vitest, unit
+pnpm test:e2e     # builds first, then the end-to-end suite
+pnpm test:all     # both suites
+pnpm typecheck
+pnpm lint         # CI parity: CI=true pnpm lint
 ```
 
-Then take what you want from the root configs and the `opt-in/` directories.
+CI runs all of these on Node 22 and 24, across Ubuntu and Windows. [AGENTS.md](AGENTS.md) has the repo layout and the full non-interactive contract; [docs/authoring-units.md](docs/authoring-units.md) covers authoring your own units.
+
+The repo also doubles as a template if you'd rather hand-pick files than run the CLI. Run `pnpm dlx degit kendrick/unbranded-starter new-project`, then take what you want from the root configs and the `opt-in/` directories.
 
 ## License
 
