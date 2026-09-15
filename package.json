@@ -79,12 +79,12 @@
 		"node-diff3": "3.2.1"
 	},
 	"devDependencies": {
-		"@antfu/eslint-config": "^9.3.0",
+		"@antfu/eslint-config": "^9.5.1",
 		"@dreamsicle.io/stylelint-config-tailwindcss": "^1.2.2",
 		"@tailwindcss/postcss": "^4.0.0",
 		"@types/node": "^22.10.5",
 		"ajv": "8.20.0",
-		"eslint": "^10.9.1",
+		"eslint": "^10.10.0",
 		"eslint-plugin-format": "^2.0.1",
 		"jsdom": "^30.0.1",
 		"lint-staged": "^17.5.1",

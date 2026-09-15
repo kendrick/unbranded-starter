@@ -60,10 +60,16 @@ function pnpmMajor(version: string | null | undefined): number | null {
 // The build-script allowlist as a pnpm-workspace.yaml. Both keys ride together
 // because pnpm split them across majors (pnpm 10 reads the
 // `onlyBuiltDependencies` list, pnpm 11 the `allowBuilds` map), and one file has
-// to serve whichever the user runs. `withPackages` adds a single-package stub:
-// pnpm 10 rejects a workspace file that has no `packages` field, while pnpm 11
-// treats the file as plain project settings and needs no stub. Default off, so
-// a modern scaffold gets the clean settings-only form.
+// to serve whichever the user runs. `allowBuilds` goes first because the ESLint
+// config a scaffold ships sorts pnpm-workspace.yaml against pnpm's own settings
+// order, which ranks `allowBuilds` above `onlyBuiltDependencies`. Emit the pair
+// the other way round and a fresh scaffold fails its own `pnpm lint` on the
+// first run.
+//
+// `withPackages` adds a single-package stub: pnpm 10 rejects a workspace file
+// that has no `packages` field, while pnpm 11 treats the file as plain project
+// settings and needs no stub. Default off, so a modern scaffold gets the clean
+// settings-only form.
 export function buildPnpmWorkspace(deps: readonly string[], opts: { withPackages?: boolean } = {}): string {
 	const list = deps.map(dep => `  - ${yamlScalar(dep)}`).join('\n');
 	const map = deps.map(dep => `  ${yamlScalar(dep)}: true`).join('\n');
@@ -87,7 +93,7 @@ export function buildPnpmWorkspace(deps: readonly string[], opts: { withPackages
 			'',
 		);
 	}
-	lines.push('onlyBuiltDependencies:', list, '', 'allowBuilds:', map, '');
+	lines.push('allowBuilds:', map, '', 'onlyBuiltDependencies:', list, '');
 	return lines.join('\n');
 }
 
