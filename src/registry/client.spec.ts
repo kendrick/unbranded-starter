@@ -39,6 +39,18 @@ describe('fetchLatestVersions', () => {
 		expect(url).toBe(`${DEFAULT_REGISTRY}/@antfu%2Feslint-config`);
 	});
 
+	it('encodes every slash, not just the first', async () => {
+		// A name with two slashes can only arrive from a --units-dir pack, but
+		// encoding just the first would leave a real separator in the path and
+		// let the rest of the name traverse off the package route.
+		const name = '@scope/pkg/../../evil';
+		const fetchImpl = fakeRegistry({ [name]: '1.0.0' });
+		await fetchLatestVersions([name], { fetchImpl });
+		const url = String(vi.mocked(fetchImpl).mock.calls[0]?.[0]);
+		expect(url).toBe(`${DEFAULT_REGISTRY}/@scope%2Fpkg%2F..%2F..%2Fevil`);
+		expect(new URL(url).pathname).not.toContain('/..');
+	});
+
 	it('caps in-flight requests at the concurrency limit', async () => {
 		let inFlight = 0;
 		let peak = 0;

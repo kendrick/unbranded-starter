@@ -38,8 +38,11 @@ export async function fetchLatestVersions(names: string[], opts: FetchLatestOpts
 
 async function latestOf(name: string, registry: string, fetchImpl: typeof fetch, timeoutMs: number): Promise<string> {
 	// Scoped names keep the @ but encode the slash — the registry route wants
-	// one path segment per package.
-	const url = `${registry}/${name.replace('/', '%2F')}`;
+	// one path segment per package. replaceAll, not replace: a valid npm name
+	// has at most one slash, but `--units-dir` loads unit packs this repo never
+	// saw, and a name carrying a second slash would otherwise leave a live path
+	// separator in the URL and walk out of the package route.
+	const url = `${registry}/${name.replaceAll('/', '%2F')}`;
 
 	let response: Response;
 	try {
