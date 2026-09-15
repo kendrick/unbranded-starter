@@ -36,7 +36,7 @@ jobs:
       contents: read
       id-token: write # npm trusted publishing (OIDC) + provenance
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # No `version:` — reads from package.json's packageManager field.
       - uses: pnpm/action-setup@v4

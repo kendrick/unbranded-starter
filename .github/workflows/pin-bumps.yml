@@ -22,7 +22,7 @@ jobs:
       # the whole merge gate here. Set a PIN_BUMP_TOKEN secret (a fine-grained
       # PAT with contents+PRs write) to get gated PRs; without it the workflow
       # still runs, but each bump PR needs a manual close/reopen to start CI.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           token: ${{ secrets.PIN_BUMP_TOKEN || github.token }}
 
