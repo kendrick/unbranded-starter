@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.0.3](https://github.com/kendrick/unbranded-starter/compare/v2.0.2...v2.0.3) (2026-09-15)
+
+
+### Bug Fixes
+
+* **ci:** scope the CI token to contents: read ([74e89b1](https://github.com/kendrick/unbranded-starter/commit/74e89b183c065b19d544f4fa098558ec66cde760))
+* **manifest:** bump core-eslint pins ([#129](https://github.com/kendrick/unbranded-starter/issues/129)) ([e27484d](https://github.com/kendrick/unbranded-starter/commit/e27484da6d56ff76c872831cd380806755e22fc0))
+* **manifest:** bump core-stylelint pins ([#133](https://github.com/kendrick/unbranded-starter/issues/133)) ([1d27677](https://github.com/kendrick/unbranded-starter/commit/1d2767770f3652c1e210cc91881ff4949a6832cb))
+* **manifest:** bump core-vitest pins ([#134](https://github.com/kendrick/unbranded-starter/issues/134)) ([53c1be2](https://github.com/kendrick/unbranded-starter/commit/53c1be29ed801fdb2683f647d912387e18697776))
+* **manifest:** bump opt-husky pins ([#132](https://github.com/kendrick/unbranded-starter/issues/132)) ([6ac8d19](https://github.com/kendrick/unbranded-starter/commit/6ac8d194f8aea7875962df7ea578ce1e21c6cf44))
+* **manifest:** bump opt-playwright pins ([#130](https://github.com/kendrick/unbranded-starter/issues/130)) ([f50534b](https://github.com/kendrick/unbranded-starter/commit/f50534b8f11f984eb92c5f35fa6f1e4fb5b2f50b))
+* **manifest:** bump opt-shadcn pins ([#135](https://github.com/kendrick/unbranded-starter/issues/135)) ([846308e](https://github.com/kendrick/unbranded-starter/commit/846308e46cce32e7e083d0d5c500f559716f0343))
+* **registry:** encode every slash in a package name, not just the first ([90c2117](https://github.com/kendrick/unbranded-starter/commit/90c2117ae11ca69004b5f9bfb8966ea5323ddc2a))
+
 ## [2.0.2](https://github.com/kendrick/unbranded-starter/compare/v2.0.1...v2.0.2) (2026-09-01)
 
 
