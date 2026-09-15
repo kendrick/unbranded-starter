@@ -1,26 +1,8 @@
 # Copy to repo root when starting a monorepo.
-# Drop `trustPolicy` / `trustPolicyExclude` if not on pnpm 9.4+.
 
-shellEmulator: true
-
-packages:
-  - 'apps/*'
-  - 'packages/*'
-
-# Approve the build scripts these packages run at install time. pnpm blocks
-# build scripts by default; on pnpm 11 an un-approved build stops `pnpm install`
-# cold, where pnpm 10 only warned. pnpm 10 reads the onlyBuiltDependencies list
-# and pnpm 11 the allowBuilds map, so both ride here to cover either major.
-# These are the common offenders across modern Next/Vite/React stacks.
-onlyBuiltDependencies:
-  - esbuild
-  - sharp
-  - unrs-resolver
-
-allowBuilds:
-  esbuild: true
-  sharp: true
-  unrs-resolver: true
+# These keys sit in pnpm's own settings order, which is what the ESLint config
+# this starter scaffolds sorts against. Reshuffle them and `pnpm lint` fails on
+# yaml/sort-keys, so add a new setting in its canonical slot.
 
 # Optional: pin peer dependency versions across all workspaces
 peerDependencyRules:
@@ -28,6 +10,27 @@ peerDependencyRules:
     react: '19'
     react-dom: '19'
 
+shellEmulator: true
+
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
 # Optional: force-resolve packages across workspaces
 # overrides:
 #   tailwind-merge: ^3.0.0
+
+# Approve the build scripts these packages run at install time. pnpm blocks
+# build scripts by default; on pnpm 11 an un-approved build stops `pnpm install`
+# cold, where pnpm 10 only warned. pnpm 10 reads the onlyBuiltDependencies list
+# and pnpm 11 the allowBuilds map, so both ride here to cover either major.
+# These are the common offenders across modern Next/Vite/React stacks.
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - unrs-resolver
