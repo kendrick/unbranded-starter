@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+# Every job here reads the tree and reports; none of them write to the repo, so
+# the token they inherit doesn't need to either. pin-bumps.yml opens PRs and
+# declares the write scopes it needs for that.
+permissions:
+  contents: read
+
 # The e2e is slow because a handful of specs run real package-manager installs, and
 # nearly all of that time was one file: eslint-flavors runs three installs (~55s each
 # on Windows), and scaffold-lint one more. vitest sharding couldn't split them (a
