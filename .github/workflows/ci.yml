@@ -27,7 +27,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         node: [22, 24]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # No `version:` — pnpm/action-setup reads from package.json's
       # `packageManager` field, which is the single source of truth.
@@ -75,7 +75,7 @@ jobs:
           - {os: ubuntu-latest, node: 24}
           - {os: windows-latest, node: 22}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -102,7 +102,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         flavor: [base, react, next]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -125,7 +125,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -151,7 +151,7 @@ jobs:
         # is the heaviest in the suite.
         preset: [node-lib, next-app, cli]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -170,7 +170,7 @@ jobs:
     name: e2e pnpm 11 acceptance
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # No version override: the repo builds under its pinned pnpm 10, same as
       # every other job. The spec drives pnpm 11 through `npx pnpm@11` for the
       # scaffolded project alone, so the one major that hard-fails an
@@ -198,7 +198,7 @@ jobs:
     # cross-platform and its forwarding rides the Windows install/e2e legs above.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
