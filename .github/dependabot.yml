@@ -1,0 +1,15 @@
+version: 2
+
+# Actions only, deliberately. The npm ecosystem here is already covered by
+# pin-bumps.yml, which grades the unit pins with `unbranded outdated` and opens
+# one PR per unit so a bad bump fails that unit's e2e in isolation. Dependabot
+# on npm would race it and split the same bump across two PRs.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Same slot as the pin bumps, so the week's dependency noise lands together.
+    commit-message:
+      prefix: chore(deps)
