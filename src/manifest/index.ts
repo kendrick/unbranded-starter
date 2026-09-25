@@ -303,7 +303,7 @@ export const UNITS: Unit[] = [
 			{ src: 'opt-in/monorepo/turbo.json', dest: 'turbo.json' },
 		],
 		devDependencies: {
-			turbo: '2.10.12',
+			turbo: '2.11.2',
 		},
 	},
 ];
