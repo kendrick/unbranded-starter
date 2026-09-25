@@ -170,8 +170,8 @@ export const UNITS: Unit[] = [
 			{ src: 'vitest.config.ts', dest: 'vitest.config.ts' },
 		],
 		devDependencies: {
-			vitest: '5.0.0',
-			jsdom: '30.0.1',
+			vitest: '5.0.1',
+			jsdom: '30.1.0',
 		},
 		packageJsonPatch: {
 			scripts: {
@@ -303,7 +303,7 @@ export const UNITS: Unit[] = [
 			{ src: 'opt-in/monorepo/turbo.json', dest: 'turbo.json' },
 		],
 		devDependencies: {
-			turbo: '2.10.12',
+			turbo: '2.11.2',
 		},
 	},
 ];
