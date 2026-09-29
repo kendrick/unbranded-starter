@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.0.5](https://github.com/kendrick/unbranded-starter/compare/v2.0.4...v2.0.5) (2026-09-28)
+
+
+### Bug Fixes
+
+* **manifest:** bump core-eslint pins ([#150](https://github.com/kendrick/unbranded-starter/issues/150)) ([fbee4bc](https://github.com/kendrick/unbranded-starter/commit/fbee4bcfaa4a34a3b0da766831db36459f0aa8d8))
+* **manifest:** bump core-vitest pins ([#152](https://github.com/kendrick/unbranded-starter/issues/152)) ([d3d33e3](https://github.com/kendrick/unbranded-starter/commit/d3d33e36804d497ac93ff42518f0112ddee36646))
+* **manifest:** bump opt-husky pins ([#153](https://github.com/kendrick/unbranded-starter/issues/153)) ([d97ad27](https://github.com/kendrick/unbranded-starter/commit/d97ad27e79dab77c4d047dcd4c1128464bccd165))
+* **manifest:** bump opt-monorepo pins ([#154](https://github.com/kendrick/unbranded-starter/issues/154)) ([18285ea](https://github.com/kendrick/unbranded-starter/commit/18285ea7439a2373f176377d0fa8ae6549753687))
+
 ## [2.0.4](https://github.com/kendrick/unbranded-starter/compare/v2.0.3...v2.0.4) (2026-09-26)
 
 
