@@ -99,7 +99,7 @@ export const UNITS: Unit[] = [
 			{ src: 'templates/tsconfig.json', dest: 'tsconfig.json' },
 		],
 		devDependencies: {
-			'typescript': '5.9.3',
+			'typescript': '6.0.3',
 			'@types/node': '22.19.19',
 		},
 		packageJsonPatch: {

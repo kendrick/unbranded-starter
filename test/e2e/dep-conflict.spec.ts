@@ -28,7 +28,7 @@ function writeJson(path: string, obj: unknown): void {
 
 // The seeded conflicting spec from #113's own repro: a project pinned a major
 // back of what core-typescript ships.
-const CONFLICTING_SPEC = '^6.0.3';
+const CONFLICTING_SPEC = '^5.9.3';
 
 describe('cli dependency conflict resolution (#113)', () => {
 	let tmp: string;
@@ -70,7 +70,7 @@ describe('cli dependency conflict resolution (#113)', () => {
 
 		expect(result.stdout).toMatch(/package\.json dependency conflicts/);
 		expect(result.stdout).toMatch(
-			new RegExp(`overwrote\\s+devDependencies\\.typescript\\s+\\^6\\.0\\.3\\s+->\\s+${TYPESCRIPT_PIN_RE}`),
+			new RegExp(`overwrote\\s+devDependencies\\.typescript\\s+\\^5\\.9\\.3\\s+->\\s+${TYPESCRIPT_PIN_RE}`),
 		);
 	});
 
@@ -99,7 +99,7 @@ describe('cli dependency conflict resolution (#113)', () => {
 		expect(pkg.devDependencies['@types/node']).toBe(TYPES_NODE_PIN);
 
 		expect(result.stdout).toMatch(
-			new RegExp(`kept\\s+devDependencies\\.typescript\\s+\\^6\\.0\\.3\\s+\\(manifest pins\\s+${TYPESCRIPT_PIN_RE}\\)`),
+			new RegExp(`kept\\s+devDependencies\\.typescript\\s+\\^5\\.9\\.3\\s+\\(manifest pins\\s+${TYPESCRIPT_PIN_RE}\\)`),
 		);
 		expect(result.stdout).toMatch(/Kept pins may not match/);
 	});
