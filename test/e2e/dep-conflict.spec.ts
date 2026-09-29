@@ -26,8 +26,8 @@ function writeJson(path: string, obj: unknown): void {
 	writeFileSync(path, JSON.stringify(obj, null, 2));
 }
 
-// The seeded conflicting spec from #113's own repro: a project pinned a major
-// back of what core-typescript ships.
+// A spec a major off what core-typescript ships, the collision #113 reported
+// (that repro sat a major ahead). Move this seed whenever the pin changes major.
 const CONFLICTING_SPEC = '^5.9.3';
 
 describe('cli dependency conflict resolution (#113)', () => {

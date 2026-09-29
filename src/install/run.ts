@@ -146,9 +146,10 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 		computedWrites.push(pnpmWorkspace);
 
 	// A spec the user already chose is a decision, so replacing it in silence is
-	// a downgrade they discover by reading the diff: a project pinned to
-	// typescript@^6 comes out a major back. Settle each collision before the
-	// write, then report every one, the default overwrites included (#113).
+	// a downgrade they discover by reading the diff: a project on a newer
+	// typescript major than core-typescript pins comes out a major back. Settle
+	// each collision before the write, then report every one, the default
+	// overwrites included (#113).
 	const keepExisting = new Set<string>();
 	const depResolutions: DepResolution[] = [];
 	for (const collision of collectDepCollisions(existing, patches)) {
