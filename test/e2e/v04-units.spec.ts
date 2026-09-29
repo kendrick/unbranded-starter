@@ -16,10 +16,17 @@ function writeJson(path: string, obj: unknown): void {
 
 // pm:null skips install, so a scaffold run is offline and fast. --config skips
 // the Apply confirm, so no stdin is needed.
-function scaffold(tmp: string, units: string[], onConflict: 'overwrite' | 'skip' = 'overwrite'): void {
+function scaffold(
+	tmp: string,
+	units: string[],
+	onConflict: 'overwrite' | 'skip' = 'overwrite',
+): void {
 	writeJson(join(tmp, 'package.json'), { name: 'v04-units', version: '0.0.0' });
 	writeJson(join(tmp, 'recipe.json'), { units, pm: null, onConflict, postInstall: 'none' });
-	const result = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+	const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+		cwd: tmp,
+		encoding: 'utf-8',
+	});
 	expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 }
 
@@ -78,7 +85,10 @@ describe('v0.4 mundane-pain units (e2e)', () => {
 		const wf = readFileSync(join(tmp, '.github', 'workflows', 'ci.yml'), 'utf-8');
 		// Assert against the executable body, not the header comment — the comment
 		// legitimately names the matrix and create-unbranded step it dropped.
-		const body = wf.split('\n').filter(line => !line.trimStart().startsWith('#')).join('\n');
+		const body = wf
+			.split('\n')
+			.filter((line) => !line.trimStart().startsWith('#'))
+			.join('\n');
 		expect(body).toMatch(/^name:/m);
 		expect(body).toMatch(/^jobs:/m);
 		for (const step of ['pnpm install', 'pnpm lint', 'pnpm typecheck', 'pnpm test'])
@@ -97,6 +107,10 @@ describe('v0.4 mundane-pain units (e2e)', () => {
 		expect(existsSync(join(tmp, 'vitest.config.ts'))).toBe(true);
 		expect(existsSync(join(tmp, '.nvmrc'))).toBe(true);
 		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8'));
-		expect(pkg.scripts).toMatchObject({ lint: expect.any(String), typecheck: expect.any(String), test: expect.any(String) });
+		expect(pkg.scripts).toMatchObject({
+			lint: expect.any(String),
+			typecheck: expect.any(String),
+			test: expect.any(String),
+		});
 	});
 });

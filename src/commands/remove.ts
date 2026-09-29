@@ -11,7 +11,12 @@ import { detectIndent } from '../install/run';
 import { loadCatalog, unitsDirsFor } from '../manifest/catalog';
 import { applyUnitOptions } from '../manifest/options';
 import { dependentsOf } from '../manifest/resolve';
-import { applyRemovalToState, hashBuffer, readStateFile, unsupportedStateMessage } from '../state/state';
+import {
+	applyRemovalToState,
+	hashBuffer,
+	readStateFile,
+	unsupportedStateMessage,
+} from '../state/state';
 import { cancelAndExit } from '../util/cancel';
 
 export interface RemovalPlan {
@@ -34,24 +39,29 @@ export interface RemovalPlan {
 
 // Filesystem in, plan out — same pattern as auditRepo, so the whole decision
 // surface is testable without prompts. Nothing here writes.
-export function planRemoval(opts: { targetDir: string; state: StateFile; removeUnits: string[]; units: AnyUnit[] }): RemovalPlan {
+export function planRemoval(opts: {
+	targetDir: string;
+	state: StateFile;
+	removeUnits: string[];
+	units: AnyUnit[];
+}): RemovalPlan {
 	const { state, removeUnits } = opts;
-	const byId = new Map<string, AnyUnit>(opts.units.map(u => [u.id, u]));
+	const byId = new Map<string, AnyUnit>(opts.units.map((u) => [u.id, u]));
 	const removedSet = new Set(removeUnits);
-	const remaining = state.units.map(u => u.id).filter(id => !removedSet.has(id));
+	const remaining = state.units.map((u) => u.id).filter((id) => !removedSet.has(id));
 
 	const candidates: { rel: string; mode: TrackedFileMode }[] = [];
 	if (state.attribution) {
 		for (const [rel, owner] of Object.entries(state.attribution)) {
-			if (removedSet.has(owner))
-				candidates.push({ rel, mode: state.modes?.[rel] ?? 'copy' });
+			if (removedSet.has(owner)) candidates.push({ rel, mode: state.modes?.[rel] ?? 'copy' });
 		}
-	}
-	else {
+	} else {
 		// Schema-1 fallback: attribute by replaying the manifest's dests. A dest a
 		// remaining unit also declares is not solely owned and survives. Computed
 		// files predate attribution entirely and stay tracked — documented degrade.
-		const remainingDests = new Set(remaining.flatMap(id => (byId.get(id)?.files ?? []).map(f => effectiveDest(f))));
+		const remainingDests = new Set(
+			remaining.flatMap((id) => (byId.get(id)?.files ?? []).map((f) => effectiveDest(f))),
+		);
 		for (const id of removeUnits) {
 			for (const f of byId.get(id)?.files ?? []) {
 				const rel = effectiveDest(f);
@@ -70,8 +80,7 @@ export function planRemoval(opts: { targetDir: string; state: StateFile; removeU
 		}
 		const abs = join(opts.targetDir, rel);
 		// Already hand-deleted: nothing to do, and nothing to warn about either.
-		if (!existsSync(abs))
-			continue;
+		if (!existsSync(abs)) continue;
 		const recorded = state.files[rel];
 		const modified = recorded !== undefined && hashBuffer(readFileSync(abs)) !== recorded;
 		deletions.push({ rel, modified });
@@ -86,16 +95,26 @@ export function planRemoval(opts: { targetDir: string; state: StateFile; removeU
 	};
 	const removed = removeUnits.map(resolve).filter((u): u is AnyUnit => u !== undefined);
 	const kept = remaining.map(resolve).filter((u): u is AnyUnit => u !== undefined);
-	const claimedDeps = new Set(kept.flatMap(u => [...Object.keys(u.dependencies ?? {}), ...Object.keys(u.devDependencies ?? {})]));
-	const claimedScripts = new Set(kept.flatMap(u => Object.keys(u.packageJsonPatch?.scripts ?? {})));
+	const claimedDeps = new Set(
+		kept.flatMap((u) => [
+			...Object.keys(u.dependencies ?? {}),
+			...Object.keys(u.devDependencies ?? {}),
+		]),
+	);
+	const claimedScripts = new Set(
+		kept.flatMap((u) => Object.keys(u.packageJsonPatch?.scripts ?? {})),
+	);
 
-	const dependencies = [...new Set(removed.flatMap(u => Object.keys(u.dependencies ?? {})))].filter(n => !claimedDeps.has(n));
-	const devDependencies = [...new Set(removed.flatMap(u => Object.keys(u.devDependencies ?? {})))].filter(n => !claimedDeps.has(n));
+	const dependencies = [
+		...new Set(removed.flatMap((u) => Object.keys(u.dependencies ?? {}))),
+	].filter((n) => !claimedDeps.has(n));
+	const devDependencies = [
+		...new Set(removed.flatMap((u) => Object.keys(u.devDependencies ?? {}))),
+	].filter((n) => !claimedDeps.has(n));
 	const scripts: Record<string, string> = {};
 	for (const u of removed) {
 		for (const [name, value] of Object.entries(u.packageJsonPatch?.scripts ?? {})) {
-			if (!claimedScripts.has(name))
-				scripts[name] = value;
+			if (!claimedScripts.has(name)) scripts[name] = value;
 		}
 	}
 
@@ -103,8 +122,16 @@ export function planRemoval(opts: { targetDir: string; state: StateFile; removeU
 	// does corepack); silently unpinning node is the kind of surprise remove
 	// exists to avoid. Named as manual steps instead.
 	const manualPkg = removed
-		.filter(u => u.packageJsonPatch?.engines !== undefined || u.packageJsonPatch?.packageManager !== undefined || u.id === 'core-node-version')
-		.map(u => `${u.id} contributed engines/packageManager pins to package.json; drop them by hand if you no longer want them.`);
+		.filter(
+			(u) =>
+				u.packageJsonPatch?.engines !== undefined ||
+				u.packageJsonPatch?.packageManager !== undefined ||
+				u.id === 'core-node-version',
+		)
+		.map(
+			(u) =>
+				`${u.id} contributed engines/packageManager pins to package.json; drop them by hand if you no longer want them.`,
+		);
 
 	return {
 		units: removeUnits,
@@ -116,7 +143,7 @@ export function planRemoval(opts: { targetDir: string; state: StateFile; removeU
 			...(Object.keys(scripts).length > 0 ? { scripts } : {}),
 		},
 		manualPkg,
-		notes: removed.map(u => u.removeNotes).filter((n): n is string => Boolean(n)),
+		notes: removed.map((u) => u.removeNotes).filter((n): n is string => Boolean(n)),
 	};
 }
 
@@ -126,14 +153,15 @@ export function formatRemovalPlan(plan: RemovalPlan): string {
 	for (const d of plan.deletions)
 		lines.push(`  delete  ${d.rel}${d.modified ? '  (modified since scaffold)' : ''}`);
 	for (const r of plan.retained)
-		lines.push(`  keep    ${r.rel}  (${r.mode === 'merge-json' ? 'merged content' : 'appended content'})`);
+		lines.push(
+			`  keep    ${r.rel}  (${r.mode === 'merge-json' ? 'merged content' : 'appended content'})`,
+		);
 	const pkgBits = [
-		...(plan.pkg.dependencies ?? []).map(n => `dependencies.${n}`),
-		...(plan.pkg.devDependencies ?? []).map(n => `devDependencies.${n}`),
-		...Object.keys(plan.pkg.scripts ?? {}).map(n => `scripts.${n}`),
+		...(plan.pkg.dependencies ?? []).map((n) => `dependencies.${n}`),
+		...(plan.pkg.devDependencies ?? []).map((n) => `devDependencies.${n}`),
+		...Object.keys(plan.pkg.scripts ?? {}).map((n) => `scripts.${n}`),
 	];
-	if (pkgBits.length > 0)
-		lines.push(`  package.json: remove ${pkgBits.join(', ')}`);
+	if (pkgBits.length > 0) lines.push(`  package.json: remove ${pkgBits.join(', ')}`);
 	return lines.join('\n');
 }
 
@@ -163,23 +191,31 @@ export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promi
 		return 1;
 	}
 	const state = read.kind === 'ok' ? read.state : undefined;
-	const installedIds = state ? state.units.map(u => u.id) : [];
+	const installedIds = state ? state.units.map((u) => u.id) : [];
 	if (!state || !installedIds.includes(unitId)) {
-		process.stderr.write(state
-			? `unbranded remove: ${unitId} is not tracked here. Installed units: ${installedIds.join(', ')}.\n`
-			: `unbranded remove: no ${'.unbranded.json'} found — nothing is tracked in this directory.\n`);
+		process.stderr.write(
+			state
+				? `unbranded remove: ${unitId} is not tracked here. Installed units: ${installedIds.join(', ')}.\n`
+				: `unbranded remove: no ${'.unbranded.json'} found — nothing is tracked in this directory.\n`,
+		);
 		return 1;
 	}
 	const target = unitId;
 
 	const catalog = loadCatalog({
-		unitsDirs: unitsDirsFor(state.units.map(u => u.source), cwd, opts.unitsDir),
+		unitsDirs: unitsDirsFor(
+			state.units.map((u) => u.source),
+			cwd,
+			opts.unitsDir,
+		),
 		onMissing: 'warn',
 	});
 
 	const dependents = dependentsOf(target, installedIds, catalog.units);
 	if (dependents.length > 0 && !opts.cascade) {
-		process.stderr.write(`unbranded remove: ${dependents.join(', ')} ${dependents.length === 1 ? 'depends' : 'depend'} on ${target}. Remove ${dependents.length === 1 ? 'it' : 'them'} first, or re-run with --cascade to take the whole set out.\n`);
+		process.stderr.write(
+			`unbranded remove: ${dependents.join(', ')} ${dependents.length === 1 ? 'depends' : 'depend'} on ${target}. Remove ${dependents.length === 1 ? 'it' : 'them'} first, or re-run with --cascade to take the whole set out.\n`,
+		);
 		return 1;
 	}
 	const removeUnits: string[] = [target, ...(opts.cascade ? dependents : [])];
@@ -188,12 +224,16 @@ export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promi
 
 	// Same rationale as init's guard: on a clean tree `git checkout .` undoes
 	// every deletion below. Non-interactive runs only warn, so CI can't hang.
-	if (!opts.force && !opts.dryRun && await isDirtyGitTree(cwd)) {
-		log.warn('Uncommitted changes in the git working tree — a clean tree is your undo button (`git checkout .`) if this removal goes sideways.');
+	if (!opts.force && !opts.dryRun && (await isDirtyGitTree(cwd))) {
+		log.warn(
+			'Uncommitted changes in the git working tree — a clean tree is your undo button (`git checkout .`) if this removal goes sideways.',
+		);
 		if (!opts.yes) {
-			const proceed = await confirm({ message: 'Remove from a dirty tree anyway?', initialValue: false });
-			if (isCancel(proceed))
-				return cancelAndExit();
+			const proceed = await confirm({
+				message: 'Remove from a dirty tree anyway?',
+				initialValue: false,
+			});
+			if (isCancel(proceed)) return cancelAndExit();
 			if (!proceed) {
 				cancel('Cancelled.');
 				return 0;
@@ -205,11 +245,12 @@ export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promi
 	// state entry dropped — attribution records both — but the package.json back-out
 	// and any removeNotes are computed from the definition, so they're skipped. Say
 	// so, or the user reads a partial removal as a complete one.
-	const unloadable = removeUnits.filter(id => !catalog.ids.has(id));
-	for (const warning of catalog.warnings)
-		log.warn(warning);
+	const unloadable = removeUnits.filter((id) => !catalog.ids.has(id));
+	for (const warning of catalog.warnings) log.warn(warning);
 	if (unloadable.length > 0)
-		log.warn(`No definition available for ${unloadable.join(', ')}. Tracked files still go, but package.json entries they added won't be backed out.`);
+		log.warn(
+			`No definition available for ${unloadable.join(', ')}. Tracked files still go, but package.json entries they added won't be backed out.`,
+		);
 
 	const plan = planRemoval({ targetDir: cwd, state, removeUnits, units: catalog.units });
 	note(formatRemovalPlan(plan), 'Removal plan');
@@ -221,8 +262,7 @@ export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promi
 
 	if (!opts.yes) {
 		const proceed = await confirm({ message: 'Remove?', initialValue: true });
-		if (isCancel(proceed))
-			return cancelAndExit();
+		if (isCancel(proceed)) return cancelAndExit();
 		if (!proceed) {
 			cancel('Cancelled.');
 			return 0;
@@ -242,21 +282,23 @@ export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promi
 			keptModified.push(d.rel);
 			continue;
 		}
-		const del = await confirm({ message: `${d.rel} was modified since it was scaffolded. Delete it anyway?`, initialValue: false });
-		if (isCancel(del))
-			return cancelAndExit();
-		if (del)
-			toDelete.push(d.rel);
-		else
-			keptModified.push(d.rel);
+		const del = await confirm({
+			message: `${d.rel} was modified since it was scaffolded. Delete it anyway?`,
+			initialValue: false,
+		});
+		if (isCancel(del)) return cancelAndExit();
+		if (del) toDelete.push(d.rel);
+		else keptModified.push(d.rel);
 	}
 
-	for (const rel of toDelete)
-		rmSync(join(cwd, rel), { force: true });
+	for (const rel of toDelete) rmSync(join(cwd, rel), { force: true });
 
 	let keptScripts: string[] = [];
 	const pkgPath = join(cwd, 'package.json');
-	if (existsSync(pkgPath) && (plan.pkg.dependencies || plan.pkg.devDependencies || plan.pkg.scripts)) {
+	if (
+		existsSync(pkgPath) &&
+		(plan.pkg.dependencies || plan.pkg.devDependencies || plan.pkg.scripts)
+	) {
 		const raw = readFileSync(pkgPath, 'utf-8');
 		const result = removePackageJsonEntries(JSON.parse(raw) as Record<string, unknown>, plan.pkg);
 		keptScripts = result.keptScripts;
@@ -268,23 +310,27 @@ export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promi
 	applyRemovalToState({
 		targetDir: cwd,
 		removeUnits,
-		removeFiles: [...plan.deletions.map(d => d.rel), ...plan.retained.map(r => r.rel)],
-		removeOptionKeys: removeUnits.flatMap(id => (catalog.units.find(u => u.id === id)?.options ?? []).map(o => o.key)),
+		removeFiles: [...plan.deletions.map((d) => d.rel), ...plan.retained.map((r) => r.rel)],
+		removeOptionKeys: removeUnits.flatMap((id) =>
+			(catalog.units.find((u) => u.id === id)?.options ?? []).map((o) => o.key),
+		),
 	});
 
-	log.success(`Removed ${removeUnits.join(', ')}: ${toDelete.length} file${toDelete.length === 1 ? '' : 's'} deleted.`);
+	log.success(
+		`Removed ${removeUnits.join(', ')}: ${toDelete.length} file${toDelete.length === 1 ? '' : 's'} deleted.`,
+	);
 	if (keptModified.length > 0)
 		log.info(`Kept (modified, now untracked): ${keptModified.join(', ')}.`);
-	if (keptScripts.length > 0)
-		log.info(`Kept scripts you rewrote: ${keptScripts.join(', ')}.`);
+	if (keptScripts.length > 0) log.info(`Kept scripts you rewrote: ${keptScripts.join(', ')}.`);
 
 	const nextSteps = [
-		...plan.retained.map(r => `${r.rel} stays on disk (it carries merged content); review or delete it by hand.`),
+		...plan.retained.map(
+			(r) => `${r.rel} stays on disk (it carries merged content); review or delete it by hand.`,
+		),
 		...plan.manualPkg,
 		...plan.notes,
 	];
-	if (nextSteps.length > 0)
-		note(nextSteps.map(s => `• ${s}`).join('\n'), 'Next steps');
+	if (nextSteps.length > 0) note(nextSteps.map((s) => `• ${s}`).join('\n'), 'Next steps');
 
 	outro('Done.');
 	return 0;

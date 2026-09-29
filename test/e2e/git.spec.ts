@@ -32,7 +32,10 @@ describe('cli git init (new-project mode)', () => {
 			git: 'init',
 		});
 
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		expect(existsSync(join(tmp, 'fresh', '.git'))).toBe(true);
@@ -52,7 +55,10 @@ describe('cli git init (new-project mode)', () => {
 			git: 'init',
 		});
 
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		const projectDir = join(tmp, 'hooked');
@@ -110,10 +116,16 @@ describe('cli git init (new-project mode)', () => {
 			git: 'init-commit',
 		});
 
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
-		const subjects = execFileSync('git', ['log', '--format=%s'], { cwd: tmp, encoding: 'utf-8' }).trim();
+		const subjects = execFileSync('git', ['log', '--format=%s'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		}).trim();
 		expect(subjects).toBe('sentinel');
 	});
 });

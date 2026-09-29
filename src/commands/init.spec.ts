@@ -68,9 +68,16 @@ describe('runInit preselect', () => {
 		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
 		vi.mocked(unitPicker).mockResolvedValue({ ids: ['core-editorconfig'], flavors: {} });
 
-		await runInit({ targetDir: tmp, dryRun: true, preselect: ['core-editorconfig'], inline: { pm: 'pnpm' } });
+		await runInit({
+			targetDir: tmp,
+			dryRun: true,
+			preselect: ['core-editorconfig'],
+			inline: { pm: 'pnpm' },
+		});
 
-		expect(vi.mocked(unitPicker).mock.calls[0]?.[0]?.initialSelected).toEqual(['core-editorconfig']);
+		expect(vi.mocked(unitPicker).mock.calls[0]?.[0]?.initialSelected).toEqual([
+			'core-editorconfig',
+		]);
 	});
 });
 
@@ -96,11 +103,21 @@ describe('runInit result', () => {
 	it('reports not-ok when the install step errors', async () => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-result-'));
 		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
-		vi.mocked(writeAndInstall).mockResolvedValue({ wrote: true, installed: false, cancelled: false, failed: true, error: 'install exploded', computedWrites: [] });
+		vi.mocked(writeAndInstall).mockResolvedValue({
+			wrote: true,
+			installed: false,
+			cancelled: false,
+			failed: true,
+			error: 'install exploded',
+			computedWrites: [],
+		});
 
 		// doctor --fix keys its exit code off this flag, so a swallowed install
 		// error would report a repaired repo that isn't.
-		const result = await runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'pnpm', yes: true } });
+		const result = await runInit({
+			targetDir: tmp,
+			inline: { units: 'core-editorconfig', pm: 'pnpm', yes: true },
+		});
 
 		expect(result).toEqual({ ok: false });
 	});
@@ -124,9 +141,19 @@ describe('runInit install-failure branching (#114)', () => {
 	it('rolls back without prompting on a non-interactive run', async () => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-install-failure-noninteractive-'));
 		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
-		vi.mocked(writeAndInstall).mockResolvedValue({ wrote: true, installed: false, cancelled: false, failed: true, installExitCode: 2, computedWrites: [] });
+		vi.mocked(writeAndInstall).mockResolvedValue({
+			wrote: true,
+			installed: false,
+			cancelled: false,
+			failed: true,
+			installExitCode: 2,
+			computedWrites: [],
+		});
 
-		const result = await runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'npm', yes: true } });
+		const result = await runInit({
+			targetDir: tmp,
+			inline: { units: 'core-editorconfig', pm: 'npm', yes: true },
+		});
 
 		// Every non-interactive run resolves straight to rollback (nobody's
 		// watching to answer a prompt), and rollback is the one branch that
@@ -140,7 +167,14 @@ describe('runInit install-failure branching (#114)', () => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-install-failure-keep-'));
 		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
 		vi.mocked(unitPicker).mockResolvedValue({ ids: ['core-editorconfig'], flavors: {} });
-		vi.mocked(writeAndInstall).mockResolvedValue({ wrote: true, installed: false, cancelled: false, failed: true, installExitCode: 2, computedWrites: [] });
+		vi.mocked(writeAndInstall).mockResolvedValue({
+			wrote: true,
+			installed: false,
+			cancelled: false,
+			failed: true,
+			installExitCode: 2,
+			computedWrites: [],
+		});
 
 		const { select, confirm } = await import('@clack/prompts');
 		// Two select() calls happen before a "keep" answer even means anything:
@@ -166,9 +200,18 @@ describe('runInit install-failure branching (#114)', () => {
 		// cancelled:true, failed:false is a different thing entirely—an
 		// install spawn interrupted mid-run, not a #114 failure—and it kept
 		// its pre-#114 behavior on purpose: state written, ok:true.
-		vi.mocked(writeAndInstall).mockResolvedValue({ wrote: true, installed: false, cancelled: true, failed: false, computedWrites: [] });
+		vi.mocked(writeAndInstall).mockResolvedValue({
+			wrote: true,
+			installed: false,
+			cancelled: true,
+			failed: false,
+			computedWrites: [],
+		});
 
-		const result = await runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'npm', yes: true } });
+		const result = await runInit({
+			targetDir: tmp,
+			inline: { units: 'core-editorconfig', pm: 'npm', yes: true },
+		});
 
 		expect(result).toEqual({ ok: true });
 		expect(existsSync(join(tmp, STATE_FILENAME))).toBe(true);
@@ -189,11 +232,20 @@ describe('runInit onConflict threading (#113)', () => {
 	it('passes onConflict "skip" through to writeAndInstall when the resolved config says skip', async () => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-onconflict-skip-'));
 		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
-		vi.mocked(writeAndInstall).mockResolvedValue({ wrote: true, installed: true, cancelled: false, failed: false, computedWrites: [] });
+		vi.mocked(writeAndInstall).mockResolvedValue({
+			wrote: true,
+			installed: true,
+			cancelled: false,
+			failed: false,
+			computedWrites: [],
+		});
 
 		// --yes plus an explicit --units skips the picker and the Apply confirm
 		// entirely, so config.onConflict comes straight from the inline flag.
-		await runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'pnpm', onConflict: 'skip', yes: true } });
+		await runInit({
+			targetDir: tmp,
+			inline: { units: 'core-editorconfig', pm: 'pnpm', onConflict: 'skip', yes: true },
+		});
 
 		expect(vi.mocked(writeAndInstall).mock.calls[0]?.[0]?.onConflict).toBe('skip');
 	});
@@ -202,7 +254,13 @@ describe('runInit onConflict threading (#113)', () => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-onconflict-interactive-'));
 		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
 		vi.mocked(unitPicker).mockResolvedValue({ ids: ['core-editorconfig'], flavors: {} });
-		vi.mocked(writeAndInstall).mockResolvedValue({ wrote: true, installed: true, cancelled: false, failed: false, computedWrites: [] });
+		vi.mocked(writeAndInstall).mockResolvedValue({
+			wrote: true,
+			installed: true,
+			cancelled: false,
+			failed: false,
+			computedWrites: [],
+		});
 		const { confirm } = await import('@clack/prompts');
 		// Only "Apply?" fires here: inline.pm already set makes usedInlineFlags true,
 		// so runInit skips its own "save this as a recipe?" confirm afterward.

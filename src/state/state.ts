@@ -1,6 +1,15 @@
 import type { UnitSource } from '../manifest/types';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	rmdirSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from 'node:fs';
 import { dirname, join, posix, relative, sep } from 'node:path';
 import { PKG_ROOT } from '../util/paths';
 
@@ -25,7 +34,8 @@ export const SIDECAR_DIR = '.unbranded';
 // agent or person who stumbles on it should learn what wrote it and which
 // commands read it without leaving the file. It sorts first in the envelope
 // (leading underscore) so it's the first thing you see.
-export const STATE_TOOL_HINT = 'unbranded manages the files below. Run `unbranded diff` to see your local drift or `unbranded doctor` to audit the repo; https://github.com/kendrick/unbranded-starter';
+export const STATE_TOOL_HINT =
+	'unbranded manages the files below. Run `unbranded diff` to see your local drift or `unbranded doctor` to audit the repo; https://github.com/kendrick/unbranded-starter';
 
 // How a tracked file was produced, recorded so `update` can pick the right
 // refresh path without replaying the manifest: text merge for `copy`, structured
@@ -89,7 +99,7 @@ export interface StateFile {
 // Built-in ids carry no provenance worth recording — there is exactly one place a
 // built-in can come from — so the whole set converts in one call.
 export function builtinUnits(ids: string[]): StateUnit[] {
-	return ids.map(id => ({ id, source: { kind: 'builtin' } }));
+	return ids.map((id) => ({ id, source: { kind: 'builtin' } }));
 }
 
 export function hashBuffer(buf: Buffer): string {
@@ -150,7 +160,7 @@ export function writeStateFile(opts: {
 
 	// A skipped write can leave a dest that was never created (nothing on our
 	// side to hash), so only track files that actually exist post-apply.
-	const landed = opts.writes.filter(w => existsSync(w.dest));
+	const landed = opts.writes.filter((w) => existsSync(w.dest));
 	for (const w of landed) {
 		const rel = toPosix(relative(opts.targetDir, w.dest));
 		files[rel] = hashBuffer(readFileSync(w.dest));
@@ -191,12 +201,11 @@ export function applyRemovalToState(opts: {
 	removeOptionKeys?: string[];
 }): void {
 	const prior = priorStateForWrite(opts.targetDir);
-	if (!prior)
-		return;
+	if (!prior) return;
 
 	const gone = new Set(opts.removeFiles);
 	const removed = new Set(opts.removeUnits);
-	const units = prior.units.filter(u => !removed.has(u.id));
+	const units = prior.units.filter((u) => !removed.has(u.id));
 
 	if (units.length === 0) {
 		rmSync(join(opts.targetDir, STATE_FILENAME), { force: true });
@@ -218,7 +227,10 @@ export function applyRemovalToState(opts: {
 	writeFileSync(join(opts.targetDir, STATE_FILENAME), serializeState(buildStateFile(merged)));
 }
 
-function dropKeys<V extends string>(record: Record<string, V>, gone: ReadonlySet<string>): Record<string, V> {
+function dropKeys<V extends string>(
+	record: Record<string, V>,
+	gone: ReadonlySet<string>,
+): Record<string, V> {
 	return Object.fromEntries(Object.entries(record).filter(([k]) => !gone.has(k)));
 }
 
@@ -233,8 +245,7 @@ export function refreshTrackedFiles(opts: {
 	entries: Record<string, { hash: string; baseline?: string }>;
 }): void {
 	const prior = priorStateForWrite(opts.targetDir);
-	if (!prior)
-		return;
+	if (!prior) return;
 
 	const files = { ...prior.files };
 	for (const [rel, entry] of Object.entries(opts.entries)) {
@@ -258,10 +269,10 @@ export function refreshTrackedFiles(opts: {
 	writeFileSync(join(opts.targetDir, STATE_FILENAME), serializeState(state));
 }
 
-export type StateRead
-	= | { kind: 'ok'; state: StateFile }
-		| { kind: 'none' }
-		| { kind: 'unsupported'; schema: number };
+export type StateRead =
+	| { kind: 'ok'; state: StateFile }
+	| { kind: 'none' }
+	| { kind: 'unsupported'; schema: number };
 
 // Three outcomes rather than two, because "written by a newer unbranded" and "not
 // tracked here" must not collapse into the same answer. They used to: an unreadable
@@ -271,21 +282,18 @@ export type StateRead
 // corrupt file to the friendly path beats throwing a stack trace at a CI job.
 export function readStateFile(dir: string): StateRead {
 	const path = join(dir, STATE_FILENAME);
-	if (!existsSync(path))
-		return { kind: 'none' };
+	if (!existsSync(path)) return { kind: 'none' };
 
 	let raw: unknown;
 	try {
 		raw = JSON.parse(readFileSync(path, 'utf-8'));
-	}
-	catch {
+	} catch {
 		return { kind: 'none' };
 	}
 
 	const doc = raw as Partial<StateFile> & { units?: unknown };
 	const schema = typeof doc.schema === 'number' ? doc.schema : 1;
-	if (schema > STATE_SCHEMA)
-		return { kind: 'unsupported', schema };
+	if (schema > STATE_SCHEMA) return { kind: 'unsupported', schema };
 
 	return { kind: 'ok', state: { ...doc, units: normalizeUnits(doc.units) } as StateFile };
 }
@@ -300,8 +308,7 @@ export function unsupportedStateMessage(schema: number): string {
 // dropped; a file that malformed would have to be hand-mangled, since the version
 // gate above already turns back anything a future unbranded wrote.
 function normalizeUnits(raw: unknown): StateUnit[] {
-	if (!Array.isArray(raw))
-		return [];
+	if (!Array.isArray(raw)) return [];
 
 	const out: StateUnit[] = [];
 	for (const entry of raw) {
@@ -309,7 +316,11 @@ function normalizeUnits(raw: unknown): StateUnit[] {
 			out.push({ id: entry, source: { kind: 'builtin' } });
 			continue;
 		}
-		if (entry !== null && typeof entry === 'object' && typeof (entry as { id?: unknown }).id === 'string') {
+		if (
+			entry !== null &&
+			typeof entry === 'object' &&
+			typeof (entry as { id?: unknown }).id === 'string'
+		) {
 			const e = entry as { id: string; source?: unknown };
 			out.push({ id: e.id, source: normalizeSource(e.source) });
 		}
@@ -318,12 +329,10 @@ function normalizeUnits(raw: unknown): StateUnit[] {
 }
 
 function normalizeSource(raw: unknown): UnitSource {
-	if (raw === null || typeof raw !== 'object')
-		return { kind: 'builtin' };
+	if (raw === null || typeof raw !== 'object') return { kind: 'builtin' };
 
 	const s = raw as { kind?: unknown; path?: unknown; name?: unknown; version?: unknown };
-	if (s.kind === 'dir' && typeof s.path === 'string')
-		return { kind: 'dir', path: s.path };
+	if (s.kind === 'dir' && typeof s.path === 'string') return { kind: 'dir', path: s.path };
 	// Packs ship in a later release and deliberately reuse schema 3, so a pack entry
 	// arrives without a version bump to announce it. Reading it here is what makes
 	// that promise good.
@@ -338,8 +347,7 @@ function normalizeSource(raw: unknown): UnitSource {
 // throw is the backstop for a path that forgot to.
 function priorStateForWrite(targetDir: string): StateFile | undefined {
 	const read = readStateFile(targetDir);
-	if (read.kind === 'unsupported')
-		throw new Error(unsupportedStateMessage(read.schema));
+	if (read.kind === 'unsupported') throw new Error(unsupportedStateMessage(read.schema));
 	return read.kind === 'ok' ? read.state : undefined;
 }
 
@@ -347,16 +355,14 @@ function priorStateForWrite(targetDir: string): StateFile | undefined {
 // path rather than the stale one.
 function mergeUnits(prior: StateUnit[], next: StateUnit[]): StateUnit[] {
 	const byIdMap = new Map<string, StateUnit>();
-	for (const u of [...prior, ...next])
-		byIdMap.set(u.id, u);
+	for (const u of [...prior, ...next]) byIdMap.set(u.id, u);
 	return [...byIdMap.values()];
 }
 
 // Plain comparator rather than localeCompare: the envelope has to be byte-identical
 // across machines and locales, which is the whole reason this file sorts at all.
 function byId(a: StateUnit, b: StateUnit): number {
-	if (a.id === b.id)
-		return 0;
+	if (a.id === b.id) return 0;
 	return a.id < b.id ? -1 : 1;
 }
 
@@ -378,12 +384,16 @@ Deleting it breaks nothing today, but \`unbranded update\` would lose its merge 
 // with a newer template. Structured (merge-json), append, and computed files refresh
 // structurally instead, so a text baseline would only mislead. Stray baselines
 // are pruned: a wrong merge base is worse than none.
-function syncSidecar(targetDir: string, landed: TrackedWrite[], files: Record<string, string>, modes: Record<string, TrackedFileMode>): void {
+function syncSidecar(
+	targetDir: string,
+	landed: TrackedWrite[],
+	files: Record<string, string>,
+	modes: Record<string, TrackedFileMode>,
+): void {
 	const baselineDir = join(targetDir, SIDECAR_DIR, 'baseline');
 
 	for (const w of landed) {
-		if (w.mode !== 'copy')
-			continue;
+		if (w.mode !== 'copy') continue;
 		const dest = join(baselineDir, relative(targetDir, w.dest));
 		mkdirSync(dirname(dest), { recursive: true });
 		writeFileSync(dest, readFileSync(w.dest));
@@ -391,17 +401,19 @@ function syncSidecar(targetDir: string, landed: TrackedWrite[], files: Record<st
 
 	// Tracked copy-mode files keep their baseline (a prior run's copy is still the
 	// honest base even when this run didn't rewrite the file); everything else goes.
-	const keep = new Set(Object.keys(files).filter(rel => modes[rel] === 'copy'));
+	const keep = new Set(Object.keys(files).filter((rel) => modes[rel] === 'copy'));
 	if (existsSync(baselineDir)) {
-		const entries = (readdirSync(baselineDir, { recursive: true }) as string[]).map(e => join(baselineDir, e));
-		for (const abs of entries.filter(e => statSync(e).isFile())) {
-			if (!keep.has(toPosix(relative(baselineDir, abs))))
-				rmSync(abs);
+		const entries = (readdirSync(baselineDir, { recursive: true }) as string[]).map((e) =>
+			join(baselineDir, e),
+		);
+		for (const abs of entries.filter((e) => statSync(e).isFile())) {
+			if (!keep.has(toPosix(relative(baselineDir, abs)))) rmSync(abs);
 		}
 		// Longest paths first, so nested empty dirs unwind bottom-up.
-		for (const abs of entries.filter(e => existsSync(e) && statSync(e).isDirectory()).sort((a, b) => b.length - a.length)) {
-			if (readdirSync(abs).length === 0)
-				rmdirSync(abs);
+		for (const abs of entries
+			.filter((e) => existsSync(e) && statSync(e).isDirectory())
+			.sort((a, b) => b.length - a.length)) {
+			if (readdirSync(abs).length === 0) rmdirSync(abs);
 		}
 	}
 
@@ -410,27 +422,29 @@ function syncSidecar(targetDir: string, landed: TrackedWrite[], files: Record<st
 }
 
 function readCliVersion(): string {
-	const pkg = JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf-8')) as { version: string };
+	const pkg = JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf-8')) as {
+		version: string;
+	};
 	return pkg.version;
 }
 
 // Spread helper for the optional envelope maps: absent or empty stays absent.
-function whenPresent<K extends string, V extends string>(key: K, record: Record<string, V> | undefined): Partial<Record<K, Record<string, V>>> {
-	if (!record || Object.keys(record).length === 0)
-		return {};
+function whenPresent<K extends string, V extends string>(
+	key: K,
+	record: Record<string, V> | undefined,
+): Partial<Record<K, Record<string, V>>> {
+	if (!record || Object.keys(record).length === 0) return {};
 	return { [key]: sortRecord(record) } as Partial<Record<K, Record<string, V>>>;
 }
 
 function sortRecord<V extends string>(record: Record<string, V>): Record<string, V> {
 	const out: Record<string, V> = {};
-	for (const key of Object.keys(record).sort())
-		out[key] = record[key] as V;
+	for (const key of Object.keys(record).sort()) out[key] = record[key] as V;
 	return out;
 }
 
 function sortKeys(value: unknown): unknown {
-	if (Array.isArray(value))
-		return value.map(sortKeys);
+	if (Array.isArray(value)) return value.map(sortKeys);
 	if (value !== null && typeof value === 'object') {
 		const out: Record<string, unknown> = {};
 		for (const key of Object.keys(value).sort())

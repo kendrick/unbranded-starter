@@ -13,7 +13,7 @@ const CLI = join(PKG_ROOT, 'dist/cli.js');
 const OFFER = /Save this configuration as a recipe/i;
 // Pins read from the manifest so a bump doesn't require touching these assertions.
 const ESLINT_PIN = eslintDevDependencies('base').eslint;
-const TYPESCRIPT_PIN = UNITS.find(u => u.id === 'core-typescript')?.devDependencies?.typescript;
+const TYPESCRIPT_PIN = UNITS.find((u) => u.id === 'core-typescript')?.devDependencies?.typescript;
 
 function writeJson(path: string, obj: unknown): void {
 	writeFileSync(path, JSON.stringify(obj, null, 2));
@@ -36,8 +36,7 @@ describe('save-recipe: emitted recipe round-trips through --config', () => {
 		// file to `--config`. If the recipe is faithful, the CLI re-resolves to the
 		// same closed set and writes every unit's files, implied ones included.
 		const resolved = resolveSelection(['core-eslint'] as never, UNITS);
-		if (resolved.kind !== 'ok')
-			throw new Error('fixture did not resolve');
+		if (resolved.kind !== 'ok') throw new Error('fixture did not resolve');
 		const recipe = buildRecipe({ ids: resolved.ids, pm: null, latest: false, version: '9.9.9' });
 
 		writeJson(join(tmp, 'package.json'), { name: 'replay-target', version: '0.0.0' });
@@ -45,9 +44,14 @@ describe('save-recipe: emitted recipe round-trips through --config', () => {
 
 		// The extra provenance key rides along in the file; the CLI must not choke
 		// on it (validate ignores unknown keys).
-		expect(readFileSync(join(tmp, 'recipe.json'), 'utf-8')).toContain('"_generatedBy": "unbranded 9.9.9"');
+		expect(readFileSync(join(tmp, 'recipe.json'), 'utf-8')).toContain(
+			'"_generatedBy": "unbranded 9.9.9"',
+		);
 
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		// core-eslint's own file plus the implied core-typescript's files.
@@ -83,7 +87,10 @@ describe('save-recipe: the offer only appears on a fully interactive run', () =>
 			postInstall: 'none',
 		});
 
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		expect(result.stdout + result.stderr).not.toMatch(OFFER);
@@ -92,7 +99,18 @@ describe('save-recipe: the offer only appears on a fully interactive run', () =>
 	it('inline-flag mode never offers to save', () => {
 		const result = spawnSync(
 			'node',
-			[CLI, '--units', 'core-editorconfig', '--pm', 'npm', '--on-conflict', 'overwrite', '--post-install', 'none', '--yes'],
+			[
+				CLI,
+				'--units',
+				'core-editorconfig',
+				'--pm',
+				'npm',
+				'--on-conflict',
+				'overwrite',
+				'--post-install',
+				'none',
+				'--yes',
+			],
 			{ cwd: tmp, encoding: 'utf-8' },
 		);
 

@@ -20,15 +20,15 @@ describe('buildUnitPickerOptions', () => {
 			unit('core-editorconfig', { category: 'foundation', label: 'EditorConfig' }),
 		];
 		const options = buildUnitPickerOptions(units, new Set());
-		expect(options.map(o => o.value)).toEqual(['core-editorconfig', 'opt-monorepo']);
-		expect(options.map(o => o.group)).toEqual(['Foundation', 'Monorepo']);
+		expect(options.map((o) => o.value)).toEqual(['core-editorconfig', 'opt-monorepo']);
+		expect(options.map((o) => o.group)).toEqual(['Foundation', 'Monorepo']);
 	});
 
 	it('threads the installed flag through from the given set', () => {
 		const units = [unit('core-eslint'), unit('core-vitest')];
 		const options = buildUnitPickerOptions(units, new Set<UnitId>(['core-eslint']));
-		expect(options.find(o => o.value === 'core-eslint')?.installed).toBe(true);
-		expect(options.find(o => o.value === 'core-vitest')?.installed).toBe(false);
+		expect(options.find((o) => o.value === 'core-eslint')?.installed).toBe(true);
+		expect(options.find((o) => o.value === 'core-vitest')?.installed).toBe(false);
 	});
 
 	it('builds a detail block: files via effectiveDest, deps, implied labels, postInstall prompts', () => {
@@ -43,10 +43,17 @@ describe('buildUnitPickerOptions', () => {
 				],
 				devDependencies: { husky: '9.1.7' },
 				implies: ['core-typescript'],
-				postInstall: [{ id: 'husky-init', command: ['husky', 'init'], prompt: 'Run husky init?', default: true }],
+				postInstall: [
+					{
+						id: 'husky-init',
+						command: ['husky', 'init'],
+						prompt: 'Run husky init?',
+						default: true,
+					},
+				],
 			}),
 		];
-		const husky = buildUnitPickerOptions(units, new Set()).find(o => o.value === 'opt-husky');
+		const husky = buildUnitPickerOptions(units, new Set()).find((o) => o.value === 'opt-husky');
 		expect(husky?.detail.files).toEqual([
 			{ dest: 'templates/pre-commit', mode: undefined },
 			{ dest: 'lint-staged.config.mjs', mode: 'copy' },
@@ -57,17 +64,24 @@ describe('buildUnitPickerOptions', () => {
 		expect(husky?.detail.postInstall).toEqual(['Run husky init?']);
 	});
 
-	it('carries a unit\'s options and notes that its files/deps vary by them', () => {
+	it("carries a unit's options and notes that its files/deps vary by them", () => {
 		// core-eslint ships no static files/deps — they live in the flavor choices —
 		// so the detail must say so rather than render an empty block.
 		const units = [
 			unit('core-eslint', {
 				label: 'ESLint',
 				files: [],
-				options: [{ key: 'eslintFlavor', label: 'ESLint flavor', default: 'base', choices: [
-					{ value: 'base', label: 'Base' },
-					{ value: 'react', label: 'React' },
-				] }],
+				options: [
+					{
+						key: 'eslintFlavor',
+						label: 'ESLint flavor',
+						default: 'base',
+						choices: [
+							{ value: 'base', label: 'Base' },
+							{ value: 'react', label: 'React' },
+						],
+					},
+				],
 			}),
 		];
 		const eslint = buildUnitPickerOptions(units, new Set())[0];
@@ -82,13 +96,13 @@ describe('buildUnitPickerOptions', () => {
 		expect(opt?.options).toBeUndefined();
 	});
 
-	it('reads a local unit\'s namespace off its own id, leaving a built-in\'s unset', () => {
+	it("reads a local unit's namespace off its own id, leaving a built-in's unset", () => {
 		const units: AnyUnit[] = [
 			unit('core-vitest', { label: 'Vitest' }),
 			localUnit('my-units/banner', { label: 'Banner' }),
 		];
 		const options = buildUnitPickerOptions(units, new Set());
-		expect(options.find(o => o.value === 'core-vitest')?.namespace).toBeUndefined();
-		expect(options.find(o => o.value === 'my-units/banner')?.namespace).toBe('my-units');
+		expect(options.find((o) => o.value === 'core-vitest')?.namespace).toBeUndefined();
+		expect(options.find((o) => o.value === 'my-units/banner')?.namespace).toBe('my-units');
 	});
 });

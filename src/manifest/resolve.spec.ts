@@ -33,21 +33,18 @@ describe('resolveSelection', () => {
 		];
 		const result = resolveSelection(['core-eslint'], units);
 		expect(result).toMatchObject({ kind: 'ok' });
-		if (result.kind !== 'ok')
-			return;
-		expect(new Set(result.ids)).toEqual(new Set(['core-eslint', 'core-typescript', 'core-tailwind']));
+		if (result.kind !== 'ok') return;
+		expect(new Set(result.ids)).toEqual(
+			new Set(['core-eslint', 'core-typescript', 'core-tailwind']),
+		);
 		expect(new Set(result.auto)).toEqual(new Set(['core-typescript', 'core-tailwind']));
 	});
 
 	it('does not mark seed units as auto even if also implied', () => {
-		const units = [
-			unit('core-eslint', { implies: ['core-typescript'] }),
-			unit('core-typescript'),
-		];
+		const units = [unit('core-eslint', { implies: ['core-typescript'] }), unit('core-typescript')];
 		const result = resolveSelection(['core-eslint', 'core-typescript'], units);
 		expect(result).toMatchObject({ kind: 'ok' });
-		if (result.kind !== 'ok')
-			return;
+		if (result.kind !== 'ok') return;
 		expect(result.auto).toEqual([]);
 		// A unit the user picked explicitly is never "required by" anything, even
 		// when another selection also implies it — the plan shouldn't annotate it.
@@ -55,14 +52,10 @@ describe('resolveSelection', () => {
 	});
 
 	it('records the direct requirer of an auto-added unit', () => {
-		const units = [
-			unit('core-eslint', { implies: ['core-typescript'] }),
-			unit('core-typescript'),
-		];
+		const units = [unit('core-eslint', { implies: ['core-typescript'] }), unit('core-typescript')];
 		const result = resolveSelection(['core-eslint'], units);
 		expect(result).toMatchObject({ kind: 'ok' });
-		if (result.kind !== 'ok')
-			return;
+		if (result.kind !== 'ok') return;
 		expect(result.requiredBy).toEqual({ 'core-typescript': 'core-eslint' });
 	});
 
@@ -76,8 +69,7 @@ describe('resolveSelection', () => {
 		];
 		const result = resolveSelection(['core-eslint'], units);
 		expect(result).toMatchObject({ kind: 'ok' });
-		if (result.kind !== 'ok')
-			return;
+		if (result.kind !== 'ok') return;
 		expect(result.requiredBy).toEqual({
 			'core-typescript': 'core-eslint',
 			'core-tailwind': 'core-typescript',
@@ -94,16 +86,12 @@ describe('resolveSelection', () => {
 		];
 		const result = resolveSelection(['core-eslint', 'core-stylelint'], units);
 		expect(result).toMatchObject({ kind: 'ok' });
-		if (result.kind !== 'ok')
-			return;
+		if (result.kind !== 'ok') return;
 		expect(result.requiredBy).toEqual({ 'core-typescript': 'core-eslint' });
 	});
 
 	it('flags missing-required when a hard precondition is absent', () => {
-		const units = [
-			unit('opt-shadcn', { requires: ['core-tailwind'] }),
-			unit('core-tailwind'),
-		];
+		const units = [unit('opt-shadcn', { requires: ['core-tailwind'] }), unit('core-tailwind')];
 		expect(resolveSelection(['opt-shadcn'], units)).toEqual({
 			kind: 'missing-required',
 			unit: 'opt-shadcn',
@@ -112,22 +100,15 @@ describe('resolveSelection', () => {
 	});
 
 	it('passes requires when the dependency is in the seed', () => {
-		const units = [
-			unit('opt-shadcn', { requires: ['core-tailwind'] }),
-			unit('core-tailwind'),
-		];
+		const units = [unit('opt-shadcn', { requires: ['core-tailwind'] }), unit('core-tailwind')];
 		expect(resolveSelection(['opt-shadcn', 'core-tailwind'], units)).toMatchObject({ kind: 'ok' });
 	});
 
 	it('detects a one-sided exclude (treats it as symmetric)', () => {
-		const units = [
-			unit('core-eslint', { excludes: ['core-stylelint'] }),
-			unit('core-stylelint'),
-		];
+		const units = [unit('core-eslint', { excludes: ['core-stylelint'] }), unit('core-stylelint')];
 		const result = resolveSelection(['core-eslint', 'core-stylelint'], units);
 		expect(result).toMatchObject({ kind: 'conflict' });
-		if (result.kind !== 'conflict')
-			return;
+		if (result.kind !== 'conflict') return;
 		expect(new Set(result.pair)).toEqual(new Set(['core-eslint', 'core-stylelint']));
 	});
 
@@ -155,10 +136,12 @@ describe('dependentsOf', () => {
 	];
 
 	it('names every installed unit whose implies or requires reaches the target', () => {
-		expect(dependentsOf('core-tailwind', ['core-tailwind', 'opt-shadcn', 'core-postcss'], units).sort())
-			.toEqual(['core-postcss', 'opt-shadcn']);
-		expect(dependentsOf('core-eslint', ['core-eslint', 'opt-ci-github'], units))
-			.toEqual(['opt-ci-github']);
+		expect(
+			dependentsOf('core-tailwind', ['core-tailwind', 'opt-shadcn', 'core-postcss'], units).sort(),
+		).toEqual(['core-postcss', 'opt-shadcn']);
+		expect(dependentsOf('core-eslint', ['core-eslint', 'opt-ci-github'], units)).toEqual([
+			'opt-ci-github',
+		]);
 	});
 
 	it('walks transitive edges, not just direct ones', () => {
@@ -168,8 +151,9 @@ describe('dependentsOf', () => {
 			unit('core-postcss', { implies: ['core-tailwind'] }),
 			unit('opt-shadcn', { implies: ['core-postcss'] }),
 		];
-		expect(dependentsOf('core-tailwind', ['core-tailwind', 'core-postcss', 'opt-shadcn'], chain).sort())
-			.toEqual(['core-postcss', 'opt-shadcn']);
+		expect(
+			dependentsOf('core-tailwind', ['core-tailwind', 'core-postcss', 'opt-shadcn'], chain).sort(),
+		).toEqual(['core-postcss', 'opt-shadcn']);
 	});
 
 	it('only counts installed units — the rest of the catalog is irrelevant', () => {

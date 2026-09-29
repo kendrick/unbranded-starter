@@ -28,19 +28,27 @@ export interface PickerState {
 	flavors: Record<string, string>;
 }
 
-export type PickerEvent
-	= | { type: 'move'; delta: number }
-		| { type: 'char'; char: string }
-		| { type: 'backspace' }
-		| { type: 'clearFilter' }
-		| { type: 'toggle' }
-		| { type: 'toggleExpand' }
-		| { type: 'cycleFlavor'; delta: number };
+export type PickerEvent =
+	| { type: 'move'; delta: number }
+	| { type: 'char'; char: string }
+	| { type: 'backspace' }
+	| { type: 'clearFilter' }
+	| { type: 'toggle' }
+	| { type: 'toggleExpand' }
+	| { type: 'cycleFlavor'; delta: number };
 
-export type PickerRow
-	= | { kind: 'header'; group: string; selected: number; total: number }
-		| { kind: 'option'; option: PickerOption; selected: boolean; auto: boolean; requiredBy?: string; active: boolean; flavor?: string }
-		| { kind: 'detail'; option: PickerOption; flavor?: string };
+export type PickerRow =
+	| { kind: 'header'; group: string; selected: number; total: number }
+	| {
+			kind: 'option';
+			option: PickerOption;
+			selected: boolean;
+			auto: boolean;
+			requiredBy?: string;
+			active: boolean;
+			flavor?: string;
+	  }
+	| { kind: 'detail'; option: PickerOption; flavor?: string };
 
 export function createPickerState(
 	units: AnyUnit[],
@@ -51,27 +59,38 @@ export function createPickerState(
 	const options = buildUnitPickerOptions(units, installed);
 	const flavors: Record<string, string> = {};
 	for (const opt of options) {
-		for (const o of opt.options ?? [])
-			flavors[o.key] = initialFlavors[o.key] ?? o.default;
+		for (const o of opt.options ?? []) flavors[o.key] = initialFlavors[o.key] ?? o.default;
 	}
 	// Seeds come from outside the picker (doctor --fix, presets), so filter to units
 	// that actually exist — a phantom id would sit invisibly in the selection with no
 	// row to toggle it off. The implies preview must reflect the seed on frame one,
 	// the same way a manual toggle would.
-	const known = new Set(units.map(u => u.id));
-	const selected = new Set(initialSelected.filter(id => known.has(id)));
-	return { units, options, filter: '', cursor: 0, selected, ...previewAuto(selected, units), expanded: null, flavors };
+	const known = new Set(units.map((u) => u.id));
+	const selected = new Set(initialSelected.filter((id) => known.has(id)));
+	return {
+		units,
+		options,
+		filter: '',
+		cursor: 0,
+		selected,
+		...previewAuto(selected, units),
+		expanded: null,
+		flavors,
+	};
 }
 
 function matches(opt: PickerOption, filter: string): boolean {
-	if (!filter)
-		return true;
+	if (!filter) return true;
 	const f = filter.toLowerCase();
-	return opt.label.toLowerCase().includes(f) || opt.value.toLowerCase().includes(f) || opt.group.toLowerCase().includes(f);
+	return (
+		opt.label.toLowerCase().includes(f) ||
+		opt.value.toLowerCase().includes(f) ||
+		opt.group.toLowerCase().includes(f)
+	);
 }
 
 export function filteredOptions(state: PickerState): PickerOption[] {
-	return state.options.filter(o => matches(o, state.filter));
+	return state.options.filter((o) => matches(o, state.filter));
 }
 
 function clamp(n: number, lo: number, hi: number): number {
@@ -84,10 +103,10 @@ function clamp(n: number, lo: number, hi: number): number {
 // a row that may no longer be where the cursor lands.
 function applyFilter(state: PickerState, filter: string): PickerState {
 	const anchorId = filteredOptions(state)[state.cursor]?.value;
-	const after = state.options.filter(o => matches(o, filter));
+	const after = state.options.filter((o) => matches(o, filter));
 	let cursor = 0;
 	if (anchorId !== undefined) {
-		const idx = after.findIndex(o => o.value === anchorId);
+		const idx = after.findIndex((o) => o.value === anchorId);
 		cursor = idx >= 0 ? idx : clamp(state.cursor, 0, Math.max(0, after.length - 1));
 	}
 	return { ...state, filter, cursor, expanded: null };
@@ -96,10 +115,12 @@ function applyFilter(state: PickerState, filter: string): PickerState {
 // The resolver is the single source of truth for "what does picking X drag in?".
 // A non-ok selection (conflict/missing) has no clean auto set to preview; the real
 // resolution in init.ts surfaces that error, so the preview just shows nothing.
-function previewAuto(selected: Set<string>, units: AnyUnit[]): Pick<PickerState, 'auto' | 'requiredBy'> {
+function previewAuto(
+	selected: Set<string>,
+	units: AnyUnit[],
+): Pick<PickerState, 'auto' | 'requiredBy'> {
 	const result = resolveSelection([...selected], units);
-	if (result.kind === 'ok')
-		return { auto: new Set(result.auto), requiredBy: result.requiredBy };
+	if (result.kind === 'ok') return { auto: new Set(result.auto), requiredBy: result.requiredBy };
 	return { auto: new Set<string>(), requiredBy: {} };
 }
 
@@ -107,7 +128,11 @@ export function reducePicker(state: PickerState, event: PickerEvent): PickerStat
 	switch (event.type) {
 		case 'move': {
 			const filtered = filteredOptions(state);
-			return { ...state, cursor: clamp(state.cursor + event.delta, 0, Math.max(0, filtered.length - 1)), expanded: null };
+			return {
+				...state,
+				cursor: clamp(state.cursor + event.delta, 0, Math.max(0, filtered.length - 1)),
+				expanded: null,
+			};
 		}
 		case 'char':
 			return applyFilter(state, state.filter + event.char);
@@ -117,26 +142,21 @@ export function reducePicker(state: PickerState, event: PickerEvent): PickerStat
 			return applyFilter(state, '');
 		case 'toggle': {
 			const opt = filteredOptions(state)[state.cursor];
-			if (!opt)
-				return state;
+			if (!opt) return state;
 			const selected = new Set(state.selected);
-			if (selected.has(opt.value))
-				selected.delete(opt.value);
-			else
-				selected.add(opt.value);
+			if (selected.has(opt.value)) selected.delete(opt.value);
+			else selected.add(opt.value);
 			return { ...state, selected, ...previewAuto(selected, state.units) };
 		}
 		case 'toggleExpand': {
 			const opt = filteredOptions(state)[state.cursor];
-			if (!opt)
-				return state;
+			if (!opt) return state;
 			return { ...state, expanded: state.expanded === opt.value ? null : opt.value };
 		}
 		case 'cycleFlavor': {
 			const option = filteredOptions(state)[state.cursor]?.options?.[0];
-			if (!option)
-				return state;
-			const values = option.choices.map(c => c.value);
+			if (!option) return state;
+			const values = option.choices.map((c) => c.value);
 			const len = values.length;
 			const cur = state.flavors[option.key] ?? option.default;
 			const base = values.indexOf(cur);
@@ -153,11 +173,17 @@ export function reducePicker(state: PickerState, event: PickerEvent): PickerStat
 // than reading as zero — the same reason formatPlan counts against resolved units.
 export function pickerSummary(state: PickerState): { units: number; files: number; deps: number } {
 	const effective = new Set<string>([...state.selected, ...state.auto]);
-	const units = state.units.filter(u => effective.has(u.id)).map(u => applyUnitOptions(u, state.flavors));
+	const units = state.units
+		.filter((u) => effective.has(u.id))
+		.map((u) => applyUnitOptions(u, state.flavors));
 	return {
 		units: units.length,
 		files: units.reduce((n, u) => n + u.files.length, 0),
-		deps: units.reduce((n, u) => n + Object.keys(u.dependencies ?? {}).length + Object.keys(u.devDependencies ?? {}).length, 0),
+		deps: units.reduce(
+			(n, u) =>
+				n + Object.keys(u.dependencies ?? {}).length + Object.keys(u.devDependencies ?? {}).length,
+			0,
+		),
 	};
 }
 
@@ -174,11 +200,11 @@ export function pickerRows(state: PickerState): PickerRow[] {
 	for (const opt of filtered) {
 		if (opt.group !== group) {
 			group = opt.group;
-			const inGroup = filtered.filter(o => o.group === group);
+			const inGroup = filtered.filter((o) => o.group === group);
 			rows.push({
 				kind: 'header',
 				group,
-				selected: inGroup.filter(o => state.selected.has(o.value)).length,
+				selected: inGroup.filter((o) => state.selected.has(o.value)).length,
 				total: inGroup.length,
 			});
 		}
@@ -193,8 +219,7 @@ export function pickerRows(state: PickerState): PickerRow[] {
 			active: opt.value === activeId,
 			flavor,
 		});
-		if (state.expanded === opt.value)
-			rows.push({ kind: 'detail', option: opt, flavor });
+		if (state.expanded === opt.value) rows.push({ kind: 'detail', option: opt, flavor });
 	}
 
 	return rows;

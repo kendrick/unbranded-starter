@@ -1,7 +1,15 @@
 import type { ValidateFunction } from 'ajv';
 import type { AddressInfo } from 'node:net';
 import { spawn, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	copyFileSync,
+	existsSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -27,7 +35,9 @@ const compiled = new Map<string, ValidateFunction>();
 function validator(name: string): ValidateFunction {
 	let fn = compiled.get(name);
 	if (fn === undefined) {
-		fn = ajv.compile(JSON.parse(readFileSync(join(PKG_ROOT, 'schemas', `${name}.schema.json`), 'utf-8')));
+		fn = ajv.compile(
+			JSON.parse(readFileSync(join(PKG_ROOT, 'schemas', `${name}.schema.json`), 'utf-8')),
+		);
 		compiled.set(name, fn);
 	}
 	return fn;
@@ -43,7 +53,10 @@ describe('--dry-run --json (the machine-readable plan)', () => {
 
 	beforeEach(() => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-plan-json-'));
-		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'plan-me', version: '0.0.0' }, null, 2));
+		writeFileSync(
+			join(tmp, 'package.json'),
+			JSON.stringify({ name: 'plan-me', version: '0.0.0' }, null, 2),
+		);
 	});
 
 	afterEach(() => {
@@ -72,9 +85,9 @@ describe('--dry-run --json (the machine-readable plan)', () => {
 		expect(plan.units).toContain('opt-shadcn');
 		expect(plan.units).toContain('core-tailwind');
 		expect(plan.auto).toEqual(['core-tailwind']);
-		expect(plan.files.find(f => f.path === 'components.json')?.action).toBe('create');
+		expect(plan.files.find((f) => f.path === 'components.json')?.action).toBe('create');
 		// dest paths are posix in the envelope, whatever the host separator.
-		expect(plan.files.find(f => f.path === 'src/lib/utils.ts')?.action).toBe('create');
+		expect(plan.files.find((f) => f.path === 'src/lib/utils.ts')?.action).toBe('create');
 	});
 
 	it('classifies an already-identical file as skip', () => {
@@ -82,7 +95,7 @@ describe('--dry-run --json (the machine-readable plan)', () => {
 		const result = run(['--dry-run', '--json', '--units', 'core-editorconfig', '--pm', 'npm'], tmp);
 		expect(result.status, result.stderr).toBe(0);
 		const plan = JSON.parse(result.stdout) as { files: { path: string; action: string }[] };
-		expect(plan.files.find(f => f.path === '.editorconfig')?.action).toBe('skip');
+		expect(plan.files.find((f) => f.path === '.editorconfig')?.action).toBe('skip');
 	});
 
 	it('writes nothing, ever', () => {
@@ -102,7 +115,10 @@ describe('the shipped schemas accept live CLI output', () => {
 
 	beforeEach(() => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-contract-'));
-		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'contract', version: '0.0.0' }, null, 2));
+		writeFileSync(
+			join(tmp, 'package.json'),
+			JSON.stringify({ name: 'contract', version: '0.0.0' }, null, 2),
+		);
 	});
 
 	afterEach(() => {
@@ -152,29 +168,30 @@ describe('the shipped schemas accept live CLI output', () => {
 	it('outdated: against a local echo registry', async () => {
 		// Same in-process registry trick as the outdated e2e, so the envelope
 		// being validated came off a real network round trip.
-		const pins = new Map(collectManifestPins(UNITS).map(p => [p.name, p.pin]));
+		const pins = new Map(collectManifestPins(UNITS).map((p) => [p.name, p.pin]));
 		const server = createServer((req, res) => {
 			const name = decodeURIComponent((req.url ?? '/').slice(1));
 			res.setHeader('content-type', 'application/json');
 			res.end(JSON.stringify({ 'dist-tags': { latest: pins.get(name) ?? '0.0.0' } }));
 		});
-		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
 		const registry = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
 		try {
 			const result = await new Promise<{ status: number | null; stdout: string }>((resolve) => {
-				const child = spawn('node', [CLI, 'outdated', '--json', '--registry', registry], { cwd: tmp });
+				const child = spawn('node', [CLI, 'outdated', '--json', '--registry', registry], {
+					cwd: tmp,
+				});
 				let stdout = '';
 				child.stdout.on('data', (d: Buffer) => {
 					stdout += d.toString();
 				});
-				child.on('close', status => resolve({ status, stdout }));
+				child.on('close', (status) => resolve({ status, stdout }));
 			});
 			expect(result.status).toBe(0);
 			expectValid('outdated', JSON.parse(result.stdout));
-		}
-		finally {
-			await new Promise(resolve => server.close(resolve));
+		} finally {
+			await new Promise((resolve) => server.close(resolve));
 		}
 	});
 });
@@ -189,7 +206,9 @@ describe('the unit schema is one contract', () => {
 		const validate = validator('unit');
 		for (const unit of UNITS) {
 			const projected = { schema: UNIT_SCHEMA, ...unit };
-			expect(validate(projected), `${unit.id}: ${JSON.stringify(validate.errors, null, 2)}`).toBe(true);
+			expect(validate(projected), `${unit.id}: ${JSON.stringify(validate.errors, null, 2)}`).toBe(
+				true,
+			);
 		}
 	});
 
@@ -197,9 +216,12 @@ describe('the unit schema is one contract', () => {
 	// directory of their own, which is the published semantic instantiated for
 	// the one catalog that ships inside the package.
 	it('passes every built-in through the shipped validator', () => {
-		const knownIds = new Set(UNITS.map(u => u.id));
+		const knownIds = new Set(UNITS.map((u) => u.id));
 		for (const unit of UNITS) {
-			const result = validateUnitDefinition({ schema: UNIT_SCHEMA, ...unit }, { baseDir: PKG_ROOT, knownIds });
+			const result = validateUnitDefinition(
+				{ schema: UNIT_SCHEMA, ...unit },
+				{ baseDir: PKG_ROOT, knownIds },
+			);
 			expect(result.ok ? [] : result.issues, `${unit.id} failed the shipped validator`).toEqual([]);
 		}
 	});
@@ -219,16 +241,15 @@ describe('the unit schema is one contract', () => {
 		const validate = validator('unit');
 		const dir = join(PKG_ROOT, 'test/fixtures/units');
 		const cases = readdirSync(dir, { withFileTypes: true })
-			.filter(e => e.isDirectory())
-			.map(e => join(dir, e.name, 'unit.json'))
-			.filter(file => existsSync(file));
+			.filter((e) => e.isDirectory())
+			.map((e) => join(dir, e.name, 'unit.json'))
+			.filter((file) => existsSync(file));
 
 		expect(cases.length).toBeGreaterThan(0);
 
 		for (const file of cases) {
 			const doc: unknown = JSON.parse(readFileSync(file, 'utf-8'));
-			if (validate(doc))
-				continue;
+			if (validate(doc)) continue;
 			const result = validateUnitDefinition(doc);
 			expect(result.ok, `${file}: ajv rejects it, the shipped validator accepts it`).toBe(false);
 		}
@@ -241,8 +262,8 @@ describe('the unit schema is one contract', () => {
 		const validate = validator('unit');
 		const dir = join(PKG_ROOT, 'test/fixtures/units');
 		const valid = readdirSync(dir, { withFileTypes: true })
-			.filter(e => e.isDirectory() && e.name.startsWith('valid-'))
-			.map(e => join(dir, e.name));
+			.filter((e) => e.isDirectory() && e.name.startsWith('valid-'))
+			.map((e) => join(dir, e.name));
 
 		expect(valid.length).toBeGreaterThan(0);
 

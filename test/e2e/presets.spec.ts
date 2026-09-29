@@ -20,7 +20,10 @@ describe('unbranded --preset', () => {
 
 	beforeEach(() => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-preset-'));
-		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'preset-me', version: '0.0.0' }, null, 2));
+		writeFileSync(
+			join(tmp, 'package.json'),
+			JSON.stringify({ name: 'preset-me', version: '0.0.0' }, null, 2),
+		);
 	});
 
 	afterEach(() => {
@@ -37,9 +40,12 @@ describe('unbranded --preset', () => {
 		// cli deliberately omits the git hooks.
 		expect(existsSync(join(tmp, 'lint-staged.config.mjs'))).toBe(false);
 
-		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as { units: { id: string }[]; options?: Record<string, string> };
-		expect(state.units.map(u => u.id)).toContain('core-eslint');
-		expect(state.units.map(u => u.id)).not.toContain('opt-husky');
+		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as {
+			units: { id: string }[];
+			options?: Record<string, string>;
+		};
+		expect(state.units.map((u) => u.id)).toContain('core-eslint');
+		expect(state.units.map((u) => u.id)).not.toContain('opt-husky');
 		expect(state.options?.eslintFlavor).toBe('base');
 	});
 
@@ -47,24 +53,38 @@ describe('unbranded --preset', () => {
 		const result = run(['--preset', 'cli', '--units', 'opt-vscode'], tmp);
 		expect(result.status, result.stderr).toBe(0);
 
-		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as { units: { id: string }[] };
+		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as {
+			units: { id: string }[];
+		};
 		// Both the preset's set and the addition survive.
-		expect(state.units.map(u => u.id)).toContain('core-eslint');
-		expect(state.units.map(u => u.id)).toContain('opt-vscode');
+		expect(state.units.map((u) => u.id)).toContain('core-eslint');
+		expect(state.units.map((u) => u.id)).toContain('opt-vscode');
 	});
 
 	it('composes with --dry-run --json: the plan shows the preset expansion', () => {
 		const result = run(['--dry-run', '--json', '--preset', 'next-app', '--pm', 'pnpm'], tmp);
 		expect(result.status, result.stderr).toBe(0);
-		const plan = JSON.parse(result.stdout) as { pm: string; units: string[]; files: { path: string }[] };
+		const plan = JSON.parse(result.stdout) as {
+			pm: string;
+			units: string[];
+			files: { path: string }[];
+		};
 		expect(plan.pm).toBe('pnpm');
 		expect(plan.units).toContain('opt-shadcn');
 		expect(plan.units).toContain('core-tailwind');
-		expect(plan.files.some(f => f.path === 'components.json')).toBe(true);
+		expect(plan.files.some((f) => f.path === 'components.json')).toBe(true);
 	});
 
 	it('refuses --preset together with --config', () => {
-		writeFileSync(join(tmp, 'recipe.json'), JSON.stringify({ units: ['core-editorconfig'], pm: null, onConflict: 'skip', postInstall: 'none' }));
+		writeFileSync(
+			join(tmp, 'recipe.json'),
+			JSON.stringify({
+				units: ['core-editorconfig'],
+				pm: null,
+				onConflict: 'skip',
+				postInstall: 'none',
+			}),
+		);
 		const result = run(['--preset', 'cli', '--config', 'recipe.json'], tmp);
 		expect(result.status).toBe(1);
 		expect(result.stderr).toContain('--preset');

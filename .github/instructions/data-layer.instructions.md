@@ -1,5 +1,5 @@
 ---
-applyTo: "**/data/**,**/api/**,**/lib/data/**"
+applyTo: '**/data/**,**/api/**,**/lib/data/**'
 ---
 
 When working on files in the data layer, always read `_working-memory/dataContracts.md` first.

@@ -30,8 +30,7 @@ export function createJournal(): WriteJournal {
 
 	return {
 		recordBefore(path: string) {
-			if (seen.has(path))
-				return;
+			if (seen.has(path)) return;
 			seen.add(path);
 
 			const before = existsSync(path) ? readFileSync(path) : null;
@@ -45,8 +44,7 @@ export function createJournal(): WriteJournal {
 			while (!existsSync(dir)) {
 				dirsCreated.push(dir);
 				const parent = dirname(dir);
-				if (parent === dir)
-					break; // hit the filesystem root; stop rather than loop forever
+				if (parent === dir) break; // hit the filesystem root; stop rather than loop forever
 				dir = parent;
 			}
 
@@ -74,22 +72,22 @@ export function rollbackJournal(journal: WriteJournal): RollbackReport {
 	const allDirs = new Set<string>();
 
 	for (const entry of journal.entries()) {
-		for (const dir of entry.dirsCreated)
-			allDirs.add(dir);
+		for (const dir of entry.dirsCreated) allDirs.add(dir);
 
 		try {
 			if (entry.before === null) {
 				rmSync(entry.path, { force: true });
 				deleted.push(entry.path);
-			}
-			else {
+			} else {
 				mkdirSync(dirname(entry.path), { recursive: true });
 				writeFileSync(entry.path, entry.before);
 				restored.push(entry.path);
 			}
-		}
-		catch (err) {
-			failures.push({ path: entry.path, message: err instanceof Error ? err.message : String(err) });
+		} catch (err) {
+			failures.push({
+				path: entry.path,
+				message: err instanceof Error ? err.message : String(err),
+			});
 		}
 	}
 
@@ -98,13 +96,14 @@ export function rollbackJournal(journal: WriteJournal): RollbackReport {
 	// the signal that something this run didn't create still lives there—
 	// caught and left alone rather than escalated to a failure.
 	const prunedDirs: string[] = [];
-	const byDepthDesc = [...allDirs].sort((a, b) => b.split(sep).length - a.split(sep).length || b.length - a.length);
+	const byDepthDesc = [...allDirs].sort(
+		(a, b) => b.split(sep).length - a.split(sep).length || b.length - a.length,
+	);
 	for (const dir of byDepthDesc) {
 		try {
 			rmdirSync(dir);
 			prunedDirs.push(dir);
-		}
-		catch {
+		} catch {
 			// Not empty, or already removed as another entry's ancestor—both
 			// are the correct outcome, not an error.
 		}
@@ -121,6 +120,8 @@ export function formatRollbackReport(report: RollbackReport, targetDir: string):
 	];
 	for (const f of report.failures)
 		lines.push(`  could not restore ${relative(targetDir, f.path)}: ${f.message}`);
-	lines.push('`node_modules` and the lockfile are untouched: the package manager owns those, and rollback does not reach them.');
+	lines.push(
+		'`node_modules` and the lockfile are untouched: the package manager owns those, and rollback does not reach them.',
+	);
 	return lines.join('\n');
 }

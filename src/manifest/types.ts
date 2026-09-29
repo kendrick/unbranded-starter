@@ -1,11 +1,32 @@
-export type UnitId
-	= | 'core-eslint' | 'core-stylelint' | 'core-typescript' | 'core-tailwind'
-		| 'core-vitest' | 'core-postcss' | 'core-editorconfig' | 'core-node-version'
-		| 'core-gitattributes'
-		| 'opt-monorepo' | 'opt-husky' | 'opt-playwright' | 'opt-shadcn'
-		| 'opt-vscode' | 'opt-ci-github';
+export type UnitId =
+	| 'core-eslint'
+	| 'core-stylelint'
+	| 'core-typescript'
+	| 'core-tailwind'
+	| 'core-vitest'
+	| 'core-postcss'
+	| 'core-editorconfig'
+	| 'core-node-version'
+	| 'core-gitattributes'
+	| 'opt-monorepo'
+	| 'opt-husky'
+	| 'opt-playwright'
+	| 'opt-shadcn'
+	| 'opt-vscode'
+	| 'opt-ci-github';
 
-export type Category = 'foundation' | 'lint' | 'style' | 'types' | 'test' | 'e2e' | 'monorepo' | 'ui' | 'git' | 'editor' | 'ci';
+export type Category =
+	| 'foundation'
+	| 'lint'
+	| 'style'
+	| 'types'
+	| 'test'
+	| 'e2e'
+	| 'monorepo'
+	| 'ui'
+	| 'git'
+	| 'editor'
+	| 'ci';
 
 export interface FileOp {
 	// Path relative to the unit's own directory, written posix-style. For the
@@ -148,7 +169,7 @@ export type AnyUnit = UnitBase<string>;
 // Where a resolved unit came from. `pack` is typed ahead of #42 (npm-published
 // unit packs) so the state schema settles its shape once, rather than needing
 // a second migration when packs land; nothing constructs it yet.
-export type UnitSource
-	= | { kind: 'builtin' }
-		| { kind: 'dir'; path: string }
-		| { kind: 'pack'; name: string; version: string };
+export type UnitSource =
+	| { kind: 'builtin' }
+	| { kind: 'dir'; path: string }
+	| { kind: 'pack'; name: string; version: string };

@@ -16,11 +16,13 @@ describe('readPackageJson', () => {
 	});
 
 	it('parses a valid manifest into a typed result', () => {
-		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', scripts: { test: 'vitest' } }));
+		writeFileSync(
+			join(tmp, 'package.json'),
+			JSON.stringify({ name: 'x', scripts: { test: 'vitest' } }),
+		);
 		const read = readPackageJson(tmp);
 		expect(read.kind).toBe('ok');
-		if (read.kind === 'ok')
-			expect(read.pkg.scripts?.test).toBe('vitest');
+		if (read.kind === 'ok') expect(read.pkg.scripts?.test).toBe('vitest');
 	});
 
 	it('reports a missing manifest without throwing', () => {
@@ -32,7 +34,6 @@ describe('readPackageJson', () => {
 		const read = readPackageJson(tmp);
 		expect(read.kind).toBe('malformed');
 		// The audit surfaces this as a finding, so the parse error must survive.
-		if (read.kind === 'malformed')
-			expect(read.error.length).toBeGreaterThan(0);
+		if (read.kind === 'malformed') expect(read.error.length).toBeGreaterThan(0);
 	});
 });

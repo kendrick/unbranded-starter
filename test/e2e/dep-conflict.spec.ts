@@ -9,11 +9,11 @@ import { PKG_ROOT } from '../../src/util/paths';
 const CLI = join(PKG_ROOT, 'dist/cli.js');
 // Read the pinned versions from the manifest, not literals, so a weekly
 // pin-bump PR doesn't redden this file every time a pin moves.
-const CORE_TYPESCRIPT = UNITS.find(u => u.id === 'core-typescript');
+const CORE_TYPESCRIPT = UNITS.find((u) => u.id === 'core-typescript');
 const TYPESCRIPT_PIN = CORE_TYPESCRIPT?.devDependencies?.typescript;
 const TYPES_NODE_PIN = CORE_TYPESCRIPT?.devDependencies?.['@types/node'];
 if (!TYPESCRIPT_PIN || !TYPES_NODE_PIN)
-	throw new Error('core-typescript manifest shape changed—update this test\'s pin lookups.');
+	throw new Error("core-typescript manifest shape changed—update this test's pin lookups.");
 
 // Escape a pin for use inside a RegExp—a pin is dotted (e.g. "5.9.3"), and
 // an unescaped "." would match any character instead of a literal dot.
@@ -70,11 +70,13 @@ describe('cli dependency conflict resolution (#113)', () => {
 
 		expect(result.stdout).toMatch(/package\.json dependency conflicts/);
 		expect(result.stdout).toMatch(
-			new RegExp(`overwrote\\s+devDependencies\\.typescript\\s+\\^6\\.0\\.3\\s+->\\s+${TYPESCRIPT_PIN_RE}`),
+			new RegExp(
+				`overwrote\\s+devDependencies\\.typescript\\s+\\^6\\.0\\.3\\s+->\\s+${TYPESCRIPT_PIN_RE}`,
+			),
 		);
 	});
 
-	it('skip: keeps the user\'s spec, and the resolution doesn\'t cascade to sibling deps', () => {
+	it("skip: keeps the user's spec, and the resolution doesn't cascade to sibling deps", () => {
 		writeJson(join(tmp, 'recipe.json'), {
 			units: ['core-typescript'],
 			pm: null,
@@ -99,7 +101,9 @@ describe('cli dependency conflict resolution (#113)', () => {
 		expect(pkg.devDependencies['@types/node']).toBe(TYPES_NODE_PIN);
 
 		expect(result.stdout).toMatch(
-			new RegExp(`kept\\s+devDependencies\\.typescript\\s+\\^6\\.0\\.3\\s+\\(manifest pins\\s+${TYPESCRIPT_PIN_RE}\\)`),
+			new RegExp(
+				`kept\\s+devDependencies\\.typescript\\s+\\^6\\.0\\.3\\s+\\(manifest pins\\s+${TYPESCRIPT_PIN_RE}\\)`,
+			),
 		);
 		expect(result.stdout).toMatch(/Kept pins may not match/);
 	});
@@ -123,7 +127,7 @@ describe('cli dependency conflict resolution (#113)', () => {
 		expect(result.stdout).toMatch(/kept\s+devDependencies\.typescript/);
 	});
 
-	it('--latest: never prompts, and rewrites the conflicting spec to \'latest\'', () => {
+	it("--latest: never prompts, and rewrites the conflicting spec to 'latest'", () => {
 		// onConflict is a required recipe field, but --latest bypasses
 		// resolveDepConflict entirely (writeAndInstall short-circuits to
 		// 'overwrite' before it would ever prompt), so its value here doesn't
@@ -152,6 +156,8 @@ describe('cli dependency conflict resolution (#113)', () => {
 		};
 		expect(pkg.devDependencies.typescript).toBe('latest');
 
-		expect(result.stdout).toMatch(/--latest:\s+rewrote\s+1\s+existing dependency spec\(s\)\s+to\s+'latest'/);
+		expect(result.stdout).toMatch(
+			/--latest:\s+rewrote\s+1\s+existing dependency spec\(s\)\s+to\s+'latest'/,
+		);
 	});
 });

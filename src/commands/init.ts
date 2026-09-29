@@ -7,7 +7,13 @@ import type { StateUnit, TrackedWrite } from '../state/state';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, posix, relative, sep } from 'node:path';
 import { cancel, confirm, intro, isCancel, log, note, outro, select } from '@clack/prompts';
-import { assertValidPm, peekUnitsDir, readConfigFile, resolveConfig, validate as validateConfig } from '../config/load';
+import {
+	assertValidPm,
+	peekUnitsDir,
+	readConfigFile,
+	resolveConfig,
+	validate as validateConfig,
+} from '../config/load';
 import { loadPreset, presetNames } from '../config/presets';
 import { buildRecipe, serializeRecipe } from '../config/recipe';
 import { detectInstalledUnits } from '../detect/installed';
@@ -88,8 +94,7 @@ function templateRoot(catalog: Catalog, id: string): string {
 function stateUnitsFor(catalog: Catalog, ids: string[], targetDir: string): StateUnit[] {
 	return ids.map((id) => {
 		const source = catalog.sources.get(id) ?? { kind: 'builtin' as const };
-		if (source.kind !== 'dir')
-			return { id, source };
+		if (source.kind !== 'dir') return { id, source };
 		const rel = relative(targetDir, source.path).split(sep).join(posix.sep);
 		// A bare directory name reads as ambiguous next to a unit id, so keep the
 		// leading ./ that a user would have typed.
@@ -104,7 +109,9 @@ function catalogNotices(catalog: Catalog): string[] {
 	return [
 		...catalog.warnings,
 		...catalog.skipped.map((skip) => {
-			const detail = skip.issues.map(i => `${i.path}: expected ${i.expected}, got ${i.got}`).join('; ');
+			const detail = skip.issues
+				.map((i) => `${i.path}: expected ${i.expected}, got ${i.got}`)
+				.join('; ');
 			return `Skipped ${skip.path}${skip.id ? ` (${skip.id})` : ''} — ${detail}`;
 		}),
 	];
@@ -118,11 +125,17 @@ function dirList(dir: string | undefined): string[] {
 // that supplies the ids validation is about to check, so the document gets read,
 // the catalog assembled from whatever it names, and only then is the config held to
 // it. The flag beats the recipe field, the same way every other flag does.
-function openCatalog(opts: { configPath?: string; preset?: string; unitsDir?: string }): { catalog: Catalog; fileConfig: Config | null } {
+function openCatalog(opts: { configPath?: string; preset?: string; unitsDir?: string }): {
+	catalog: Catalog;
+	fileConfig: Config | null;
+} {
 	if (opts.configPath) {
 		const { raw, dir } = readConfigFile(opts.configPath);
 		const catalog = loadCatalog({ unitsDirs: dirList(opts.unitsDir ?? peekUnitsDir(raw, dir)) });
-		return { catalog, fileConfig: validateConfig(raw, catalog.ids, catalog.optionSchema, { configDir: dir }) };
+		return {
+			catalog,
+			fileConfig: validateConfig(raw, catalog.ids, catalog.optionSchema, { configDir: dir }),
+		};
 	}
 
 	// Shipped presets only ever name built-ins, so there's no second place a units
@@ -130,7 +143,9 @@ function openCatalog(opts: { configPath?: string; preset?: string; unitsDir?: st
 	const catalog = loadCatalog({ unitsDirs: dirList(opts.unitsDir) });
 	return {
 		catalog,
-		fileConfig: opts.preset ? loadPreset(opts.preset, catalog.ids, catalog.optionSchema).config : null,
+		fileConfig: opts.preset
+			? loadPreset(opts.preset, catalog.ids, catalog.optionSchema).config
+			: null,
 	};
 }
 
@@ -138,61 +153,97 @@ function openCatalog(opts: { configPath?: string; preset?: string; unitsDir?: st
 // that flow narrates through clack from its first line, and one stray chrome
 // line on stdout breaks a JSON consumer. Requires a selection (--units or
 // --config) because there is no picker to drive without a TTY story.
-export async function runPlanJson(opts: { configPath?: string; inline?: InlineFlags; targetDir?: string; preset?: string; unitsDir?: string }): Promise<number> {
+export async function runPlanJson(opts: {
+	configPath?: string;
+	inline?: InlineFlags;
+	targetDir?: string;
+	preset?: string;
+	unitsDir?: string;
+}): Promise<number> {
 	const inline = opts.inline ?? {};
-	if (inline.pm !== undefined)
-		assertValidPm(inline.pm);
+	if (inline.pm !== undefined) assertValidPm(inline.pm);
 
 	const { catalog, fileConfig } = openCatalog(opts);
 	// Skipped units go to stderr here rather than through clack: this path's stdout
 	// is a JSON document, and one stray line of chrome breaks the consumer parsing it.
-	for (const notice of catalogNotices(catalog))
-		process.stderr.write(`${notice}\n`);
+	for (const notice of catalogNotices(catalog)) process.stderr.write(`${notice}\n`);
 
 	const known = catalog.ids;
 	const optionSchema = catalog.optionSchema;
-	const config = fileConfig !== null || inline.units !== undefined
-		? resolveConfig(fileConfig, inline, known, optionSchema, { unitsMode: opts.preset ? 'additive' : 'override', unitsDir: opts.unitsDir })
-		: null;
+	const config =
+		fileConfig !== null || inline.units !== undefined
+			? resolveConfig(fileConfig, inline, known, optionSchema, {
+					unitsMode: opts.preset ? 'additive' : 'override',
+					unitsDir: opts.unitsDir,
+				})
+			: null;
 	if (!config) {
-		process.stderr.write('--dry-run --json needs a selection: pass --units <ids>, --config <file>, or --preset <name>.\n');
+		process.stderr.write(
+			'--dry-run --json needs a selection: pass --units <ids>, --config <file>, or --preset <name>.\n',
+		);
 		return 1;
 	}
 
 	const target = await detectTarget({ projectName: config.projectName, cwd: opts.targetDir });
 	// Mirrors runInit's override expression exactly so the two dry-run flavors
 	// can't drift: an explicit --pm wins, then the recipe's pm, then detection.
-	const pm = await detectPm(target.dir, { override: inline.pm ?? fileConfig?.pm, mode: target.mode });
+	const pm = await detectPm(target.dir, {
+		override: inline.pm ?? fileConfig?.pm,
+		mode: target.mode,
+	});
 
 	const resolution = resolveSelection(config.units, catalog.units);
 	if (resolution.kind === 'missing-required') {
-		process.stderr.write(`${resolution.unit} requires ${resolution.needs.join(', ')}, which weren't selected.\n`);
+		process.stderr.write(
+			`${resolution.unit} requires ${resolution.needs.join(', ')}, which weren't selected.\n`,
+		);
 		return 1;
 	}
 	if (resolution.kind === 'conflict') {
-		process.stderr.write(`${resolution.pair[0]} and ${resolution.pair[1]} can't both be selected.\n`);
+		process.stderr.write(
+			`${resolution.pair[0]} and ${resolution.pair[1]} can't both be selected.\n`,
+		);
 		return 1;
 	}
 
-	const byId = new Map<string, AnyUnit>(catalog.units.map(u => [u.id, u]));
-	const selectedUnits = resolution.ids.map(id => byId.get(id)).filter((u): u is AnyUnit => u !== undefined);
-	const optionSelections = await resolveUnitOptions(selectedUnits, config.options, false, target.dir);
-	const units = selectedUnits.map(unit => applyUnitOptions(unit, optionSelections));
+	const byId = new Map<string, AnyUnit>(catalog.units.map((u) => [u.id, u]));
+	const selectedUnits = resolution.ids
+		.map((id) => byId.get(id))
+		.filter((u): u is AnyUnit => u !== undefined);
+	const optionSelections = await resolveUnitOptions(
+		selectedUnits,
+		config.options,
+		false,
+		target.dir,
+	);
+	const units = selectedUnits.map((unit) => applyUnitOptions(unit, optionSelections));
 
 	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
-	const plans = units.flatMap(unit =>
-		unit.files.map(file => planFileOp(file, { pkgRoot: templateRoot(catalog, unit.id), targetDir: target.dir, projectName })),
+	const plans = units.flatMap((unit) =>
+		unit.files.map((file) =>
+			planFileOp(file, {
+				pkgRoot: templateRoot(catalog, unit.id),
+				targetDir: target.dir,
+				projectName,
+			}),
+		),
 	);
 
-	process.stdout.write(`${JSON.stringify({
-		schema: PLAN_SCHEMA,
-		target: { dir: target.dir, mode: target.mode },
-		pm,
-		units: [...resolution.ids].sort(),
-		auto: [...resolution.auto].sort(),
-		// rel is native; the envelope speaks posix like every other surface.
-		files: plans.map(p => ({ path: p.rel.split(sep).join('/'), action: p.outcome })),
-	}, null, 2)}\n`);
+	process.stdout.write(
+		`${JSON.stringify(
+			{
+				schema: PLAN_SCHEMA,
+				target: { dir: target.dir, mode: target.mode },
+				pm,
+				units: [...resolution.ids].sort(),
+				auto: [...resolution.auto].sort(),
+				// rel is native; the envelope speaks posix like every other surface.
+				files: plans.map((p) => ({ path: p.rel.split(sep).join('/'), action: p.outcome })),
+			},
+			null,
+			2,
+		)}\n`,
+	);
 	return 0;
 }
 
@@ -202,7 +253,9 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// --yes means "don't prompt, just apply". With no selection there's nothing
 	// to apply and no prompt is allowed to fill the gap, so fail before any IO.
 	if (inline.yes && inline.units === undefined && !opts.configPath && !opts.preset) {
-		throw new Error('`--yes` needs `--units <ids>` to know what to install, or point at a recipe with `--config <file>` or `--preset <name>`.');
+		throw new Error(
+			'`--yes` needs `--units <ids>` to know what to install, or point at a recipe with `--config <file>` or `--preset <name>`.',
+		);
 	}
 
 	// Validate --pm up front so a bad value fails fast in every mode, not only
@@ -227,7 +280,10 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// preset, inline --units, or --yes. A bare interactive run leaves it null.
 	const nonInteractive = fileConfig !== null || inline.units !== undefined || Boolean(inline.yes);
 	const config = nonInteractive
-		? resolveConfig(fileConfig, inline, known, optionSchema, { unitsMode: opts.preset ? 'additive' : 'override', unitsDir: opts.unitsDir })
+		? resolveConfig(fileConfig, inline, known, optionSchema, {
+				unitsMode: opts.preset ? 'additive' : 'override',
+				unitsDir: opts.unitsDir,
+			})
 		: null;
 
 	// The flag wins over the recipe field, so `--config r.json --latest` works.
@@ -240,8 +296,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 
 	intro(config ? 'unbranded (non-interactive)' : 'unbranded');
 
-	for (const notice of catalogNotices(catalog))
-		log.warn(notice);
+	for (const notice of catalogNotices(catalog)) log.warn(notice);
 
 	const target = await detectTarget({ projectName: config?.projectName, cwd: opts.targetDir });
 	log.info(`Target: ${target.dir} (${target.mode})`);
@@ -253,12 +308,16 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// `force`) opts out. Non-interactive runs (skipApply) only warn so CI can't
 	// hang on a prompt; interactive runs confirm, and a cancel exits 130.
 	const forced = Boolean(opts.force) || Boolean(config?.force);
-	if (!forced && target.mode === 'augment' && await isDirtyGitTree(target.dir)) {
-		log.warn('Uncommitted changes in the git working tree — a clean tree is your undo button (`git checkout .`) if this scaffold goes sideways.');
+	if (!forced && target.mode === 'augment' && (await isDirtyGitTree(target.dir))) {
+		log.warn(
+			'Uncommitted changes in the git working tree — a clean tree is your undo button (`git checkout .`) if this scaffold goes sideways.',
+		);
 		if (!skipApply) {
-			const proceed = await confirm({ message: 'Write into a dirty tree anyway?', initialValue: false });
-			if (isCancel(proceed))
-				return cancelAndExit();
+			const proceed = await confirm({
+				message: 'Write into a dirty tree anyway?',
+				initialValue: false,
+			});
+			if (isCancel(proceed)) return cancelAndExit();
 			if (!proceed) {
 				cancel('Cancelled.');
 				return { ok: true };
@@ -270,15 +329,23 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// prompt in interactive runs too, not just config mode. Inline --pm wins
 	// over the recipe's pm; when neither is set the override is undefined and
 	// detection runs exactly as before.
-	const pm = await detectPm(target.dir, { override: pmOverride ?? fileConfig?.pm, mode: target.mode });
-	log.info(pm ? `Package manager: ${pm}` : 'No package.json — files will be written; install will be skipped.');
+	const pm = await detectPm(target.dir, {
+		override: pmOverride ?? fileConfig?.pm,
+		mode: target.mode,
+	});
+	log.info(
+		pm
+			? `Package manager: ${pm}`
+			: 'No package.json — files will be written; install will be skipped.',
+	);
 
 	// Badge already-installed units, but only in an interactive augment run: a new
 	// project has nothing pre-existing to badge, and non-interactive paths never
 	// prompt, so detecting there would be wasted work that changes no output.
-	const installed = config === null && target.mode === 'augment'
-		? detectInstalledUnits({ cwd: target.dir, units: catalog.units })
-		: new Set<string>();
+	const installed =
+		config === null && target.mode === 'augment'
+			? detectInstalledUnits({ cwd: target.dir, units: catalog.units })
+			: new Set<string>();
 
 	// The interactive picker returns chosen flavors alongside the ids, so cycling a
 	// flavor inline (←/→) stands in for the old follow-up select prompt. A recipe run
@@ -287,8 +354,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	let pickerFlavors: Record<string, string> = {};
 	if (config) {
 		selection = config.units;
-	}
-	else {
+	} else {
 		// "Start from a preset?" seeds the picker, it never bypasses it: the units
 		// land preselected and editable, so a preset is a head start rather than a
 		// commitment. Skipped when a caller (doctor --fix) already brought a seed.
@@ -306,8 +372,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 				],
 				initialValue: '',
 			});
-			if (isCancel(fromPreset))
-				return cancelAndExit();
+			if (isCancel(fromPreset)) return cancelAndExit();
 			if (fromPreset !== '') {
 				const preset = loadPreset(fromPreset, known, optionSchema);
 				initialSelected = preset.config.units;
@@ -324,8 +389,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 			initialFlavors: { ...pickerInitialFlavors(catalog.units, target.dir), ...presetFlavors },
 			initialSelected,
 		});
-		if (isCancel(picked))
-			return cancelAndExit();
+		if (isCancel(picked)) return cancelAndExit();
 		selection = picked.ids;
 		pickerFlavors = picked.flavors;
 	}
@@ -336,7 +400,9 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 
 	const resolution = resolveSelection(selection, catalog.units);
 	if (resolution.kind === 'missing-required') {
-		log.error(`${resolution.unit} requires ${resolution.needs.join(', ')}, which weren't selected.`);
+		log.error(
+			`${resolution.unit} requires ${resolution.needs.join(', ')}, which weren't selected.`,
+		);
 		process.exit(1);
 	}
 	if (resolution.kind === 'conflict') {
@@ -344,9 +410,9 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		process.exit(1);
 	}
 
-	const byId = new Map<string, AnyUnit>(catalog.units.map(u => [u.id, u]));
+	const byId = new Map<string, AnyUnit>(catalog.units.map((u) => [u.id, u]));
 	const selectedUnits = resolution.ids
-		.map(id => byId.get(id))
+		.map((id) => byId.get(id))
 		.filter((u): u is AnyUnit => u !== undefined);
 
 	// Resolve each selected unit's options (core-eslint's flavor today) to a concrete
@@ -355,8 +421,13 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// already seeds every option-bearing unit's flavor, the interactive select branch
 	// inside resolveUnitOptions no longer fires — cycling ←/→ replaced it.
 	const seededOptions = { ...pickerFlavors, ...config?.options };
-	const optionSelections = await resolveUnitOptions(selectedUnits, seededOptions, !skipApply, target.dir);
-	const units = selectedUnits.map(unit => applyUnitOptions(unit, optionSelections));
+	const optionSelections = await resolveUnitOptions(
+		selectedUnits,
+		seededOptions,
+		!skipApply,
+		target.dir,
+	);
+	const units = selectedUnits.map((unit) => applyUnitOptions(unit, optionSelections));
 
 	note(formatPlan(units, resolution.auto, resolution.requiredBy, pm, latest), 'Plan');
 
@@ -366,8 +437,14 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// stops before the first write. It sits ahead of the Apply gate so it works
 	// the same whether the selection came from a prompt or a --config recipe.
 	if (opts.dryRun) {
-		const plans = units.flatMap(unit =>
-			unit.files.map(file => planFileOp(file, { pkgRoot: templateRoot(catalog, unit.id), targetDir: target.dir, projectName })),
+		const plans = units.flatMap((unit) =>
+			unit.files.map((file) =>
+				planFileOp(file, {
+					pkgRoot: templateRoot(catalog, unit.id),
+					targetDir: target.dir,
+					projectName,
+				}),
+			),
 		);
 		note(formatDryRun(plans, opts.diff ?? false), 'Dry run (no files written)');
 		log.success(formatDryRunSummary(plans));
@@ -379,8 +456,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// Inline --units without --yes still confirms, so a typo'd id is catchable.
 	if (!skipApply) {
 		const proceed = await confirm({ message: 'Apply?', initialValue: true });
-		if (isCancel(proceed))
-			return cancelAndExit();
+		if (isCancel(proceed)) return cancelAndExit();
 		if (!proceed) {
 			cancel('Cancelled.');
 			return { ok: true };
@@ -411,10 +487,11 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		}
 	}
 
-	const count = (action: CopyResult['action']): number => copyResults.filter(r => r.action === action).length;
+	const count = (action: CopyResult['action']): number =>
+		copyResults.filter((r) => r.action === action).length;
 	log.success(
-		`Files: ${count('copied')} written, ${count('overwrote')} overwritten, `
-		+ `${count('merged')} merged, ${count('appended')} appended, ${count('skipped')} skipped.`,
+		`Files: ${count('copied')} written, ${count('overwrote')} overwritten, ` +
+			`${count('merged')} merged, ${count('appended')} appended, ${count('skipped')} skipped.`,
 	);
 
 	const installResult = await writeAndInstall({
@@ -442,7 +519,11 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 			units: stateUnitsFor(catalog, resolution.ids, target.dir),
 			writes: [
 				...writes,
-				...installResult.computedWrites.map(w => ({ dest: w.path, unit: w.unit, mode: 'computed' as const })),
+				...installResult.computedWrites.map((w) => ({
+					dest: w.path,
+					unit: w.unit,
+					mode: 'computed' as const,
+				})),
 			],
 			options: optionSelections,
 		});
@@ -464,10 +545,8 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		if (action === 'rollback') {
 			const rollback = rollbackJournal(journal);
 			const rolledBack = formatRollbackReport(rollback, target.dir);
-			if (rollback.failures.length > 0)
-				log.warn(rolledBack);
-			else
-				log.success(rolledBack);
+			if (rollback.failures.length > 0) log.warn(rolledBack);
+			else log.success(rolledBack);
 			outro('Rolled back.');
 			return { ok: false };
 		}
@@ -487,11 +566,9 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 
 	if (installResult.cancelled) {
 		log.warn(`Install interrupted. Re-run \`${pm} install\` in ${target.dir} to finish.`);
-	}
-	else if (installResult.error) {
+	} else if (installResult.error) {
 		log.error(installResult.error);
-	}
-	else if (!pm) {
+	} else if (!pm) {
 		log.message(formatNoPmNextSteps(target.dir, units));
 	}
 
@@ -517,20 +594,43 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// as a recipe. Only on a fully interactive run — a config or inline-flag run
 	// already has its source of truth, so re-emitting one is circular. Defaults to
 	// No so nobody who doesn't care pays more than one Enter.
-	const usedInlineFlags = inline.units !== undefined || inline.pm !== undefined
-		|| inline.onConflict !== undefined || inline.postInstall !== undefined || Boolean(inline.yes);
+	const usedInlineFlags =
+		inline.units !== undefined ||
+		inline.pm !== undefined ||
+		inline.onConflict !== undefined ||
+		inline.postInstall !== undefined ||
+		Boolean(inline.yes);
 	if (config === null && !usedInlineFlags) {
-		const save = await confirm({ message: 'Save this configuration as a recipe? (recipe.json)', initialValue: false });
-		if (isCancel(save))
-			return cancelAndExit();
+		const save = await confirm({
+			message: 'Save this configuration as a recipe? (recipe.json)',
+			initialValue: false,
+		});
+		if (isCancel(save)) return cancelAndExit();
 		if (save) {
-			const version = (JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf-8')) as { version: string }).version;
+			const version = (
+				JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf-8')) as { version: string }
+			).version;
 			const dest = join(target.dir, 'recipe.json');
 			// The recipe lands in the project root, so a units directory recorded
 			// relative to the target is already relative to the recipe beside it.
 			const recorded = stateUnitsFor(catalog, resolution.ids, target.dir);
-			const unitsDir = recorded.find(u => u.source.kind === 'dir')?.source as { path: string } | undefined;
-			writeFileSync(dest, serializeRecipe(buildRecipe({ ids: resolution.ids, pm, latest, projectName, options: optionSelections, version, unitsDir: unitsDir?.path })));
+			const unitsDir = recorded.find((u) => u.source.kind === 'dir')?.source as
+				| { path: string }
+				| undefined;
+			writeFileSync(
+				dest,
+				serializeRecipe(
+					buildRecipe({
+						ids: resolution.ids,
+						pm,
+						latest,
+						projectName,
+						options: optionSelections,
+						version,
+						unitsDir: unitsDir?.path,
+					}),
+				),
+			);
 			log.success(`Saved ${dest}. Replay it with \`unbranded --config recipe.json\`.`);
 		}
 	}
@@ -561,8 +661,7 @@ async function resolveUnitOptions(
 
 	for (const unit of units) {
 		for (const option of unit.options ?? []) {
-			if (selections[option.key] !== undefined)
-				continue;
+			if (selections[option.key] !== undefined) continue;
 
 			const fallback = optionDefault(option, targetDir);
 			if (!interactive) {
@@ -572,11 +671,14 @@ async function resolveUnitOptions(
 
 			const chosen = await select<string>({
 				message: `${unit.label}: ${option.label}`,
-				options: option.choices.map((c: UnitOption['choices'][number]) => ({ value: c.value, label: c.label, hint: c.hint })),
+				options: option.choices.map((c: UnitOption['choices'][number]) => ({
+					value: c.value,
+					label: c.label,
+					hint: c.hint,
+				})),
 				initialValue: fallback,
 			});
-			if (isCancel(chosen))
-				return cancelAndExit();
+			if (isCancel(chosen)) return cancelAndExit();
 			selections[option.key] = chosen;
 		}
 	}
@@ -589,16 +691,17 @@ async function resolveUnitOptions(
 // option is core-eslint's flavor, defaulted by sniffing the target's dependencies
 // (a repo that pulls next/react wants that flavor, everything else gets base).
 function optionDefault(option: UnitOption, targetDir: string): string {
-	if (option.key === 'eslintFlavor')
-		return detectEslintFlavor(targetDependencyNames(targetDir));
+	if (option.key === 'eslintFlavor') return detectEslintFlavor(targetDependencyNames(targetDir));
 	return option.default;
 }
 
 function targetDependencyNames(targetDir: string): string[] {
 	const read = readPackageJson(targetDir);
-	if (read.kind !== 'ok')
-		return [];
-	return [...Object.keys(read.pkg.dependencies ?? {}), ...Object.keys(read.pkg.devDependencies ?? {})];
+	if (read.kind !== 'ok') return [];
+	return [
+		...Object.keys(read.pkg.dependencies ?? {}),
+		...Object.keys(read.pkg.devDependencies ?? {}),
+	];
 }
 
 // Seed the picker's flavor tags with the same environment-sniffed default the
@@ -607,8 +710,7 @@ function targetDependencyNames(targetDir: string): string[] {
 function pickerInitialFlavors(units: AnyUnit[], targetDir: string): Record<string, string> {
 	const flavors: Record<string, string> = {};
 	for (const unit of units) {
-		for (const option of unit.options ?? [])
-			flavors[option.key] = optionDefault(option, targetDir);
+		for (const option of unit.options ?? []) flavors[option.key] = optionDefault(option, targetDir);
 	}
 	return flavors;
 }
@@ -624,7 +726,7 @@ export function formatPlan(
 	latest: boolean,
 ): string {
 	const lines: string[] = [];
-	const labelById = new Map(units.map(u => [u.id, u.label]));
+	const labelById = new Map(units.map((u) => [u.id, u.label]));
 
 	for (const u of units) {
 		const requirer = requiredBy[u.id];
@@ -633,20 +735,25 @@ export function formatPlan(
 		// same resolver call, so a missing attribution shouldn't happen, but printing
 		// "required by undefined" would be worse than saying nothing.
 		const autoTag = auto.includes(u.id)
-			? (requirerLabel ? ` (auto — required by ${requirerLabel})` : ' (auto)')
+			? requirerLabel
+				? ` (auto — required by ${requirerLabel})`
+				: ' (auto)'
 			: '';
 		lines.push(`  • ${u.label}${autoTag}`);
 	}
 
 	const fileCount = units.reduce((n, u) => n + u.files.length, 0);
 	const depCount = units.reduce(
-		(n, u) => n + Object.keys(u.dependencies ?? {}).length + Object.keys(u.devDependencies ?? {}).length,
+		(n, u) =>
+			n + Object.keys(u.dependencies ?? {}).length + Object.keys(u.devDependencies ?? {}).length,
 		0,
 	);
 
 	lines.push('');
 	const installLine = pm ? `install via ${pm}` : 'no install (no package.json)';
-	lines.push(`${units.length} units · ${fileCount} files · ${depCount} deps (${latest ? 'latest' : 'pinned'}) · ${installLine}`);
+	lines.push(
+		`${units.length} units · ${fileCount} files · ${depCount} deps (${latest ? 'latest' : 'pinned'}) · ${installLine}`,
+	);
 
 	return lines.join('\n');
 }
@@ -663,15 +770,14 @@ const PLAN_LABELS: Record<PlanOutcome, string> = {
 };
 
 function formatDryRun(plans: FilePlan[], withDiff: boolean): string {
-	const width = Math.max(...Object.values(PLAN_LABELS).map(l => l.length));
+	const width = Math.max(...Object.values(PLAN_LABELS).map((l) => l.length));
 	const lines: string[] = [];
 
 	for (const plan of plans) {
 		lines.push(`${PLAN_LABELS[plan.outcome].padEnd(width)}  ${plan.rel}`);
 		if (withDiff) {
 			const diff = renderPlanDiff(plan);
-			if (diff)
-				lines.push(diff);
+			if (diff) lines.push(diff);
 		}
 	}
 
@@ -679,13 +785,13 @@ function formatDryRun(plans: FilePlan[], withDiff: boolean): string {
 }
 
 function formatDryRunSummary(plans: FilePlan[]): string {
-	const count = (outcome: PlanOutcome): number => plans.filter(p => p.outcome === outcome).length;
+	const count = (outcome: PlanOutcome): number => plans.filter((p) => p.outcome === outcome).length;
 	// Mirrors the real run's `Files: N written…` line, swapped to would-phrasing.
 	// Conflicts get their own tail count since dry-run reports them instead of
 	// resolving them into a write or a skip.
 	return (
-		`Would: ${count('create')} written, ${count('merge')} merged, `
-		+ `${count('append')} appended, ${count('skip')} skipped, ${count('conflict')} conflicts.`
+		`Would: ${count('create')} written, ${count('merge')} merged, ` +
+		`${count('append')} appended, ${count('skip')} skipped, ${count('conflict')} conflicts.`
 	);
 }
 
@@ -710,11 +816,8 @@ function formatNoPmNextSteps(targetDir: string, units: AnyUnit[]): string {
 		'',
 		`  cd ${targetDir}`,
 	];
-	if (!hasPkg)
-		lines.push('  npm init -y           # or pnpm init / yarn init / bun init');
-	if (deps.size > 0)
-		lines.push(`  npm install ${[...deps].sort().join(' ')}`);
-	if (devDeps.size > 0)
-		lines.push(`  npm install -D ${[...devDeps].sort().join(' ')}`);
+	if (!hasPkg) lines.push('  npm init -y           # or pnpm init / yarn init / bun init');
+	if (deps.size > 0) lines.push(`  npm install ${[...deps].sort().join(' ')}`);
+	if (devDeps.size > 0) lines.push(`  npm install -D ${[...devDeps].sort().join(' ')}`);
 	return lines.join('\n');
 }

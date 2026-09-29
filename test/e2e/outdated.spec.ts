@@ -32,14 +32,14 @@ function run(args: string[]): Promise<{ status: number | null; stdout: string; s
 		child.stderr.on('data', (d: Buffer) => {
 			stderr += d.toString();
 		});
-		child.on('close', status => resolve({ status, stdout, stderr }));
+		child.on('close', (status) => resolve({ status, stdout, stderr }));
 	});
 }
 
 describe('unbranded outdated (against a local registry)', () => {
 	// Echoes every real manifest pin back as latest, minus per-test overrides —
 	// a registry where nothing moved unless the test says so.
-	const pins = new Map(collectManifestPins(UNITS).map(p => [p.name, p.pin]));
+	const pins = new Map(collectManifestPins(UNITS).map((p) => [p.name, p.pin]));
 	const overrides: Record<string, string> = {};
 	let server: Server;
 	let registry: string;
@@ -48,9 +48,11 @@ describe('unbranded outdated (against a local registry)', () => {
 		server = createServer((req, res) => {
 			const name = decodeURIComponent((req.url ?? '/').slice(1));
 			res.setHeader('content-type', 'application/json');
-			res.end(JSON.stringify({ 'dist-tags': { latest: overrides[name] ?? pins.get(name) ?? '0.0.0' } }));
+			res.end(
+				JSON.stringify({ 'dist-tags': { latest: overrides[name] ?? pins.get(name) ?? '0.0.0' } }),
+			);
 		});
-		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
 		registry = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 	});
 
@@ -59,7 +61,7 @@ describe('unbranded outdated (against a local registry)', () => {
 	});
 
 	afterAll(async () => {
-		await new Promise(resolve => server.close(resolve));
+		await new Promise((resolve) => server.close(resolve));
 	});
 
 	it('exits 0 with a clean bill when every pin matches the registry', async () => {
@@ -92,7 +94,7 @@ describe('unbranded outdated (against a local registry)', () => {
 		};
 		expect(parsed.schema).toBe(1);
 		expect(parsed.majorsBehind).toBe(0);
-		expect(parsed.packages.find(p => p.name === 'vitest')?.behind).toBe('minor');
+		expect(parsed.packages.find((p) => p.name === 'vitest')?.behind).toBe('minor');
 	});
 
 	it('fails fast with a clear error when the registry is unreachable', async () => {

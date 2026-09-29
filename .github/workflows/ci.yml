@@ -77,9 +77,9 @@ jobs:
         # is the one cell skipped: a Windows bug shows on windows-22, a node-24 bug on
         # ubuntu-24.
         include:
-          - {os: ubuntu-latest, node: 22}
-          - {os: ubuntu-latest, node: 24}
-          - {os: windows-latest, node: 22}
+          - { os: ubuntu-latest, node: 22 }
+          - { os: ubuntu-latest, node: 24 }
+          - { os: windows-latest, node: 22 }
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6

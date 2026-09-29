@@ -16,7 +16,10 @@ export interface FetchLatestOpts {
 // Batched lookup of the `latest` dist-tag per package. Rejects on the FIRST
 // failure with one clear error (offline degrades to a message, not a hang or a
 // half-report); the rest of the pool is abandoned.
-export async function fetchLatestVersions(names: string[], opts: FetchLatestOpts = {}): Promise<Map<string, string>> {
+export async function fetchLatestVersions(
+	names: string[],
+	opts: FetchLatestOpts = {},
+): Promise<Map<string, string>> {
 	const registry = (opts.registry ?? DEFAULT_REGISTRY).replace(/\/$/, '');
 	const fetchImpl = opts.fetchImpl ?? fetch;
 	const timeoutMs = opts.timeoutMs ?? 10_000;
@@ -36,7 +39,12 @@ export async function fetchLatestVersions(names: string[], opts: FetchLatestOpts
 	return latest;
 }
 
-async function latestOf(name: string, registry: string, fetchImpl: typeof fetch, timeoutMs: number): Promise<string> {
+async function latestOf(
+	name: string,
+	registry: string,
+	fetchImpl: typeof fetch,
+	timeoutMs: number,
+): Promise<string> {
 	// Scoped names keep the @ but encode the slash — the registry route wants
 	// one path segment per package. replaceAll, not replace: a valid npm name
 	// has at most one slash, but `--units-dir` loads unit packs this repo never
@@ -52,15 +60,15 @@ async function latestOf(name: string, registry: string, fetchImpl: typeof fetch,
 			headers: { accept: 'application/vnd.npm.install-v1+json' },
 			signal: AbortSignal.timeout(timeoutMs),
 		});
-	}
-	catch (err) {
-		throw new Error(`couldn't reach ${registry} for ${name}: ${err instanceof Error ? err.message : String(err)}`);
+	} catch (err) {
+		throw new Error(
+			`couldn't reach ${registry} for ${name}: ${err instanceof Error ? err.message : String(err)}`,
+		);
 	}
 
-	if (!response.ok)
-		throw new Error(`${registry} answered ${response.status} for ${name}.`);
+	if (!response.ok) throw new Error(`${registry} answered ${response.status} for ${name}.`);
 
-	const body = await response.json() as { 'dist-tags'?: { latest?: string } };
+	const body = (await response.json()) as { 'dist-tags'?: { latest?: string } };
 	const version = body['dist-tags']?.latest;
 	if (typeof version !== 'string')
 		throw new Error(`${registry} returned no latest dist-tag for ${name}.`);

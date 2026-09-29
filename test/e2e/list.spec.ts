@@ -51,11 +51,11 @@ describe('unbranded list', () => {
 
 		// core-eslint's config now varies by flavor, so it ships no static file —
 		// the eslintFlavor option surfaces the choices instead.
-		const eslint = parsed.units.find(u => u.id === 'core-eslint');
+		const eslint = parsed.units.find((u) => u.id === 'core-eslint');
 		expect(eslint?.files).toEqual([]);
-		const flavor = eslint?.options?.find(o => o.key === 'eslintFlavor');
+		const flavor = eslint?.options?.find((o) => o.key === 'eslintFlavor');
 		expect(flavor?.default).toBe('base');
-		expect(flavor?.choices.map(c => c.value)).toEqual(['base', 'react', 'next']);
+		expect(flavor?.choices.map((c) => c.value)).toEqual(['base', 'react', 'next']);
 
 		// Byte-for-byte determinism is the whole point of the versioned envelope.
 		const again = spawnSync('node', [CLI, 'list', '--json'], { cwd: tmp, encoding: 'utf-8' });

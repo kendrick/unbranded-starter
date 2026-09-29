@@ -25,8 +25,7 @@ export async function maybeInitGit(opts: MaybeInitGitOpts): Promise<void> {
 	let plan: GitPlan;
 	if (opts.plan !== undefined) {
 		plan = opts.plan;
-	}
-	else {
+	} else {
 		const init = await confirm({ message: 'Initialize a git repository?', initialValue: true });
 		if (isCancel(init)) {
 			return cancelAndExit();
@@ -45,7 +44,7 @@ export async function maybeInitGit(opts: MaybeInitGitOpts): Promise<void> {
 		return;
 	}
 
-	if (!await runGit(opts.targetDir, ['init'])) {
+	if (!(await runGit(opts.targetDir, ['init']))) {
 		// A missing or broken git shouldn't sink the run — the files are already
 		// written and husky's post-install has its own `.git` gate. Warn and move
 		// on so a machine without git still gets a working scaffold.
@@ -65,7 +64,7 @@ export async function maybeInitGit(opts: MaybeInitGitOpts): Promise<void> {
 async function runGit(cwd: string, args: string[]): Promise<boolean> {
 	return new Promise((resolve) => {
 		const child = spawn('git', args, spawnOptions(cwd));
-		child.on('exit', code => resolve(code === 0));
+		child.on('exit', (code) => resolve(code === 0));
 		child.on('error', () => resolve(false));
 	});
 }
@@ -82,7 +81,7 @@ export async function gitCapture(cwd: string, args: string[]): Promise<string | 
 		child.stdout?.on('data', (chunk: Buffer) => {
 			out += chunk.toString();
 		});
-		child.on('exit', code => resolve(code === 0 ? out : null));
+		child.on('exit', (code) => resolve(code === 0 ? out : null));
 		child.on('error', () => resolve(null));
 	});
 }

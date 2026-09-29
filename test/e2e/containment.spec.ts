@@ -36,14 +36,17 @@ describe('containment: root-agnosticism (spawned)', () => {
 	it('rejects the same escaping unit identically from two different working directories', () => {
 		const dir = join(tmp, 'evil');
 		mkdirSync(dir, { recursive: true });
-		writeFileSync(join(dir, 'unit.json'), JSON.stringify({
-			schema: 1,
-			id: 'unit-root-agnostic',
-			category: 'editor',
-			label: 'Escape probe',
-			description: 'A unit whose rename escapes the project root.',
-			files: [{ dest: 'ok.txt', content: 'pwned\n', rename: '../ESCAPED-e2e-root-agnostic.txt' }],
-		}));
+		writeFileSync(
+			join(dir, 'unit.json'),
+			JSON.stringify({
+				schema: 1,
+				id: 'unit-root-agnostic',
+				category: 'editor',
+				label: 'Escape probe',
+				description: 'A unit whose rename escapes the project root.',
+				files: [{ dest: 'ok.txt', content: 'pwned\n', rename: '../ESCAPED-e2e-root-agnostic.txt' }],
+			}),
+		);
 
 		// The unit path is absolute, so the CLI's own cwd is the only thing
 		// varying between these two invocations. Neither cwd is the project

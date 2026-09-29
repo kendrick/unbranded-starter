@@ -146,7 +146,9 @@ if (values.preset !== undefined && values.config !== undefined) {
 if (values.version) {
 	// Read at runtime so the version stays in sync with package.json without
 	// rebuilding. The cost is one filesystem read per invocation.
-	const pkg = JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf-8')) as { version: string };
+	const pkg = JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf-8')) as {
+		version: string;
+	};
 	process.stdout.write(`${pkg.version}\n`);
 	process.exit(EXIT_OK);
 }
@@ -170,7 +172,9 @@ if (command === 'list') {
 if (command === 'validate') {
 	const target = positionals[1];
 	if (target === undefined) {
-		process.stderr.write('Usage: unbranded validate <path>. Pass a unit definition file, a unit directory, or a directory of units.\n');
+		process.stderr.write(
+			'Usage: unbranded validate <path>. Pass a unit definition file, a unit directory, or a directory of units.\n',
+		);
 		process.exit(EXIT_ERROR);
 	}
 	process.exit(runValidate(target, { json: values.json }));
@@ -189,20 +193,24 @@ if (command === 'diff') {
 if (command === 'doctor') {
 	if (values.fix) {
 		if (values.json) {
-			process.stderr.write('doctor --fix has no --json output. Run the audit with `doctor --json`, or drop --json to apply fixes.\n');
+			process.stderr.write(
+				'doctor --fix has no --json output. Run the audit with `doctor --json`, or drop --json to apply fixes.\n',
+			);
 			process.exit(EXIT_ERROR);
 		}
-		process.exit(await runDoctorFix({
-			yes: values.yes,
-			dryRun: values['dry-run'],
-			diff: values.diff,
-			force: values.force,
-			pm: values.pm,
-			unitsDir,
-		}).catch((err: unknown) => {
-			log.error(err instanceof Error ? err.message : String(err));
-			return 1;
-		}));
+		process.exit(
+			await runDoctorFix({
+				yes: values.yes,
+				dryRun: values['dry-run'],
+				diff: values.diff,
+				force: values.force,
+				pm: values.pm,
+				unitsDir,
+			}).catch((err: unknown) => {
+				log.error(err instanceof Error ? err.message : String(err));
+				return 1;
+			}),
+		);
 	}
 	process.exit(runDoctor({ json: values.json, strict: values.strict }));
 }
@@ -215,51 +223,62 @@ if (command === 'remove') {
 		process.stderr.write('Usage: unbranded remove <unit-id>. Run `unbranded list` for the ids.\n');
 		process.exit(EXIT_ERROR);
 	}
-	process.exit(await runRemove(unitId, {
-		yes: values.yes,
-		dryRun: values['dry-run'],
-		force: values.force,
-		cascade: values.cascade,
-		unitsDir,
-	}).catch((err: unknown) => {
-		log.error(err instanceof Error ? err.message : String(err));
-		return EXIT_ERROR;
-	}));
+	process.exit(
+		await runRemove(unitId, {
+			yes: values.yes,
+			dryRun: values['dry-run'],
+			force: values.force,
+			cascade: values.cascade,
+			unitsDir,
+		}).catch((err: unknown) => {
+			log.error(err instanceof Error ? err.message : String(err));
+			return EXIT_ERROR;
+		}),
+	);
 }
 
 // Read-only freshness report: manifest pins vs the registry's latest. Like
 // doctor, the default exit is 0 so a report never fails a job; --strict is the
 // opt-in gate, and it trips on majors only.
 if (command === 'outdated') {
-	process.exit(await runOutdated({
-		json: values.json,
-		strict: values.strict,
-		registry: values.registry,
-	}).catch((err: unknown) => {
-		log.error(err instanceof Error ? err.message : String(err));
-		return EXIT_ERROR;
-	}));
+	process.exit(
+		await runOutdated({
+			json: values.json,
+			strict: values.strict,
+			registry: values.registry,
+		}).catch((err: unknown) => {
+			log.error(err instanceof Error ? err.message : String(err));
+			return EXIT_ERROR;
+		}),
+	);
 }
 
 // Template refresh over the recorded baselines. Validating --strategy here keeps
 // a typo'd value a one-line error instead of a half-applied update.
 if (command === 'update') {
 	const strategy = values.strategy;
-	if (strategy !== undefined && strategy !== 'ours' && strategy !== 'theirs' && strategy !== 'markers') {
+	if (
+		strategy !== undefined &&
+		strategy !== 'ours' &&
+		strategy !== 'theirs' &&
+		strategy !== 'markers'
+	) {
 		process.stderr.write(`--strategy must be ours, theirs, or markers (got "${strategy}").\n`);
 		process.exit(EXIT_ERROR);
 	}
-	process.exit(await runUpdate({
-		yes: values.yes,
-		dryRun: values['dry-run'],
-		diff: values.diff,
-		force: values.force,
-		strategy,
-		unitsDir,
-	}).catch((err: unknown) => {
-		log.error(err instanceof Error ? err.message : String(err));
-		return EXIT_ERROR;
-	}));
+	process.exit(
+		await runUpdate({
+			yes: values.yes,
+			dryRun: values['dry-run'],
+			diff: values.diff,
+			force: values.force,
+			strategy,
+			unitsDir,
+		}).catch((err: unknown) => {
+			log.error(err instanceof Error ? err.message : String(err));
+			return EXIT_ERROR;
+		}),
+	);
 }
 
 // A stray positional is almost always a typo (`unbranded lst`). Failing loudly
@@ -272,22 +291,24 @@ if (command !== undefined) {
 // The machine half of --dry-run: pure JSON on stdout, no clack chrome. Routed
 // ahead of runInit because that flow starts narrating from its first line.
 if (values['dry-run'] && values.json) {
-	process.exit(await runPlanJson({
-		configPath: values.config,
-		preset: values.preset,
-		unitsDir,
-		targetDir: values.target ? resolve(values.target) : undefined,
-		inline: {
-			units: values.units,
-			pm: values.pm,
-			onConflict: values['on-conflict'],
-			postInstall: values['post-install'],
-			yes: values.yes,
-		},
-	}).catch((err: unknown) => {
-		process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
-		return EXIT_ERROR;
-	}));
+	process.exit(
+		await runPlanJson({
+			configPath: values.config,
+			preset: values.preset,
+			unitsDir,
+			targetDir: values.target ? resolve(values.target) : undefined,
+			inline: {
+				units: values.units,
+				pm: values.pm,
+				onConflict: values['on-conflict'],
+				postInstall: values['post-install'],
+				yes: values.yes,
+			},
+		}).catch((err: unknown) => {
+			process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+			return EXIT_ERROR;
+		}),
+	);
 }
 
 runInit({
@@ -308,16 +329,18 @@ runInit({
 		postInstall: values['post-install'],
 		yes: values.yes,
 	},
-}).then((result) => {
-	// A scaffold that wrote its files but couldn't install them hasn't done its
-	// job, and the exit code is the only part of that CI reads (#114). Set the
-	// code rather than calling process.exit, so the failure report queued on a
-	// piped stdout still flushes.
-	process.exitCode = result.ok ? EXIT_OK : EXIT_ERROR;
-}).catch((err: unknown) => {
-	// Top-level catch so an exception surfaces as a friendly clack error
-	// instead of a raw stack trace. detectPm throws for workspace-leaf and
-	// malformed package.json; config validation throws for bad recipes.
-	log.error(err instanceof Error ? err.message : String(err));
-	process.exit(EXIT_ERROR);
-});
+})
+	.then((result) => {
+		// A scaffold that wrote its files but couldn't install them hasn't done its
+		// job, and the exit code is the only part of that CI reads (#114). Set the
+		// code rather than calling process.exit, so the failure report queued on a
+		// piped stdout still flushes.
+		process.exitCode = result.ok ? EXIT_OK : EXIT_ERROR;
+	})
+	.catch((err: unknown) => {
+		// Top-level catch so an exception surfaces as a friendly clack error
+		// instead of a raw stack trace. detectPm throws for workspace-leaf and
+		// malformed package.json; config validation throws for bad recipes.
+		log.error(err instanceof Error ? err.message : String(err));
+		process.exit(EXIT_ERROR);
+	});

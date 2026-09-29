@@ -43,11 +43,17 @@ describe('fileOp mode dispatch (committed fixtures)', () => {
 		const modeDir = join(FIXTURES, 'append-if-missing');
 		cpSync(join(modeDir, 'target', 'gitignore'), join(targetDir, '.gitignore'));
 
-		const op = { src: 'source/gitignore.template', dest: '.gitignore', mode: 'append-if-missing' } as const;
+		const op = {
+			src: 'source/gitignore.template',
+			dest: '.gitignore',
+			mode: 'append-if-missing',
+		} as const;
 
 		const first = await copyFileOp(op, { pkgRoot: modeDir, targetDir });
 		expect(first.action).toBe('appended');
-		expect(readFileSync(join(targetDir, '.gitignore'), 'utf-8')).toBe('node_modules\ncoverage\ndist\n.env\n');
+		expect(readFileSync(join(targetDir, '.gitignore'), 'utf-8')).toBe(
+			'node_modules\ncoverage\ndist\n.env\n',
+		);
 
 		const second = await copyFileOp(op, { pkgRoot: modeDir, targetDir });
 		expect(second).toMatchObject({ action: 'skipped', reason: 'identical' });

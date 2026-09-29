@@ -7,12 +7,15 @@ import { buildEslintConfig, ESLINT_FLAVORS, eslintDevDependencies } from './esli
 // FileOp.content) so it flows through the same conflict/dry-run/state pipeline a
 // copied file gets. base pulls zero React packages; react and next layer on.
 const ESLINT_FLAVOR_META: Record<EslintFlavor, { label: string; hint: string }> = {
-	base: { label: 'Base (TypeScript only)', hint: 'No React or Next plugins — for Node libraries and CLIs' },
+	base: {
+		label: 'Base (TypeScript only)',
+		hint: 'No React or Next plugins — for Node libraries and CLIs',
+	},
 	react: { label: 'React', hint: 'React, react-hooks, and strict jsx-a11y' },
 	next: { label: 'Next.js', hint: 'React plus Next.js performance rules' },
 };
 
-const ESLINT_FLAVOR_CHOICES: UnitOptionChoice[] = ESLINT_FLAVORS.map(flavor => ({
+const ESLINT_FLAVOR_CHOICES: UnitOptionChoice[] = ESLINT_FLAVORS.map((flavor) => ({
 	value: flavor,
 	label: ESLINT_FLAVOR_META[flavor].label,
 	hint: ESLINT_FLAVOR_META[flavor].hint,
@@ -31,16 +34,15 @@ export const UNITS: Unit[] = [
 		category: 'foundation',
 		label: 'EditorConfig',
 		description: 'Cross-editor whitespace and charset rules.',
-		files: [
-			{ src: '.editorconfig', dest: '.editorconfig' },
-		],
+		files: [{ src: '.editorconfig', dest: '.editorconfig' }],
 		recommendedExtensions: ['editorconfig.editorconfig'],
 	},
 	{
 		id: 'core-gitattributes',
 		category: 'foundation',
 		label: 'Git attributes',
-		description: 'Normalizes line endings to LF and marks common binaries so diffs and merges stay clean.',
+		description:
+			'Normalizes line endings to LF and marks common binaries so diffs and merges stay clean.',
 		files: [
 			// Shipped as templates/gitattributes (no leading dot) so npm keeps it in
 			// the tarball; it lands as .gitattributes in the target.
@@ -51,7 +53,8 @@ export const UNITS: Unit[] = [
 		id: 'core-node-version',
 		category: 'foundation',
 		label: 'Node version pin',
-		description: 'Pins .nvmrc, engines.node, and the Corepack packageManager to your current toolchain.',
+		description:
+			'Pins .nvmrc, engines.node, and the Corepack packageManager to your current toolchain.',
 		// No static files. .nvmrc and the two package.json pins are computed at
 		// write time from the running node major and the detected package manager
 		// (see install/run.ts), so they track the environment rather than a value
@@ -63,18 +66,21 @@ export const UNITS: Unit[] = [
 		id: 'core-eslint',
 		category: 'lint',
 		label: 'ESLint',
-		description: '@antfu base in a base/react/next flavor; jsx-a11y strict on the React flavors, dprint formatting for non-code files.',
+		description:
+			'@antfu base in a base/react/next flavor; jsx-a11y strict on the React flavors, dprint formatting for non-code files.',
 		// The config and its plugins vary by flavor, so neither is static: the
 		// eslintFlavor option below supplies eslint.config.mjs (as inline content)
 		// and the exact devDependencies for the chosen flavor. A plain Node CLI
 		// (base) then never gets React-ecosystem packages it can't use.
 		files: [],
-		options: [{
-			key: 'eslintFlavor',
-			label: 'ESLint flavor',
-			default: 'base',
-			choices: ESLINT_FLAVOR_CHOICES,
-		}],
+		options: [
+			{
+				key: 'eslintFlavor',
+				label: 'ESLint flavor',
+				default: 'base',
+				choices: ESLINT_FLAVOR_CHOICES,
+			},
+		],
 		packageJsonPatch: {
 			scripts: {
 				'lint': 'eslint .',
@@ -113,9 +119,7 @@ export const UNITS: Unit[] = [
 		category: 'style',
 		label: 'Stylelint',
 		description: 'CSS linting with stylelint-config-standard plus a Tailwind-aware preset.',
-		files: [
-			{ src: 'stylelint.config.mjs', dest: 'stylelint.config.mjs' },
-		],
+		files: [{ src: 'stylelint.config.mjs', dest: 'stylelint.config.mjs' }],
 		devDependencies: {
 			'stylelint': '17.15.0',
 			'stylelint-config-standard': '40.0.0',
@@ -133,7 +137,8 @@ export const UNITS: Unit[] = [
 		id: 'core-tailwind',
 		category: 'style',
 		label: 'Tailwind v4',
-		description: 'No JS config — Tailwind v4 is CSS-only. Add `@import "tailwindcss";` to your stylesheet.',
+		description:
+			'No JS config — Tailwind v4 is CSS-only. Add `@import "tailwindcss";` to your stylesheet.',
 		// Tailwind v4 ships zero config files. Manifest is deps-only.
 		files: [],
 		devDependencies: {
@@ -145,10 +150,9 @@ export const UNITS: Unit[] = [
 		id: 'core-postcss',
 		category: 'style',
 		label: 'PostCSS (non-Vite Tailwind)',
-		description: 'Loads Tailwind v4 in Next.js and other non-Vite bundlers. On Vite (Astro, SvelteKit, Nuxt) use @tailwindcss/vite instead.',
-		files: [
-			{ src: 'postcss.config.mjs', dest: 'postcss.config.mjs' },
-		],
+		description:
+			'Loads Tailwind v4 in Next.js and other non-Vite bundlers. On Vite (Astro, SvelteKit, Nuxt) use @tailwindcss/vite instead.',
+		files: [{ src: 'postcss.config.mjs', dest: 'postcss.config.mjs' }],
 		// PostCSS is only one of Tailwind v4's entry points. A Vite project (Astro,
 		// SvelteKit, Nuxt) reaches Tailwind through @tailwindcss/vite and never
 		// loads the adapter, so it belongs to the unit that ships the config. On
@@ -166,9 +170,7 @@ export const UNITS: Unit[] = [
 		category: 'test',
 		label: 'Vitest',
 		description: 'Baseline jsdom test setup with the common excludes.',
-		files: [
-			{ src: 'vitest.config.ts', dest: 'vitest.config.ts' },
-		],
+		files: [{ src: 'vitest.config.ts', dest: 'vitest.config.ts' }],
 		devDependencies: {
 			vitest: '5.0.2',
 			jsdom: '30.1.1',
@@ -186,9 +188,7 @@ export const UNITS: Unit[] = [
 		category: 'e2e',
 		label: 'Playwright + axe',
 		description: 'Mobile-first device matrix with @axe-core/playwright wired up.',
-		files: [
-			{ src: 'opt-in/playwright/playwright.config.ts', dest: 'playwright.config.ts' },
-		],
+		files: [{ src: 'opt-in/playwright/playwright.config.ts', dest: 'playwright.config.ts' }],
 		devDependencies: {
 			'@playwright/test': '1.63.0',
 			'@axe-core/playwright': '4.13.0',
@@ -259,13 +259,15 @@ export const UNITS: Unit[] = [
 		// husky init wires core.hooksPath into .git/config, which file removal
 		// can't reach — without this pointer, commits keep trying to run a hook
 		// that's gone.
-		removeNotes: 'husky set core.hooksPath in this repo\'s git config; run `git config --unset core.hooksPath` to fully detach the hooks.',
+		removeNotes:
+			"husky set core.hooksPath in this repo's git config; run `git config --unset core.hooksPath` to fully detach the hooks.",
 	},
 	{
 		id: 'opt-vscode',
 		category: 'editor',
 		label: 'VS Code workspace',
-		description: 'Shared settings.json (merged, not clobbered) plus an extensions.json generated from the units you picked.',
+		description:
+			'Shared settings.json (merged, not clobbered) plus an extensions.json generated from the units you picked.',
 		files: [
 			{ src: 'opt-in/vscode/settings.json', dest: '.vscode/settings.json', mode: 'merge-json' },
 			// No extensions.json here — it's generated at write time from the union
@@ -280,10 +282,9 @@ export const UNITS: Unit[] = [
 		id: 'opt-ci-github',
 		category: 'ci',
 		label: 'GitHub Actions CI',
-		description: 'Runs install, lint, typecheck, and test on push and PR via GitHub Actions (pnpm).',
-		files: [
-			{ src: 'opt-in/ci-github/ci.yml', dest: '.github/workflows/ci.yml' },
-		],
+		description:
+			'Runs install, lint, typecheck, and test on push and PR via GitHub Actions (pnpm).',
+		files: [{ src: 'opt-in/ci-github/ci.yml', dest: '.github/workflows/ci.yml' }],
 		// The shipped workflow calls pnpm lint / typecheck / test by name, so it
 		// only passes on a fresh scaffold if those scripts exist — pull in the units
 		// that define them (eslint drags in typescript via its own implies).
@@ -297,7 +298,8 @@ export const UNITS: Unit[] = [
 		id: 'opt-monorepo',
 		category: 'monorepo',
 		label: 'pnpm workspace + Turbo',
-		description: 'Workspace yaml with build-script approvals for esbuild/sharp/unrs-resolver (pnpm 10 and 11) and a turbo.json baseline.',
+		description:
+			'Workspace yaml with build-script approvals for esbuild/sharp/unrs-resolver (pnpm 10 and 11) and a turbo.json baseline.',
 		files: [
 			{ src: 'opt-in/monorepo/pnpm-workspace.yaml', dest: 'pnpm-workspace.yaml' },
 			{ src: 'opt-in/monorepo/turbo.json', dest: 'turbo.json' },

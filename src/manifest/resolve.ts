@@ -1,9 +1,9 @@
 import type { AnyUnit } from './types';
 
-export type ResolveResult
-	= | { kind: 'ok'; ids: string[]; auto: string[]; requiredBy: Record<string, string> }
-		| { kind: 'missing-required'; unit: string; needs: string[] }
-		| { kind: 'conflict'; pair: [string, string] };
+export type ResolveResult =
+	| { kind: 'ok'; ids: string[]; auto: string[]; requiredBy: Record<string, string> }
+	| { kind: 'missing-required'; unit: string; needs: string[] }
+	| { kind: 'conflict'; pair: [string, string] };
 
 // Closes the user's selection under `implies`, then validates `requires` and
 // `excludes`. Returns either the resolved set (with separate visibility on
@@ -11,7 +11,7 @@ export type ResolveResult
 //
 // Pure — no prompting, no side effects. Caller decides how to surface errors.
 export function resolveSelection(seed: string[], units: AnyUnit[]): ResolveResult {
-	const byId = new Map<string, AnyUnit>(units.map(u => [u.id, u]));
+	const byId = new Map<string, AnyUnit>(units.map((u) => [u.id, u]));
 	const seedSet = new Set(seed);
 	const selected = new Set<string>(seed);
 	const auto = new Set<string>();
@@ -26,8 +26,7 @@ export function resolveSelection(seed: string[], units: AnyUnit[]): ResolveResul
 		changed = false;
 		for (const id of selected) {
 			const unit = byId.get(id);
-			if (!unit?.implies)
-				continue;
+			if (!unit?.implies) continue;
 			for (const implied of unit.implies) {
 				if (!selected.has(implied)) {
 					selected.add(implied);
@@ -39,8 +38,7 @@ export function resolveSelection(seed: string[], units: AnyUnit[]): ResolveResul
 						// `undefined` guard keeps that first attribution stable across a
 						// later diamond edge. Seed units are skipped — the user picked
 						// them, nothing "required" them.
-						if (requiredBy[implied] === undefined)
-							requiredBy[implied] = id;
+						if (requiredBy[implied] === undefined) requiredBy[implied] = id;
 					}
 					changed = true;
 				}
@@ -50,9 +48,8 @@ export function resolveSelection(seed: string[], units: AnyUnit[]): ResolveResul
 
 	for (const id of selected) {
 		const unit = byId.get(id);
-		if (!unit?.requires)
-			continue;
-		const missing = unit.requires.filter(r => !selected.has(r));
+		if (!unit?.requires) continue;
+		const missing = unit.requires.filter((r) => !selected.has(r));
 		if (missing.length > 0) {
 			return { kind: 'missing-required', unit: id, needs: missing };
 		}
@@ -64,8 +61,7 @@ export function resolveSelection(seed: string[], units: AnyUnit[]): ResolveResul
 	// entry doesn't mention A.
 	for (const id of selected) {
 		const unit = byId.get(id);
-		if (!unit?.excludes)
-			continue;
+		if (!unit?.excludes) continue;
 		for (const x of unit.excludes) {
 			if (selected.has(x)) {
 				return { kind: 'conflict', pair: [id, x] };
@@ -82,17 +78,15 @@ export function resolveSelection(seed: string[], units: AnyUnit[]): ResolveResul
 // of a chain names the whole chain. `unbranded remove` refuses with this list, or
 // removes the closure under --cascade. Pure, like the resolver.
 export function dependentsOf(target: string, installed: string[], units: AnyUnit[]): string[] {
-	const byId = new Map<string, AnyUnit>(units.map(u => [u.id, u]));
+	const byId = new Map<string, AnyUnit>(units.map((u) => [u.id, u]));
 	return installed.filter((id) => {
-		if (id === target)
-			return false;
+		if (id === target) return false;
 		// Fixed-point closure over implies + requires, same shape as the resolver's
 		// implies loop (a Set visits mid-loop additions, so one pass converges).
 		const reach = new Set<string>([id]);
 		for (const r of reach) {
 			const unit = byId.get(r);
-			for (const edge of [...(unit?.implies ?? []), ...(unit?.requires ?? [])])
-				reach.add(edge);
+			for (const edge of [...(unit?.implies ?? []), ...(unit?.requires ?? [])]) reach.add(edge);
 		}
 		return reach.has(target);
 	});

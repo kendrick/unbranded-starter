@@ -11,7 +11,7 @@ const CLI = join(PKG_ROOT, 'dist/cli.js');
 // Read the pinned versions from the manifest, not literals, so the weekly pin-bump
 // PRs don't redden these tests every time a pin moves.
 const ESLINT_PIN = eslintDevDependencies('base').eslint;
-const TYPESCRIPT_PIN = UNITS.find(u => u.id === 'core-typescript')?.devDependencies?.typescript;
+const TYPESCRIPT_PIN = UNITS.find((u) => u.id === 'core-typescript')?.devDependencies?.typescript;
 
 function writeJson(path: string, obj: unknown): void {
 	writeFileSync(path, JSON.stringify(obj, null, 2));
@@ -100,7 +100,9 @@ describe('cli --config (augment mode)', () => {
 		});
 
 		expect(result.status).toBe(0);
-		expect(readFileSync(join(tmp, 'eslint.config.mjs'), 'utf-8')).toBe('// user content — should not be clobbered\n');
+		expect(readFileSync(join(tmp, 'eslint.config.mjs'), 'utf-8')).toBe(
+			'// user content — should not be clobbered\n',
+		);
 	});
 
 	it('fails fast with a clear error on a bad recipe', () => {
@@ -213,7 +215,10 @@ describe('cli version policy (--latest / recipe versions)', () => {
 			versions: 'latest',
 		});
 
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		expect(eslintSpec()).toBe('latest');

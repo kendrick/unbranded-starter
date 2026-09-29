@@ -58,8 +58,7 @@ export function readConfigFile(path: string): { raw: unknown; dir: string } {
 
 	try {
 		return { raw: JSON.parse(readFileSync(abs, 'utf-8')), dir: dirname(abs) };
-	}
-	catch (err) {
+	} catch (err) {
 		throw new Error(`Invalid JSON in ${abs}: ${(err as Error).message}`);
 	}
 }
@@ -69,17 +68,19 @@ export function readConfigFile(path: string): { raw: unknown; dir: string } {
 // names travel together, so a path relative to the invoking cwd would break the
 // moment someone ran it from anywhere but the repo root.
 export function peekUnitsDir(raw: unknown, configDir: string): string | undefined {
-	if (raw === null || typeof raw !== 'object' || Array.isArray(raw))
-		return undefined;
+	if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
 	const value = (raw as Record<string, unknown>).unitsDir;
-	if (value === undefined)
-		return undefined;
+	if (value === undefined) return undefined;
 	if (typeof value !== 'string')
 		throw new TypeError('config.unitsDir must be a string when present.');
 	return resolve(configDir, value);
 }
 
-export function loadConfig(path: string, knownUnits: ReadonlySet<string>, schema?: OptionSchema): Config {
+export function loadConfig(
+	path: string,
+	knownUnits: ReadonlySet<string>,
+	schema?: OptionSchema,
+): Config {
 	const { raw, dir } = readConfigFile(path);
 	return validate(raw, knownUnits, schema, { configDir: dir });
 }
@@ -131,8 +132,7 @@ export function resolveConfig(
 		units = [];
 		for (const raw of inline.units.split(',')) {
 			const token = raw.trim();
-			if (!token)
-				continue;
+			if (!token) continue;
 			const colon = token.indexOf(':');
 			if (colon === -1) {
 				units.push(token);
@@ -143,13 +143,11 @@ export function resolveConfig(
 			units.push(id);
 			if (schema) {
 				const option = schema.byUnit.get(id);
-				if (!option)
-					throw new Error(`--units: ${id} takes no options, but ":${value}" was given.`);
+				if (!option) throw new Error(`--units: ${id} takes no options, but ":${value}" was given.`);
 				inlineOptions[option.key] = value;
 			}
 		}
-	}
-	else {
+	} else {
 		units = fileConfig?.units;
 	}
 	if (opts.unitsMode === 'additive' && inline.units !== undefined && fileConfig?.units)
@@ -158,26 +156,35 @@ export function resolveConfig(
 	const mergedOptions = { ...fileConfig?.options, ...inlineOptions };
 	const options = Object.keys(mergedOptions).length > 0 ? mergedOptions : undefined;
 
-	return validate({
-		units,
-		pm: inline.pm ?? fileConfig?.pm ?? null,
-		onConflict: inline.onConflict ?? fileConfig?.onConflict ?? 'overwrite',
-		postInstall: inline.postInstall ?? fileConfig?.postInstall ?? 'none',
-		versions: fileConfig?.versions ?? 'pinned',
-		projectName: fileConfig?.projectName,
-		options,
-		// Not an inline flag — there's no --git yet, so it only ever comes from the
-		// recipe. Passing it through keeps `git: "init"` alive after the merge.
-		git: fileConfig?.git,
-		// Like git, force has no inline mirror: the --force flag rides its own
-		// RunInitOpts channel, so the merge only has to keep the recipe field alive.
-		force: fileConfig?.force,
-		// Already absolute from either source, so validate's re-resolve is a no-op.
-		unitsDir: opts.unitsDir ?? fileConfig?.unitsDir,
-	}, knownUnits, schema);
+	return validate(
+		{
+			units,
+			pm: inline.pm ?? fileConfig?.pm ?? null,
+			onConflict: inline.onConflict ?? fileConfig?.onConflict ?? 'overwrite',
+			postInstall: inline.postInstall ?? fileConfig?.postInstall ?? 'none',
+			versions: fileConfig?.versions ?? 'pinned',
+			projectName: fileConfig?.projectName,
+			options,
+			// Not an inline flag — there's no --git yet, so it only ever comes from the
+			// recipe. Passing it through keeps `git: "init"` alive after the merge.
+			git: fileConfig?.git,
+			// Like git, force has no inline mirror: the --force flag rides its own
+			// RunInitOpts channel, so the merge only has to keep the recipe field alive.
+			force: fileConfig?.force,
+			// Already absolute from either source, so validate's re-resolve is a no-op.
+			unitsDir: opts.unitsDir ?? fileConfig?.unitsDir,
+		},
+		knownUnits,
+		schema,
+	);
 }
 
-export function validate(raw: unknown, knownUnits: ReadonlySet<string>, schema?: OptionSchema, opts: { configDir?: string } = {}): Config {
+export function validate(
+	raw: unknown,
+	knownUnits: ReadonlySet<string>,
+	schema?: OptionSchema,
+	opts: { configDir?: string } = {},
+): Config {
 	if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
 		throw new Error('Config must be a JSON object.');
 	}
@@ -186,20 +193,21 @@ export function validate(raw: unknown, knownUnits: ReadonlySet<string>, schema?:
 	if (!Array.isArray(obj.units)) {
 		throw new TypeError('config.units must be an array of UnitId strings.');
 	}
-	const unknownUnits = obj.units.filter(
-		u => typeof u !== 'string' || !knownUnits.has(u),
-	);
+	const unknownUnits = obj.units.filter((u) => typeof u !== 'string' || !knownUnits.has(u));
 	if (unknownUnits.length > 0) {
 		// A namespaced id that resolves to nothing almost always means the units
 		// directory wasn't supplied rather than that the id is wrong, and the two
 		// failures want opposite fixes. Saying so here is the whole of the promise
 		// that a recipe replayed on a machine without the directory fails at once,
 		// naming what's missing, instead of quietly scaffolding a smaller project.
-		const local = unknownUnits.filter(u => typeof u === 'string' && u.includes('/'));
-		const hint = local.length > 0
-			? ` ${local.join(', ')} ${local.length === 1 ? 'looks like a local unit' : 'look like local units'} — pass --units-dir <dir>, or set "unitsDir" in the recipe.`
-			: '';
-		throw new Error(`config.units contains unknown ids: ${unknownUnits.join(', ')}. Run 'unbranded list' to see valid ids.${hint}`);
+		const local = unknownUnits.filter((u) => typeof u === 'string' && u.includes('/'));
+		const hint =
+			local.length > 0
+				? ` ${local.join(', ')} ${local.length === 1 ? 'looks like a local unit' : 'look like local units'} — pass --units-dir <dir>, or set "unitsDir" in the recipe.`
+				: '';
+		throw new Error(
+			`config.units contains unknown ids: ${unknownUnits.join(', ')}. Run 'unbranded list' to see valid ids.${hint}`,
+		);
 	}
 
 	if (obj.unitsDir !== undefined && typeof obj.unitsDir !== 'string') {
@@ -216,7 +224,10 @@ export function validate(raw: unknown, knownUnits: ReadonlySet<string>, schema?:
 		throw new Error('config.postInstall must be "all" or "none".');
 	}
 
-	if (obj.versions !== undefined && (typeof obj.versions !== 'string' || !VALID_VERSIONS.has(obj.versions))) {
+	if (
+		obj.versions !== undefined &&
+		(typeof obj.versions !== 'string' || !VALID_VERSIONS.has(obj.versions))
+	) {
 		throw new Error('config.versions must be "pinned" or "latest" when present.');
 	}
 
@@ -243,7 +254,9 @@ export function validate(raw: unknown, knownUnits: ReadonlySet<string>, schema?:
 		projectName: obj.projectName,
 		git: (obj.git as 'init' | 'init-commit' | 'none') ?? 'none',
 		force: obj.force,
-		...(typeof obj.unitsDir === 'string' ? { unitsDir: resolve(opts.configDir ?? '.', obj.unitsDir) } : {}),
+		...(typeof obj.unitsDir === 'string'
+			? { unitsDir: resolve(opts.configDir ?? '.', obj.unitsDir) }
+			: {}),
 		...(options ? { options } : {}),
 	};
 }
@@ -252,8 +265,7 @@ export function validate(raw: unknown, knownUnits: ReadonlySet<string>, schema?:
 // schema is supplied, hold each key/value to the manifest's declared options.
 // Failing loud here keeps a typo'd flavor from silently degrading to the default.
 function validateOptions(raw: unknown, schema?: OptionSchema): Record<string, string> | undefined {
-	if (raw === undefined)
-		return undefined;
+	if (raw === undefined) return undefined;
 	if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
 		throw new Error('config.options must be an object of option-key → value strings.');
 	}
@@ -265,10 +277,14 @@ function validateOptions(raw: unknown, schema?: OptionSchema): Record<string, st
 		if (schema) {
 			const allowed = schema.values.get(key);
 			if (!allowed) {
-				throw new Error(`config.options has unknown option "${key}". Run 'unbranded list' to see available options.`);
+				throw new Error(
+					`config.options has unknown option "${key}". Run 'unbranded list' to see available options.`,
+				);
 			}
 			if (!allowed.has(value)) {
-				throw new Error(`config.options.${key} must be one of: ${[...allowed].sort().join(', ')} (got "${value}").`);
+				throw new Error(
+					`config.options.${key} must be one of: ${[...allowed].sort().join(', ')} (got "${value}").`,
+				);
 			}
 		}
 	}

@@ -39,29 +39,41 @@ describe('detectInstalledUnits', () => {
 			files: {},
 		});
 		const units = [unit('core-eslint'), unit('core-typescript'), unit('core-vitest')];
-		expect(detectInstalledUnits({ cwd: tmp, units })).toEqual(new Set(['core-eslint', 'core-typescript']));
+		expect(detectInstalledUnits({ cwd: tmp, units })).toEqual(
+			new Set(['core-eslint', 'core-typescript']),
+		);
 	});
 
 	it('badges core-tailwind from the tailwindcss dependency (no config file to stat)', () => {
 		writeJson(tmp, 'package.json', { devDependencies: { tailwindcss: '4.3.0' } });
-		expect(detectInstalledUnits({ cwd: tmp, units: [unit('core-tailwind')] }).has('core-tailwind')).toBe(true);
+		expect(
+			detectInstalledUnits({ cwd: tmp, units: [unit('core-tailwind')] }).has('core-tailwind'),
+		).toBe(true);
 	});
 
 	it('badges core-node-version from any node pin', () => {
 		touch(tmp, '.nvmrc');
-		expect(detectInstalledUnits({ cwd: tmp, units: [unit('core-node-version')] }).has('core-node-version')).toBe(true);
+		expect(
+			detectInstalledUnits({ cwd: tmp, units: [unit('core-node-version')] }).has(
+				'core-node-version',
+			),
+		).toBe(true);
 	});
 
 	it('badges core-eslint from eslint.config.mjs, since its config lives in a flavor option', () => {
 		touch(tmp, 'eslint.config.mjs');
-		expect(detectInstalledUnits({ cwd: tmp, units: [unit('core-eslint')] }).has('core-eslint')).toBe(true);
+		expect(
+			detectInstalledUnits({ cwd: tmp, units: [unit('core-eslint')] }).has('core-eslint'),
+		).toBe(true);
 	});
 
 	it('requires every shipped file to be present, not just some', () => {
-		const ts = unit('core-typescript', { files: [
-			{ src: 'a', dest: 'tsconfig.base.json' },
-			{ src: 'b', dest: 'tsconfig.json' },
-		] });
+		const ts = unit('core-typescript', {
+			files: [
+				{ src: 'a', dest: 'tsconfig.base.json' },
+				{ src: 'b', dest: 'tsconfig.json' },
+			],
+		});
 		touch(tmp, 'tsconfig.json');
 		expect(detectInstalledUnits({ cwd: tmp, units: [ts] }).has('core-typescript')).toBe(false);
 		touch(tmp, 'tsconfig.base.json');
@@ -69,9 +81,9 @@ describe('detectInstalledUnits', () => {
 	});
 
 	it('resolves a renamed file to the path that actually lands', () => {
-		const u = unit('core-gitattributes', { files: [
-			{ src: 'templates/gitignore', dest: 'gitignore.template', rename: '.gitignore' },
-		] });
+		const u = unit('core-gitattributes', {
+			files: [{ src: 'templates/gitignore', dest: 'gitignore.template', rename: '.gitignore' }],
+		});
 		touch(tmp, 'gitignore.template');
 		expect(detectInstalledUnits({ cwd: tmp, units: [u] }).has('core-gitattributes')).toBe(false);
 		touch(tmp, '.gitignore');
@@ -79,7 +91,10 @@ describe('detectInstalledUnits', () => {
 	});
 
 	it('badges nothing in a bare repo with no state, deps, or files', () => {
-		const units = [unit('core-editorconfig', { files: [{ src: 'x', dest: '.editorconfig' }] }), unit('core-tailwind')];
+		const units = [
+			unit('core-editorconfig', { files: [{ src: 'x', dest: '.editorconfig' }] }),
+			unit('core-tailwind'),
+		];
 		expect(detectInstalledUnits({ cwd: tmp, units })).toEqual(new Set());
 	});
 });

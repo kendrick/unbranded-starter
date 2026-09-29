@@ -78,7 +78,7 @@ export async function copyFileOp(op: FileOp, opts: CopyOptions): Promise<CopyRes
 		return appendIfMissingOp(srcPath, destPath, srcBuf, destBuf, opts.journal);
 	}
 
-	const resolution = opts.onConflict ?? await promptConflict(destPath, srcBuf, destBuf);
+	const resolution = opts.onConflict ?? (await promptConflict(destPath, srcBuf, destBuf));
 
 	if (resolution === 'overwrite') {
 		writeBuffer(destPath, srcBuf, opts.journal);
@@ -99,9 +99,10 @@ function resolvePaths(op: FileOp, opts: CopyOptions): { srcPath: string; destPat
 	// posix.sep and let node:path build the native form for the host. A
 	// content-mode op has no src file; the path is a label for reporting only,
 	// never read, so we key it off dest to stay recognizable in results.
-	const srcPath = op.src !== undefined
-		? joinNative(opts.pkgRoot, ...op.src.split(posix.sep))
-		: `<computed:${op.dest}>`;
+	const srcPath =
+		op.src !== undefined
+			? joinNative(opts.pkgRoot, ...op.src.split(posix.sep))
+			: `<computed:${op.dest}>`;
 
 	const interpolatedDest = opts.projectName
 		? op.dest.replace(/\{projectName\}/g, opts.projectName)
@@ -111,9 +112,7 @@ function resolvePaths(op: FileOp, opts: CopyOptions): { srcPath: string; destPat
 	// `rename` swaps just the basename — the directory portion of `dest` still
 	// applies. The motivating case: shipped `.gitignore.template` → final
 	// `.gitignore`, because npm strips top-level `.gitignore` from tarballs.
-	const destPath = op.rename
-		? resolveNative(dirname(destBase), op.rename)
-		: destBase;
+	const destPath = op.rename ? resolveNative(dirname(destBase), op.rename) : destBase;
 
 	return { srcPath, destPath };
 }
@@ -134,7 +133,10 @@ async function mergeJsonOp(
 
 	// Re-serialize with the destination's own indentation so a merge doesn't
 	// silently reformat the user's file wider than the keys it actually touched.
-	const proposedBuf = Buffer.from(`${JSON.stringify(merged, null, detectIndent(existingText))}\n`, 'utf-8');
+	const proposedBuf = Buffer.from(
+		`${JSON.stringify(merged, null, detectIndent(existingText))}\n`,
+		'utf-8',
+	);
 
 	if (!conflict) {
 		// A clean merge that added nothing is a no-op — report it like an
@@ -150,7 +152,7 @@ async function mergeJsonOp(
 	// it through the same diff-and-prompt UX raw copies use, showing the
 	// patch-wins merge as the proposed side. `onConflict` (config mode) resolves
 	// it without a prompt so CI never blocks.
-	const resolution = onConflict ?? await promptConflict(destPath, proposedBuf, destBuf);
+	const resolution = onConflict ?? (await promptConflict(destPath, proposedBuf, destBuf));
 	if (resolution === 'overwrite') {
 		writeBuffer(destPath, proposedBuf, journal);
 		return { src: srcPath, dest: destPath, action: 'merged' };
@@ -158,7 +160,13 @@ async function mergeJsonOp(
 	return { src: srcPath, dest: destPath, action: 'skipped', reason: 'user-skip' };
 }
 
-function appendIfMissingOp(srcPath: string, destPath: string, srcBuf: Buffer, destBuf: Buffer, journal?: WriteJournal): CopyResult {
+function appendIfMissingOp(
+	srcPath: string,
+	destPath: string,
+	srcBuf: Buffer,
+	destBuf: Buffer,
+	journal?: WriteJournal,
+): CopyResult {
 	const { content, changed } = appendMissingLines(destBuf, srcBuf);
 	if (!changed) {
 		return { src: srcPath, dest: destPath, action: 'skipped', reason: 'identical' };
@@ -194,34 +202,42 @@ export function planFileOp(op: FileOp, opts: CopyOptions): FilePlan {
 
 	const base = { src: srcPath, dest: destPath, rel };
 
-	if (!existsSync(destPath))
-		return { ...base, outcome: 'create' };
+	if (!existsSync(destPath)) return { ...base, outcome: 'create' };
 
 	const destBuf = readFileSync(destPath);
-	if (srcBuf.equals(destBuf))
-		return { ...base, outcome: 'skip' };
+	if (srcBuf.equals(destBuf)) return { ...base, outcome: 'skip' };
 
 	const mode = op.mode ?? 'copy';
 	if (mode === 'merge-json') {
 		const existingText = destBuf.toString('utf-8');
 		const existing = JSON.parse(existingText) as unknown;
 		const { merged, conflict } = deepMergeJson(existing, JSON.parse(srcBuf.toString('utf-8')));
-		if (!conflict && deepEqual(merged, existing))
-			return { ...base, outcome: 'skip' };
+		if (!conflict && deepEqual(merged, existing)) return { ...base, outcome: 'skip' };
 		const proposed = `${JSON.stringify(merged, null, detectIndent(existingText))}\n`;
-		return { ...base, outcome: conflict ? 'conflict' : 'merge', diff: { existing: existingText, proposed } };
+		return {
+			...base,
+			outcome: conflict ? 'conflict' : 'merge',
+			diff: { existing: existingText, proposed },
+		};
 	}
 
 	if (mode === 'append-if-missing') {
 		const { content, changed } = appendMissingLines(destBuf, srcBuf);
-		if (!changed)
-			return { ...base, outcome: 'skip' };
-		return { ...base, outcome: 'append', diff: { existing: destBuf.toString('utf-8'), proposed: content.toString('utf-8') } };
+		if (!changed) return { ...base, outcome: 'skip' };
+		return {
+			...base,
+			outcome: 'append',
+			diff: { existing: destBuf.toString('utf-8'), proposed: content.toString('utf-8') },
+		};
 	}
 
 	// Raw copy into an existing, differing file: the user has to choose, so it's
 	// a conflict in plan terms even though a real run might auto-resolve it.
-	return { ...base, outcome: 'conflict', diff: { existing: destBuf.toString('utf-8'), proposed: srcBuf.toString('utf-8') } };
+	return {
+		...base,
+		outcome: 'conflict',
+		diff: { existing: destBuf.toString('utf-8'), proposed: srcBuf.toString('utf-8') },
+	};
 }
 
 // Unified patch for a plan that would change an existing file, or null when
@@ -229,9 +245,11 @@ export function planFileOp(op: FileOp, opts: CopyOptions): FilePlan {
 // defaults to the shared color policy so a piped or NO_COLOR run degrades to the
 // bare +/- prefixes; callers pass it explicitly only in tests.
 export function renderPlanDiff(plan: FilePlan, enabled = colorEnabled()): string | null {
-	if (!plan.diff)
-		return null;
-	return colorizeDiff(createPatch(plan.rel, plan.diff.existing, plan.diff.proposed, 'existing', 'proposed'), enabled);
+	if (!plan.diff) return null;
+	return colorizeDiff(
+		createPatch(plan.rel, plan.diff.existing, plan.diff.proposed, 'existing', 'proposed'),
+		enabled,
+	);
 }
 
 function writeBuffer(path: string, buf: Buffer, journal?: WriteJournal): void {
@@ -246,7 +264,11 @@ function writeBuffer(path: string, buf: Buffer, journal?: WriteJournal): void {
 	writeFileSync(path, buf);
 }
 
-async function promptConflict(destPath: string, src: Buffer, dest: Buffer): Promise<'overwrite' | 'skip'> {
+async function promptConflict(
+	destPath: string,
+	src: Buffer,
+	dest: Buffer,
+): Promise<'overwrite' | 'skip'> {
 	const firstChoice = await select<'overwrite' | 'skip' | 'diff'>({
 		message: `Conflict: ${destPath} already exists`,
 		options: [
@@ -258,14 +280,18 @@ async function promptConflict(destPath: string, src: Buffer, dest: Buffer): Prom
 	if (isCancel(firstChoice)) {
 		return cancelAndExit();
 	}
-	if (firstChoice !== 'diff')
-		return firstChoice;
+	if (firstChoice !== 'diff') return firstChoice;
 
 	// Render unified diff with red/green +/- lines. `diff.createPatch` produces
 	// the standard hunk format; we colorize the prefix characters for the
 	// terminal. After showing it, re-prompt without the diff option so the
 	// user doesn't loop back to it from itself.
-	log.message(colorizeDiff(createPatch(destPath, dest.toString('utf-8'), src.toString('utf-8'), 'existing', 'proposed'), colorEnabled()));
+	log.message(
+		colorizeDiff(
+			createPatch(destPath, dest.toString('utf-8'), src.toString('utf-8'), 'existing', 'proposed'),
+			colorEnabled(),
+		),
+	);
 
 	const secondChoice = await select<'overwrite' | 'skip'>({
 		message: 'Now what?',
@@ -303,14 +329,12 @@ function deepMergeJson(existing: unknown, incoming: unknown): MergeResult {
 				const sub = deepMergeJson(existing[key], incoming[key]);
 				merged[key] = sub.merged;
 				conflict ||= sub.conflict;
-			}
-			else {
+			} else {
 				merged[key] = existing[key];
 			}
 		}
 		for (const key of Object.keys(incoming)) {
-			if (!(key in existing))
-				merged[key] = incoming[key];
+			if (!(key in existing)) merged[key] = incoming[key];
 		}
 		return { merged, conflict };
 	}
@@ -318,8 +342,7 @@ function deepMergeJson(existing: unknown, incoming: unknown): MergeResult {
 	// Equal leaves aren't a conflict even when they collide — the user already
 	// has exactly what we'd write. Otherwise the patch wins the merged value,
 	// but we flag it so the caller can offer the choice rather than impose it.
-	if (deepEqual(existing, incoming))
-		return { merged: existing, conflict: false };
+	if (deepEqual(existing, incoming)) return { merged: existing, conflict: false };
 	return { merged: incoming, conflict: true };
 }
 
@@ -328,15 +351,15 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function deepEqual(a: unknown, b: unknown): boolean {
-	if (a === b)
-		return true;
+	if (a === b) return true;
 	if (Array.isArray(a) && Array.isArray(b)) {
 		return a.length === b.length && a.every((v, i) => deepEqual(v, b[i]));
 	}
 	if (isPlainObject(a) && isPlainObject(b)) {
 		const keys = Object.keys(a);
-		return keys.length === Object.keys(b).length
-			&& keys.every(k => k in b && deepEqual(a[k], b[k]));
+		return (
+			keys.length === Object.keys(b).length && keys.every((k) => k in b && deepEqual(a[k], b[k]))
+		);
 	}
 	return false;
 }
@@ -348,8 +371,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
 function detectIndent(content: string): string {
 	for (const line of content.split('\n')) {
 		const match = /^([ \t]+)\S/.exec(line);
-		if (match?.[1])
-			return match[1];
+		if (match?.[1]) return match[1];
 	}
 	return '  ';
 }
@@ -368,13 +390,14 @@ function appendMissingLines(existing: Buffer, incoming: Buffer): AppendResult {
 	const existingText = existing.toString('utf-8');
 	const present = new Set(existingText.split('\n'));
 
-	const missing = incoming.toString('utf-8').split('\n').filter(line => line !== '' && !present.has(line));
-	if (missing.length === 0)
-		return { content: existing, changed: false };
+	const missing = incoming
+		.toString('utf-8')
+		.split('\n')
+		.filter((line) => line !== '' && !present.has(line));
+	if (missing.length === 0) return { content: existing, changed: false };
 
-	const base = existingText.length > 0 && !existingText.endsWith('\n')
-		? `${existingText}\n`
-		: existingText;
+	const base =
+		existingText.length > 0 && !existingText.endsWith('\n') ? `${existingText}\n` : existingText;
 	return { content: Buffer.from(`${base}${missing.join('\n')}\n`, 'utf-8'), changed: true };
 }
 
@@ -382,17 +405,16 @@ function appendMissingLines(existing: Buffer, incoming: Buffer): AppendResult {
 // handing it back untouched — the prefixes are the fallback the audit asks for.
 // Exported for update's --diff, which renders patches outside a FilePlan.
 export function colorizeDiff(patch: string, enabled: boolean): string {
-	if (!enabled)
-		return patch;
-	return patch.split('\n').map((line) => {
-		// Skip the file headers (`+++`, `---`) when coloring; they're metadata
-		// rather than content changes.
-		if (line.startsWith('+') && !line.startsWith('+++'))
-			return `[32m${line}[0m`;
-		if (line.startsWith('-') && !line.startsWith('---'))
-			return `[31m${line}[0m`;
-		if (line.startsWith('@@'))
-			return `[36m${line}[0m`;
-		return line;
-	}).join('\n');
+	if (!enabled) return patch;
+	return patch
+		.split('\n')
+		.map((line) => {
+			// Skip the file headers (`+++`, `---`) when coloring; they're metadata
+			// rather than content changes.
+			if (line.startsWith('+') && !line.startsWith('+++')) return `[32m${line}[0m`;
+			if (line.startsWith('-') && !line.startsWith('---')) return `[31m${line}[0m`;
+			if (line.startsWith('@@')) return `[36m${line}[0m`;
+			return line;
+		})
+		.join('\n');
 }

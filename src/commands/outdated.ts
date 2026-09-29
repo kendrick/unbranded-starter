@@ -22,10 +22,8 @@ export function collectManifestPins(units: Unit[]): ManifestPin[] {
 	const byName = new Map<string, ManifestPin>();
 	const add = (name: string, pin: string, unit: UnitId): void => {
 		const entry = byName.get(name);
-		if (entry === undefined)
-			byName.set(name, { name, pin, units: [unit] });
-		else if (!entry.units.includes(unit))
-			entry.units.push(unit);
+		if (entry === undefined) byName.set(name, { name, pin, units: [unit] });
+		else if (!entry.units.includes(unit)) entry.units.push(unit);
 	};
 
 	for (const unit of units) {
@@ -35,8 +33,7 @@ export function collectManifestPins(units: Unit[]): ManifestPin[] {
 				sources.push(choice.dependencies, choice.devDependencies);
 		}
 		for (const source of sources) {
-			for (const [name, pin] of Object.entries(source ?? {}))
-				add(name, pin, unit.id);
+			for (const [name, pin] of Object.entries(source ?? {})) add(name, pin, unit.id);
 		}
 	}
 
@@ -51,21 +48,16 @@ export type Behind = 'up-to-date' | 'patch' | 'minor' | 'major' | 'unknown';
 export function classifyBehind(pin: string, latest: string): Behind {
 	const p = parseExact(pin);
 	const l = parseExact(latest);
-	if (!p || !l)
-		return 'unknown';
-	if (l[0] !== p[0])
-		return l[0] > p[0] ? 'major' : 'up-to-date';
-	if (l[1] !== p[1])
-		return l[1] > p[1] ? 'minor' : 'up-to-date';
-	if (l[2] !== p[2])
-		return l[2] > p[2] ? 'patch' : 'up-to-date';
+	if (!p || !l) return 'unknown';
+	if (l[0] !== p[0]) return l[0] > p[0] ? 'major' : 'up-to-date';
+	if (l[1] !== p[1]) return l[1] > p[1] ? 'minor' : 'up-to-date';
+	if (l[2] !== p[2]) return l[2] > p[2] ? 'patch' : 'up-to-date';
 	return 'up-to-date';
 }
 
 function parseExact(spec: string): [number, number, number] | undefined {
 	const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(spec);
-	if (!match)
-		return undefined;
+	if (!match) return undefined;
 	return [Number(match[1]), Number(match[2]), Number(match[3])];
 }
 
@@ -92,14 +84,18 @@ export async function runOutdated(opts: RunOutdatedOpts = {}): Promise<number> {
 
 	let latest: Map<string, string>;
 	try {
-		latest = await fetchLatestVersions(pins.map(p => p.name), {
-			registry,
-			fetchImpl: opts.fetchImpl,
-			timeoutMs: opts.timeoutMs,
-		});
-	}
-	catch (err) {
-		process.stderr.write(`unbranded outdated: ${err instanceof Error ? err.message : String(err)}\n`);
+		latest = await fetchLatestVersions(
+			pins.map((p) => p.name),
+			{
+				registry,
+				fetchImpl: opts.fetchImpl,
+				timeoutMs: opts.timeoutMs,
+			},
+		);
+	} catch (err) {
+		process.stderr.write(
+			`unbranded outdated: ${err instanceof Error ? err.message : String(err)}\n`,
+		);
 		return 1;
 	}
 
@@ -107,17 +103,22 @@ export async function runOutdated(opts: RunOutdatedOpts = {}): Promise<number> {
 		const version = latest.get(p.name) ?? '';
 		return { ...p, latest: version, behind: classifyBehind(p.pin, version) };
 	});
-	const majors = entries.filter(e => e.behind === 'major').length;
+	const majors = entries.filter((e) => e.behind === 'major').length;
 
 	if (opts.json) {
-		process.stdout.write(`${JSON.stringify({
-			schema: OUTDATED_SCHEMA,
-			registry,
-			majorsBehind: majors,
-			packages: entries,
-		}, null, 2)}\n`);
-	}
-	else {
+		process.stdout.write(
+			`${JSON.stringify(
+				{
+					schema: OUTDATED_SCHEMA,
+					registry,
+					majorsBehind: majors,
+					packages: entries,
+				},
+				null,
+				2,
+			)}\n`,
+		);
+	} else {
 		process.stdout.write(formatOutdated(entries, registry));
 	}
 
@@ -125,7 +126,7 @@ export async function runOutdated(opts: RunOutdatedOpts = {}): Promise<number> {
 }
 
 function formatOutdated(entries: OutdatedEntry[], registry: string): string {
-	const stale = entries.filter(e => e.behind !== 'up-to-date');
+	const stale = entries.filter((e) => e.behind !== 'up-to-date');
 	const lines: string[] = [];
 
 	if (stale.length === 0) {
@@ -133,15 +134,19 @@ function formatOutdated(entries: OutdatedEntry[], registry: string): string {
 		return `${lines.join('\n')}\n`;
 	}
 
-	const nameWidth = Math.max(...stale.map(e => e.name.length));
-	const pinWidth = Math.max(...stale.map(e => e.pin.length));
+	const nameWidth = Math.max(...stale.map((e) => e.name.length));
+	const pinWidth = Math.max(...stale.map((e) => e.pin.length));
 	for (const e of stale) {
 		const grade = e.behind === 'unknown' ? 'unparsable' : `${e.behind} behind`;
-		lines.push(`  ${e.name.padEnd(nameWidth)}  ${e.pin.padStart(pinWidth)} → ${e.latest || '?'}  (${grade})  [${e.units.join(', ')}]`);
+		lines.push(
+			`  ${e.name.padEnd(nameWidth)}  ${e.pin.padStart(pinWidth)} → ${e.latest || '?'}  (${grade})  [${e.units.join(', ')}]`,
+		);
 	}
 
-	const majors = stale.filter(e => e.behind === 'major').length;
+	const majors = stale.filter((e) => e.behind === 'major').length;
 	lines.push('');
-	lines.push(`${entries.length} pins checked against ${registry}: ${entries.length - stale.length} up to date, ${stale.length} behind (${majors} major${majors === 1 ? '' : 's'}).`);
+	lines.push(
+		`${entries.length} pins checked against ${registry}: ${entries.length - stale.length} up to date, ${stale.length} behind (${majors} major${majors === 1 ? '' : 's'}).`,
+	);
 	return `${lines.join('\n')}\n`;
 }

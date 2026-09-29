@@ -45,7 +45,10 @@ describe('dirty-tree guard (config mode)', () => {
 		writeJson(join(tmp, 'package.json'), { name: 'test-project', version: '0.0.0' });
 		writeJson(join(tmp, 'recipe.json'), RECIPE);
 
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		expect(result.stdout + result.stderr).toMatch(WARNING);
@@ -58,7 +61,10 @@ describe('dirty-tree guard (config mode)', () => {
 		writeJson(join(tmp, 'package.json'), { name: 'test-project', version: '0.0.0' });
 		writeJson(join(tmp, 'recipe.json'), RECIPE);
 
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json', '--force'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json', '--force'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		expect(result.stdout + result.stderr).not.toMatch(WARNING);
@@ -70,7 +76,10 @@ describe('dirty-tree guard (config mode)', () => {
 		writeJson(join(tmp, 'package.json'), { name: 'test-project', version: '0.0.0' });
 		writeJson(join(tmp, 'recipe.json'), { ...RECIPE, force: true });
 
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		expect(result.stdout + result.stderr).not.toMatch(WARNING);
@@ -81,7 +90,10 @@ describe('dirty-tree guard (config mode)', () => {
 		writeJson(join(tmp, 'package.json'), { name: 'test-project', version: '0.0.0' });
 		writeJson(join(tmp, 'recipe.json'), RECIPE);
 
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		expect(result.stdout + result.stderr).not.toMatch(WARNING);
@@ -98,7 +110,10 @@ describe('dirty-tree guard (config mode)', () => {
 		execFileSync('git', ['commit', '-m', 'seed'], { cwd: repo });
 		writeJson(join(tmp, 'recipe.json'), RECIPE);
 
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json', '--target', 'proj'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json', '--target', 'proj'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		expect(result.stdout + result.stderr).not.toMatch(WARNING);

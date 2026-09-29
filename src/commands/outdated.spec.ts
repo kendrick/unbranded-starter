@@ -20,21 +20,34 @@ describe('collectManifestPins', () => {
 		const catalog = [
 			unit('core-typescript', { devDependencies: { typescript: '5.9.3' } }),
 			unit('core-eslint', {
-				options: [{
-					key: 'eslintFlavor',
-					label: 'flavor',
-					default: 'base',
-					choices: [
-						{ value: 'base', label: 'Base', devDependencies: { 'eslint': '9.39.4', '@antfu/eslint-config': '6.2.3' } },
-						{ value: 'react', label: 'React', devDependencies: { 'eslint': '9.39.4', 'eslint-plugin-jsx-a11y': '6.10.2' } },
-					],
-				}],
+				options: [
+					{
+						key: 'eslintFlavor',
+						label: 'flavor',
+						default: 'base',
+						choices: [
+							{
+								value: 'base',
+								label: 'Base',
+								devDependencies: { 'eslint': '9.39.4', '@antfu/eslint-config': '6.2.3' },
+							},
+							{
+								value: 'react',
+								label: 'React',
+								devDependencies: { 'eslint': '9.39.4', 'eslint-plugin-jsx-a11y': '6.10.2' },
+							},
+						],
+					},
+				],
 			}),
-			unit('opt-shadcn', { dependencies: { clsx: '2.1.1' }, devDependencies: { typescript: '5.9.3' } }),
+			unit('opt-shadcn', {
+				dependencies: { clsx: '2.1.1' },
+				devDependencies: { typescript: '5.9.3' },
+			}),
 		];
 
 		const pins = collectManifestPins(catalog);
-		const byName = new Map(pins.map(p => [p.name, p]));
+		const byName = new Map(pins.map((p) => [p.name, p]));
 
 		// Flavor-only deps are reachable without special-casing the eslint unit.
 		expect(byName.get('eslint-plugin-jsx-a11y')?.pin).toBe('6.10.2');
@@ -43,11 +56,11 @@ describe('collectManifestPins', () => {
 		// Deduped within a unit across choices.
 		expect(byName.get('eslint')?.units).toEqual(['core-eslint']);
 		// Sorted by name for a stable report.
-		expect(pins.map(p => p.name)).toEqual([...pins.map(p => p.name)].sort());
+		expect(pins.map((p) => p.name)).toEqual([...pins.map((p) => p.name)].sort());
 	});
 
-	it('reaches every pin in the real manifest, including the flavor system\'s', () => {
-		const names = new Set(collectManifestPins(UNITS).map(p => p.name));
+	it("reaches every pin in the real manifest, including the flavor system's", () => {
+		const names = new Set(collectManifestPins(UNITS).map((p) => p.name));
 		expect(names.has('eslint')).toBe(true); // lives only in flavor choices
 		expect(names.has('typescript')).toBe(true);
 		expect(names.has('vitest')).toBe(true);
@@ -97,7 +110,7 @@ describe('runOutdated', () => {
 
 	// Serves every real manifest pin back verbatim, except the overrides.
 	function echoRegistry(overrides: Record<string, string> = {}): typeof fetch {
-		const pins = new Map(collectManifestPins(UNITS).map(p => [p.name, p.pin]));
+		const pins = new Map(collectManifestPins(UNITS).map((p) => [p.name, p.pin]));
 		return async (input: RequestInfo | URL) => {
 			const url = String(input);
 			const name = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1));
@@ -107,7 +120,9 @@ describe('runOutdated', () => {
 	}
 
 	it('exits 0 and says so when every pin is current, even under --strict', async () => {
-		expect(await runOutdated({ fetchImpl: echoRegistry(), strict: true, registry: 'https://reg.test' })).toBe(0);
+		expect(
+			await runOutdated({ fetchImpl: echoRegistry(), strict: true, registry: 'https://reg.test' }),
+		).toBe(0);
 		expect(out.join('')).toContain('up to date');
 	});
 
@@ -123,13 +138,25 @@ describe('runOutdated', () => {
 	it('keeps --strict quiet for minors: only majors gate CI', async () => {
 		// A pin one minor behind should surface in the report but never gate --strict;
 		// only majors do. Stage that off vitest's live pin so the case survives bumps.
-		const vitestPin = collectManifestPins(UNITS).find(p => p.name === 'vitest')!.pin;
-		expect(await runOutdated({ fetchImpl: echoRegistry({ vitest: oneMinorAhead(vitestPin) }), strict: true, registry: 'https://reg.test' })).toBe(0);
+		const vitestPin = collectManifestPins(UNITS).find((p) => p.name === 'vitest')!.pin;
+		expect(
+			await runOutdated({
+				fetchImpl: echoRegistry({ vitest: oneMinorAhead(vitestPin) }),
+				strict: true,
+				registry: 'https://reg.test',
+			}),
+		).toBe(0);
 		expect(out.join('')).toContain('vitest');
 	});
 
 	it('emits a schema-versioned JSON envelope', async () => {
-		expect(await runOutdated({ fetchImpl: echoRegistry({ eslint: '99.0.0' }), json: true, registry: 'https://reg.test' })).toBe(0);
+		expect(
+			await runOutdated({
+				fetchImpl: echoRegistry({ eslint: '99.0.0' }),
+				json: true,
+				registry: 'https://reg.test',
+			}),
+		).toBe(0);
 		const parsed = JSON.parse(out.join('')) as {
 			schema: number;
 			registry: string;
@@ -139,7 +166,7 @@ describe('runOutdated', () => {
 		expect(parsed.schema).toBe(1);
 		expect(parsed.registry).toBe('https://reg.test');
 		expect(parsed.majorsBehind).toBe(1);
-		const eslint = parsed.packages.find(p => p.name === 'eslint');
+		const eslint = parsed.packages.find((p) => p.name === 'eslint');
 		expect(eslint?.behind).toBe('major');
 		expect(eslint?.units).toContain('core-eslint');
 	});
