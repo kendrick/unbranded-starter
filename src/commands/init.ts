@@ -22,10 +22,11 @@ import { writeAndInstall } from '../install/run';
 import { loadCatalog } from '../manifest/catalog';
 import { detectEslintFlavor } from '../manifest/eslint-config';
 import { applyUnitOptions } from '../manifest/options';
-import { resolveSelection } from '../manifest/resolve';
+import { exclusionAgainstTracked, resolveSelection } from '../manifest/resolve';
 import { unitPicker } from '../prompts/unit-picker/prompt';
-import { writeStateFile } from '../state/state';
+import { readStateFile, writeStateFile } from '../state/state';
 import { cancelAndExit } from '../util/cancel';
+import { EXIT_ERROR } from '../util/exit-codes';
 import { readPackageJson } from '../util/package-json';
 import { PKG_ROOT } from '../util/paths';
 
@@ -134,6 +135,11 @@ function openCatalog(opts: { configPath?: string; preset?: string; unitsDir?: st
 	};
 }
 
+function trackedUnitIds(dir: string): string[] {
+	const read = readStateFile(dir);
+	return read.kind === 'ok' ? read.state.units.map(u => u.id) : [];
+}
+
 // The machine half of --dry-run. Deliberately a separate path from runInit:
 // that flow narrates through clack from its first line, and one stray chrome
 // line on stdout breaks a JSON consumer. Requires a selection (--units or
@@ -175,6 +181,13 @@ export async function runPlanJson(opts: { configPath?: string; inline?: InlineFl
 	}
 
 	const byId = new Map<string, AnyUnit>(catalog.units.map(u => [u.id, u]));
+
+	const clash = exclusionAgainstTracked(resolution.ids, trackedUnitIds(target.dir), catalog.units);
+	if (clash) {
+		process.stderr.write(`${clash.selected} and ${clash.tracked} can't both be selected (${clash.tracked} is already installed here).\n`);
+		return EXIT_ERROR;
+	}
+
 	const selectedUnits = resolution.ids.map(id => byId.get(id)).filter((u): u is AnyUnit => u !== undefined);
 	const optionSelections = await resolveUnitOptions(selectedUnits, config.options, false, target.dir);
 	const units = selectedUnits.map(unit => applyUnitOptions(unit, optionSelections));
@@ -345,6 +358,13 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	}
 
 	const byId = new Map<string, AnyUnit>(catalog.units.map(u => [u.id, u]));
+
+	const clash = exclusionAgainstTracked(resolution.ids, trackedUnitIds(target.dir), catalog.units);
+	if (clash) {
+		log.error(`${clash.selected} and ${clash.tracked} can't both be selected (${clash.tracked} is already installed here).`);
+		process.exit(EXIT_ERROR);
+	}
+
 	const selectedUnits = resolution.ids
 		.map(id => byId.get(id))
 		.filter((u): u is AnyUnit => u !== undefined);

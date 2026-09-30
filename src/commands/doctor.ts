@@ -111,6 +111,8 @@ export function auditRepo(opts: { cwd: string }): AuditResult {
 	const { cwd } = opts;
 	const catalog = buildCatalog();
 	const findings: Finding[] = [];
+	const stateRead = readStateFile(cwd);
+	const tracked = stateRead.kind === 'ok' ? stateRead.state.units.map(u => u.id) : [];
 
 	const read = readPackageJson(cwd);
 	if (read.kind === 'malformed') {
@@ -187,10 +189,10 @@ export function auditRepo(opts: { cwd: string }): AuditResult {
 			});
 		}
 		if (!hasScript(pkg, 'test')) {
-			findings.push(missingScript(catalog, 'test', 'no-test-script', 'No test script in package.json.'));
+			findings.push(missingScript(catalog, tracked, 'test', 'no-test-script', 'No test script in package.json.'));
 		}
 		if (!hasScript(pkg, 'lint')) {
-			findings.push(missingScript(catalog, 'lint', 'no-lint-script', 'No lint script in package.json.'));
+			findings.push(missingScript(catalog, tracked, 'lint', 'no-lint-script', 'No lint script in package.json.'));
 		}
 
 		const hasTsDep = Boolean(hasDep(pkg, 'typescript'));
@@ -345,8 +347,8 @@ function missingFile(catalog: ReturnType<typeof buildCatalog>, dest: string, mes
 	return { id, message, fix: fixForUnit(unit, `Add ${dest}.`), unit };
 }
 
-function missingScript(catalog: ReturnType<typeof buildCatalog>, script: string, id: string, message: string): Finding {
-	const unit = unitForScript(catalog, script);
+function missingScript(catalog: ReturnType<typeof buildCatalog>, tracked: string[], script: string, id: string, message: string): Finding {
+	const unit = unitForScript(catalog, tracked, script);
 	return { id, message, fix: fixForUnit(unit, `Add a "${script}" script to package.json.`), unit };
 }
 
@@ -360,8 +362,12 @@ function unitForDest(catalog: ReturnType<typeof buildCatalog>, dest: string): st
 	return catalog.units.find(u => u.files.some(f => effectiveDest(f) === dest))?.id;
 }
 
-function unitForScript(catalog: ReturnType<typeof buildCatalog>, script: string): string | undefined {
-	return catalog.units.find(u => u.packageJsonPatch?.scripts && script in u.packageJsonPatch.scripts)?.id;
+// core-eslint and core-oxlint both provide `lint`. Catalog order alone would send an
+// oxlint scaffold to core-eslint, whose fix installs the unit it excludes, so a unit
+// the project already tracks wins over the first catalog hit.
+function unitForScript(catalog: ReturnType<typeof buildCatalog>, tracked: string[], script: string): string | undefined {
+	const providers = catalog.units.filter(u => u.packageJsonPatch?.scripts && script in u.packageJsonPatch.scripts);
+	return (providers.find(u => tracked.includes(u.id)) ?? providers[0])?.id;
 }
 
 // For units whose fix isn't discoverable by a destination file — core-node-version

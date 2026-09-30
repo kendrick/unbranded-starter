@@ -97,3 +97,24 @@ export function dependentsOf(target: string, installed: string[], units: AnyUnit
 		return reach.has(target);
 	});
 }
+
+export interface TrackedExclusion {
+	selected: string;
+	tracked: string;
+}
+
+// resolveSelection only sees this run's picks. A unit already recorded in
+// .unbranded.json still owns files and scripts, so an exclusion against it must
+// fail like a within-selection one (#157). Both directions are checked without
+// re-resolving the tracked set, because that could change what a plain add applies.
+// Pure, like the resolver: the caller reads the state file.
+export function exclusionAgainstTracked(selected: string[], tracked: string[], units: AnyUnit[]): TrackedExclusion | undefined {
+	const byId = new Map<string, AnyUnit>(units.map(u => [u.id, u]));
+	const others = tracked.filter(id => !selected.includes(id));
+	for (const id of selected) {
+		const other = others.find(t => byId.get(id)?.excludes?.includes(t) || byId.get(t)?.excludes?.includes(id));
+		if (other !== undefined)
+			return { selected: id, tracked: other };
+	}
+	return undefined;
+}
