@@ -98,7 +98,7 @@ function stateUnitsFor(catalog: Catalog, ids: string[], targetDir: string): Stat
 }
 
 // Invalid definitions don't stop a run: a units directory is a working area, and a
-// half-written unit in it shouldn't block the fifteen that are fine. It does have to
+// half-written unit in it shouldn't block the sixteen that are fine. It does have to
 // be said out loud, though, or the user reads the shorter picker as the whole story.
 function catalogNotices(catalog: Catalog): string[] {
 	return [
@@ -586,10 +586,10 @@ async function resolveUnitOptions(
 
 // The one place an option default is computed from the environment rather than a
 // static value. F-14 will fold this into the option schema; for now the only
-// option is core-eslint's flavor, defaulted by sniffing the target's dependencies
+// options are core-eslint's and core-oxlint's flavors, defaulted by sniffing the target's dependencies
 // (a repo that pulls next/react wants that flavor, everything else gets base).
 function optionDefault(option: UnitOption, targetDir: string): string {
-	if (option.key === 'eslintFlavor')
+	if (option.key === 'eslintFlavor' || option.key === 'oxlintFlavor')
 		return detectEslintFlavor(targetDependencyNames(targetDir));
 	return option.default;
 }

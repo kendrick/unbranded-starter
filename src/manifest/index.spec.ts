@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PKG_ROOT } from '../util/paths';
 import { UNITS } from './index';
+import { resolveSelection } from './resolve';
 import { UNIT_SCHEMA, validateUnitDefinition } from './validate-unit';
 
 describe('manifest', () => {
@@ -43,6 +44,34 @@ describe('manifest', () => {
 		const base = option?.choices.find(c => c.value === 'base');
 		expect(base?.devDependencies).not.toHaveProperty('@eslint-react/eslint-plugin');
 		expect(base?.devDependencies).not.toHaveProperty('@next/eslint-plugin-next');
+	});
+
+	it('core-oxlint declares an oxlintFlavor option whose choices write both oxc configs (#157)', () => {
+		const oxlint = UNITS.find(u => u.id === 'core-oxlint');
+		expect(oxlint?.category).toBe('lint');
+		expect(oxlint?.files).toEqual([]);
+		expect(oxlint?.devDependencies).toEqual({ oxlint: '1.86.0', oxfmt: '0.71.0' });
+		expect(oxlint?.implies).toEqual(['core-typescript']);
+		expect(oxlint?.excludes).toEqual(['core-eslint']);
+		expect(oxlint?.recommendedExtensions).toEqual(['oxc.oxc-vscode']);
+		expect(oxlint?.packageJsonPatch?.scripts).toEqual({
+			'lint': 'oxlint --no-error-on-unmatched-pattern',
+			'lint:fix': 'oxlint --no-error-on-unmatched-pattern --fix',
+			'format': 'oxfmt',
+		});
+
+		const option = oxlint?.options?.find(o => o.key === 'oxlintFlavor');
+		expect(option?.default).toBe('base');
+		expect(option?.choices.map(c => c.value)).toEqual(['base', 'react', 'next']);
+		for (const choice of option?.choices ?? [])
+			expect(choice.files?.map(f => f.dest)).toEqual(['.oxlintrc.json', '.oxfmtrc.json']);
+	});
+
+	it('refuses core-oxlint alongside core-eslint (#157)', () => {
+		const result = resolveSelection(['core-oxlint', 'core-eslint'], UNITS);
+		expect(result.kind).toBe('conflict');
+		if (result.kind === 'conflict')
+			expect([...result.pair].sort()).toEqual(['core-eslint', 'core-oxlint']);
 	});
 
 	it('core-tailwind carries only the CSS-only package, never the PostCSS adapter', () => {
