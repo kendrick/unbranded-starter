@@ -1,6 +1,8 @@
 import type { EslintFlavor } from './eslint-config';
+import type { OxlintFlavor } from './oxlint-config';
 import type { Unit, UnitOptionChoice } from './types';
 import { buildEslintConfig, ESLINT_FLAVORS, eslintDevDependencies } from './eslint-config';
+import { buildOxfmtConfig, buildOxlintConfig, OXC_DEV_DEPENDENCIES, OXLINT_FLAVORS } from './oxlint-config';
 
 // core-eslint's three flavors, built as UnitOption choices. Each choice ships the
 // exact plugins it needs and a generated eslint.config.mjs delivered inline (via
@@ -18,6 +20,24 @@ const ESLINT_FLAVOR_CHOICES: UnitOptionChoice[] = ESLINT_FLAVORS.map(flavor => (
 	hint: ESLINT_FLAVOR_META[flavor].hint,
 	devDependencies: eslintDevDependencies(flavor),
 	files: [{ content: buildEslintConfig(flavor), dest: 'eslint.config.mjs' }],
+}));
+
+const OXLINT_FLAVOR_META: Record<OxlintFlavor, { label: string; hint: string }> = {
+	base: { label: 'Base (TypeScript only)', hint: 'No React or Next rules — for Node libraries and CLIs' },
+	react: { label: 'React', hint: 'React and jsx-a11y rules' },
+	next: { label: 'Next.js', hint: 'React plus Next.js rules' },
+};
+
+// Both configs ride on the choice rather than the unit so they stay out of
+// `list --json`, which never surfaces inline file content.
+const OXLINT_FLAVOR_CHOICES: UnitOptionChoice[] = OXLINT_FLAVORS.map(flavor => ({
+	value: flavor,
+	label: OXLINT_FLAVOR_META[flavor].label,
+	hint: OXLINT_FLAVOR_META[flavor].hint,
+	files: [
+		{ content: buildOxlintConfig(flavor), dest: '.oxlintrc.json' },
+		{ content: buildOxfmtConfig(), dest: '.oxfmtrc.json' },
+	],
 }));
 
 // Versions pinned exactly. `unbranded --latest` is the escape hatch when
@@ -85,6 +105,33 @@ export const UNITS: Unit[] = [
 		// The eslint config sets `typescript: true`, which makes the antfu
 		// preset attempt to load typescript. Without TS installed the config
 		// itself fails to load — pull it in automatically. True in every flavor.
+		implies: ['core-typescript'],
+	},
+	{
+		id: 'core-oxlint',
+		category: 'lint',
+		label: 'oxlint + oxfmt',
+		description: 'oxlint and oxfmt in a base/react/next flavor. Native binaries, so there are no plugins to install.',
+		files: [],
+		devDependencies: { ...OXC_DEV_DEPENDENCIES },
+		options: [{
+			key: 'oxlintFlavor',
+			label: 'oxlint flavor',
+			default: 'base',
+			choices: OXLINT_FLAVOR_CHOICES,
+		}],
+		packageJsonPatch: {
+			scripts: {
+				// A fresh scaffold has no source yet, and plain `oxlint` exits 1 when it
+				// finds nothing to lint. Real findings still exit 1 with the flag.
+				'lint': 'oxlint --no-error-on-unmatched-pattern',
+				'lint:fix': 'oxlint --no-error-on-unmatched-pattern --fix',
+				'format': 'oxfmt',
+			},
+		},
+		recommendedExtensions: ['oxc.oxc-vscode'],
+		// Two lint units would fight over the `lint` script and format every file twice.
+		excludes: ['core-eslint'],
 		implies: ['core-typescript'],
 	},
 	{

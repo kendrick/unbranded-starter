@@ -2,11 +2,12 @@ import type { Unit, UnitId } from '../manifest/types';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { log } from '@clack/prompts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writeAndInstall } from '../install/run';
 import { unitPicker } from '../prompts/unit-picker/prompt';
 import { STATE_FILENAME } from '../state/state';
-import { formatPlan, runInit } from './init';
+import { formatPlan, runInit, runPlanJson } from './init';
 
 // The picker is the one TTY boundary in the interactive flow; mocking just it lets
 // runInit's threading be exercised against a real temp dir and the real detectors.
@@ -103,6 +104,107 @@ describe('runInit result', () => {
 		const result = await runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'pnpm', yes: true } });
 
 		expect(result).toEqual({ ok: false });
+	});
+});
+
+describe('runInit exclusions against tracked units (#157)', () => {
+	let tmp: string;
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+		vi.restoreAllMocks();
+		vi.mocked(writeAndInstall).mockReset();
+	});
+
+	function trackedProject(...ids: string[]): void {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-tracked-'));
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		writeFileSync(join(tmp, STATE_FILENAME), JSON.stringify({
+			schema: 3,
+			units: ids.map(id => ({ id, source: { kind: 'builtin' } })),
+			files: {},
+		}));
+	}
+
+	// A real exit would kill the runner; throwing lets the test read the code and message.
+	function trapExit(): { messages: string[] } {
+		const messages: string[] = [];
+		vi.spyOn(log, 'error').mockImplementation((m: string) => {
+			messages.push(m);
+		});
+		vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+			throw new Error(`exit ${code}`);
+		}) as typeof process.exit);
+		return { messages };
+	}
+
+	it('rejects a new unit that excludes a tracked one, naming both', async () => {
+		trackedProject('core-eslint');
+		const { messages } = trapExit();
+
+		await expect(runInit({ targetDir: tmp, dryRun: true, inline: { units: 'core-oxlint', yes: true, pm: 'pnpm' } })).rejects.toThrow('exit 1');
+
+		expect(messages.join('\n')).toContain(`core-oxlint and core-eslint can't both be selected (core-eslint is already installed here).`);
+	});
+
+	it('rejects the reverse direction, where the tracked unit declares the exclusion', async () => {
+		trackedProject('core-oxlint');
+		const { messages } = trapExit();
+
+		await expect(runInit({ targetDir: tmp, dryRun: true, inline: { units: 'core-eslint', yes: true, pm: 'pnpm' } })).rejects.toThrow('exit 1');
+
+		expect(messages.join('\n')).toContain(`core-eslint and core-oxlint can't both be selected (core-oxlint is already installed here).`);
+	});
+
+	it('fails the --dry-run --json path the same way, on stderr', async () => {
+		trackedProject('core-eslint');
+		const err: string[] = [];
+		vi.spyOn(process.stderr, 'write').mockImplementation(((m: string) => {
+			err.push(String(m));
+			return true;
+		}) as typeof process.stderr.write);
+
+		const code = await runPlanJson({ targetDir: tmp, inline: { units: 'core-oxlint', pm: 'pnpm' } });
+
+		expect(code).toBe(1);
+		expect(err.join('')).toContain(`core-oxlint and core-eslint can't both be selected (core-eslint is already installed here).`);
+	});
+
+	it('refuses a newer-schema state file before writing anything', async () => {
+		trackedProject('core-eslint');
+		writeFileSync(join(tmp, STATE_FILENAME), JSON.stringify({ schema: 99, units: [], files: {} }));
+		const { messages } = trapExit();
+
+		await expect(runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', yes: true, pm: 'pnpm' } })).rejects.toThrow('exit 1');
+
+		expect(messages.join('\n')).toContain('newer unbranded');
+		expect(existsSync(join(tmp, '.editorconfig'))).toBe(false);
+		expect(vi.mocked(writeAndInstall)).not.toHaveBeenCalled();
+	});
+
+	it('refuses a newer-schema state file on the --dry-run --json path, on stderr', async () => {
+		trackedProject('core-eslint');
+		writeFileSync(join(tmp, STATE_FILENAME), JSON.stringify({ schema: 99, units: [], files: {} }));
+		const err: string[] = [];
+		vi.spyOn(process.stderr, 'write').mockImplementation(((m: string) => {
+			err.push(String(m));
+			return true;
+		}) as typeof process.stderr.write);
+
+		const code = await runPlanJson({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'pnpm' } });
+
+		expect(code).toBe(1);
+		expect(err.join('')).toContain('newer unbranded');
+	});
+
+	it('still lets a re-run re-select a tracked unit', async () => {
+		trackedProject('core-eslint');
+		const { messages } = trapExit();
+
+		const result = await runInit({ targetDir: tmp, dryRun: true, inline: { units: 'core-eslint', yes: true, pm: 'pnpm' } });
+
+		expect(result).toEqual({ ok: true });
+		expect(messages).toEqual([]);
 	});
 });
 

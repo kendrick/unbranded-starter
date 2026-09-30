@@ -22,10 +22,11 @@ import { writeAndInstall } from '../install/run';
 import { loadCatalog } from '../manifest/catalog';
 import { detectEslintFlavor } from '../manifest/eslint-config';
 import { applyUnitOptions } from '../manifest/options';
-import { resolveSelection } from '../manifest/resolve';
+import { exclusionAgainstTracked, resolveSelection } from '../manifest/resolve';
 import { unitPicker } from '../prompts/unit-picker/prompt';
-import { writeStateFile } from '../state/state';
+import { readStateFile, unsupportedStateMessage, writeStateFile } from '../state/state';
 import { cancelAndExit } from '../util/cancel';
+import { EXIT_ERROR } from '../util/exit-codes';
 import { readPackageJson } from '../util/package-json';
 import { PKG_ROOT } from '../util/paths';
 
@@ -98,7 +99,7 @@ function stateUnitsFor(catalog: Catalog, ids: string[], targetDir: string): Stat
 }
 
 // Invalid definitions don't stop a run: a units directory is a working area, and a
-// half-written unit in it shouldn't block the fifteen that are fine. It does have to
+// half-written unit in it shouldn't block the sixteen that are fine. It does have to
 // be said out loud, though, or the user reads the shorter picker as the whole story.
 function catalogNotices(catalog: Catalog): string[] {
 	return [
@@ -132,6 +133,16 @@ function openCatalog(opts: { configPath?: string; preset?: string; unitsDir?: st
 		catalog,
 		fileConfig: opts.preset ? loadPreset(opts.preset, catalog.ids, catalog.optionSchema).config : null,
 	};
+}
+
+// Refusing here, ahead of the first write, matters because writeStateFile throws on
+// a newer-schema envelope only after files are written and the install has run,
+// which strands a half-applied scaffold.
+function readTracked(dir: string): { ids: string[]; unsupported?: undefined } | { unsupported: string } {
+	const read = readStateFile(dir);
+	if (read.kind === 'unsupported')
+		return { unsupported: unsupportedStateMessage(read.schema) };
+	return { ids: read.kind === 'ok' ? read.state.units.map(u => u.id) : [] };
 }
 
 // The machine half of --dry-run. Deliberately a separate path from runInit:
@@ -175,6 +186,18 @@ export async function runPlanJson(opts: { configPath?: string; inline?: InlineFl
 	}
 
 	const byId = new Map<string, AnyUnit>(catalog.units.map(u => [u.id, u]));
+
+	const tracked = readTracked(target.dir);
+	if (tracked.unsupported !== undefined) {
+		process.stderr.write(`${tracked.unsupported}\n`);
+		return EXIT_ERROR;
+	}
+	const clash = exclusionAgainstTracked(resolution.ids, tracked.ids, catalog.units);
+	if (clash) {
+		process.stderr.write(`${clash.selected} and ${clash.tracked} can't both be selected (${clash.tracked} is already installed here).\n`);
+		return EXIT_ERROR;
+	}
+
 	const selectedUnits = resolution.ids.map(id => byId.get(id)).filter((u): u is AnyUnit => u !== undefined);
 	const optionSelections = await resolveUnitOptions(selectedUnits, config.options, false, target.dir);
 	const units = selectedUnits.map(unit => applyUnitOptions(unit, optionSelections));
@@ -345,6 +368,18 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	}
 
 	const byId = new Map<string, AnyUnit>(catalog.units.map(u => [u.id, u]));
+
+	const tracked = readTracked(target.dir);
+	if (tracked.unsupported !== undefined) {
+		log.error(tracked.unsupported);
+		process.exit(EXIT_ERROR);
+	}
+	const clash = exclusionAgainstTracked(resolution.ids, tracked.ids, catalog.units);
+	if (clash) {
+		log.error(`${clash.selected} and ${clash.tracked} can't both be selected (${clash.tracked} is already installed here).`);
+		process.exit(EXIT_ERROR);
+	}
+
 	const selectedUnits = resolution.ids
 		.map(id => byId.get(id))
 		.filter((u): u is AnyUnit => u !== undefined);
@@ -586,10 +621,11 @@ async function resolveUnitOptions(
 
 // The one place an option default is computed from the environment rather than a
 // static value. F-14 will fold this into the option schema; for now the only
-// option is core-eslint's flavor, defaulted by sniffing the target's dependencies
-// (a repo that pulls next/react wants that flavor, everything else gets base).
+// options are core-eslint's and core-oxlint's flavors, defaulted by sniffing the
+// target's dependencies (a repo that pulls next/react wants that flavor,
+// everything else gets base).
 function optionDefault(option: UnitOption, targetDir: string): string {
-	if (option.key === 'eslintFlavor')
+	if (option.key === 'eslintFlavor' || option.key === 'oxlintFlavor')
 		return detectEslintFlavor(targetDependencyNames(targetDir));
 	return option.default;
 }

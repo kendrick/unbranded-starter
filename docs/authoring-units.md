@@ -1,6 +1,6 @@
 # Authoring Units
 
-A unit is one installable piece of tooling: the files it writes, the dependencies it pins, and the rules about what has to travel with it. The fifteen built-in units are written against the same contract your own units use. That contract ships as `schemas/unit.schema.json`. Every definition carries an integer `schema` field that names the version it targets, so tooling keys off that number instead of sniffing fields.
+A unit is one installable piece of tooling: the files it writes, the dependencies it pins, and the rules about what has to travel with it. The sixteen built-in units are written against the same contract your own units use. That contract ships as `schemas/unit.schema.json`. Every definition carries an integer `schema` field that names the version it targets, so tooling keys off that number instead of sniffing fields.
 
 This page covers writing a definition and checking it with `unbranded validate`. The contract summary for every other JSON surface lives in [AGENTS.md](../AGENTS.md).
 

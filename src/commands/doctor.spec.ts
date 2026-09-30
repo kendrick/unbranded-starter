@@ -129,6 +129,19 @@ describe('auditRepo', () => {
 		expect(found.find(f => f.id === 'no-lint-script')?.unit).toBe('core-eslint');
 	});
 
+	it('names the tracked lint provider, not the first catalog hit, for a missing lint script (#157)', () => {
+		writeJson(join(tmp, 'package.json'), { name: 'x' });
+		writeJson(join(tmp, '.unbranded.json'), { schema: 3, units: [{ id: 'core-oxlint', source: { kind: 'builtin' } }], files: {} });
+		const found = auditRepo({ cwd: tmp }).findings;
+		expect(found.find(f => f.id === 'no-lint-script')?.unit).toBe('core-oxlint');
+	});
+
+	it('falls back to the first catalog provider when no tracked unit provides the script', () => {
+		writeJson(join(tmp, 'package.json'), { name: 'x' });
+		writeJson(join(tmp, '.unbranded.json'), { schema: 3, units: [{ id: 'core-editorconfig', source: { kind: 'builtin' } }], files: {} });
+		expect(auditRepo({ cwd: tmp }).findings.find(f => f.id === 'no-lint-script')?.unit).toBe('core-eslint');
+	});
+
 	it('flags a packageManager field that disagrees with the lockfile', () => {
 		cleanRepo(tmp);
 		// pnpm-lock.yaml on disk, but the field claims yarn.

@@ -1,6 +1,6 @@
 import type { Unit, UnitId } from './types';
 import { describe, expect, it } from 'vitest';
-import { dependentsOf, resolveSelection } from './resolve';
+import { dependentsOf, exclusionAgainstTracked, resolveSelection } from './resolve';
 
 // Minimal fixture builder so tests stay readable.
 function unit(id: UnitId, extras: Partial<Unit> = {}): Unit {
@@ -179,5 +179,34 @@ describe('dependentsOf', () => {
 
 	it('returns empty for a leaf unit nothing points at', () => {
 		expect(dependentsOf('core-typescript', ['core-typescript', 'core-eslint'], units)).toEqual([]);
+	});
+});
+
+describe('exclusionAgainstTracked', () => {
+	const units = [
+		unit('core-eslint'),
+		unit('core-oxlint', { excludes: ['core-eslint'] }),
+		unit('core-vitest'),
+	];
+
+	it('flags a selected unit that excludes a tracked one', () => {
+		expect(exclusionAgainstTracked(['core-oxlint'], ['core-eslint'], units)).toEqual({ selected: 'core-oxlint', tracked: 'core-eslint' });
+	});
+
+	it('flags a selected unit that a tracked one excludes', () => {
+		expect(exclusionAgainstTracked(['core-eslint'], ['core-oxlint'], units)).toEqual({ selected: 'core-eslint', tracked: 'core-oxlint' });
+	});
+
+	it('ignores tracked units that are re-selected', () => {
+		expect(exclusionAgainstTracked(['core-eslint'], ['core-eslint'], units)).toBeUndefined();
+	});
+
+	it('does not flag a tracked unit that is also selected, even when a selected unit excludes it', () => {
+		const hand = [unit('core-oxlint', { excludes: ['core-eslint'] }), unit('core-eslint')];
+		expect(exclusionAgainstTracked(['core-oxlint', 'core-eslint'], ['core-eslint'], hand)).toBeUndefined();
+	});
+
+	it('passes unrelated units and unknown tracked ids', () => {
+		expect(exclusionAgainstTracked(['core-vitest'], ['core-eslint', 'local:mine'], units)).toBeUndefined();
 	});
 });

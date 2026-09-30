@@ -16,8 +16,9 @@ permissions:
 # on Windows), and scaffold-lint one more. vitest sharding couldn't split them (a
 # file's tests stay together), so instead each heavy install runs in its own parallel
 # job. `e2e-main` runs everything else with the heavy specs skipped, `e2e-flavors`
-# fans the three flavors out, `e2e-scaffold` runs the full-project lint, `checks`
-# carries the fast grid, and `launcher-smoke` is the one-off publish check. Wall-clock
+# fans the three flavors out, `e2e-oxlint-flavors` does the same for oxlint's,
+# `e2e-scaffold` runs the full-project lint, `checks` carries the fast grid, and
+# `launcher-smoke` is the one-off publish check. Wall-clock
 # is now the slowest single install, not the sum. Only the launcher still upgrades npm
 # (pack/version parse defensively now, so the global upgrade is gone everywhere else).
 jobs:
@@ -120,6 +121,32 @@ jobs:
         run: pnpm build
       - name: E2E tests (eslint flavor)
         run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/eslint-flavors.spec.ts
+        env:
+          UB_FLAVOR: ${{ matrix.flavor }}
+
+  e2e-oxlint-flavors:
+    name: e2e oxlint flavor ${{ matrix.flavor }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Its own job, not a second step in e2e-flavors: each flavor is a real install,
+        # and stacking two per cell would put their sum back on the critical path.
+        os: [ubuntu-latest, windows-latest]
+        flavor: [base, react, next]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: E2E tests (oxlint flavor)
+        run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/oxlint-flavors.spec.ts
         env:
           UB_FLAVOR: ${{ matrix.flavor }}
 

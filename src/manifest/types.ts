@@ -1,5 +1,5 @@
 export type UnitId
-	= | 'core-eslint' | 'core-stylelint' | 'core-typescript' | 'core-tailwind'
+	= | 'core-eslint' | 'core-oxlint' | 'core-stylelint' | 'core-typescript' | 'core-tailwind'
 		| 'core-vitest' | 'core-postcss' | 'core-editorconfig' | 'core-node-version'
 		| 'core-gitattributes'
 		| 'opt-monorepo' | 'opt-husky' | 'opt-playwright' | 'opt-shadcn'
@@ -129,7 +129,7 @@ export interface UnitBase<Id extends string> {
 	removeNotes?: string;
 }
 
-// The built-in catalog: ids closed to the fifteen shipped units.
+// The built-in catalog: ids closed to the sixteen shipped units.
 export type Unit = UnitBase<UnitId>;
 
 // The published authoring contract (F-14). Ids are open because a unit loaded

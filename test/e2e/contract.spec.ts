@@ -50,6 +50,13 @@ describe('--dry-run --json (the machine-readable plan)', () => {
 		rmSync(tmp, { recursive: true, force: true });
 	});
 
+	it('refuses core-oxlint with core-eslint and names both (#157)', () => {
+		const result = run(['--dry-run', '--json', '--units', 'core-oxlint,core-eslint', '--pm', 'npm'], tmp);
+		expect(result.status).toBe(1);
+		expect(result.stderr).toContain('core-oxlint');
+		expect(result.stderr).toContain('core-eslint');
+	});
+
 	it('emits pure JSON: the resolved units, the implied additions, and per-file verdicts', () => {
 		const result = run(['--dry-run', '--json', '--units', 'opt-shadcn', '--pm', 'npm'], tmp);
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
