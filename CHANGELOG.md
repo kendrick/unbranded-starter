@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.0](https://github.com/kendrick/unbranded-starter/compare/v2.0.5...v2.1.0) (2026-09-30)
+
+
+### Features
+
+* **manifest:** add a core-oxlint unit with base/react/next flavors ([#167](https://github.com/kendrick/unbranded-starter/issues/167)) ([bb09f2a](https://github.com/kendrick/unbranded-starter/commit/bb09f2a371da93aa54c69459d7661825b7883624))
+
+
+### Bug Fixes
+
+* **manifest:** pin TypeScript to 6.0.3 instead of 7 ([#165](https://github.com/kendrick/unbranded-starter/issues/165)) ([7896583](https://github.com/kendrick/unbranded-starter/commit/7896583be2d7ae5ec9bf88fd1199da0b78798e2f))
+
 ## [2.0.5](https://github.com/kendrick/unbranded-starter/compare/v2.0.4...v2.0.5) (2026-09-28)
 
 
