@@ -276,6 +276,7 @@ if (values['dry-run'] && values.json) {
 		configPath: values.config,
 		preset: values.preset,
 		unitsDir,
+		latest: values.latest,
 		targetDir: values.target ? resolve(values.target) : undefined,
 		inline: {
 			units: values.units,

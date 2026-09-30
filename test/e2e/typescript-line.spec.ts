@@ -10,8 +10,8 @@ import { PKG_ROOT } from '../../src/util/paths';
 // what a consumer sees before anything is written.
 const CLI = join(PKG_ROOT, 'dist/cli.js');
 
-function dryRun(units: string, cwd: string): { status: number | null; plan: { units: string[]; devDependencies?: Record<string, string> }; stderr: string } {
-	const res = spawnSync('node', [CLI, '--dry-run', '--json', '--units', units, '--pm', 'pnpm'], { cwd, encoding: 'utf-8' });
+function dryRun(units: string, cwd: string, extra: string[] = []): { status: number | null; plan: { units: string[]; devDependencies?: Record<string, string> }; stderr: string } {
+	const res = spawnSync('node', [CLI, '--dry-run', '--json', '--units', units, '--pm', 'pnpm', ...extra], { cwd, encoding: 'utf-8' });
 	return { status: res.status, plan: res.status === 0 ? JSON.parse(res.stdout) : { units: [] }, stderr: res.stderr };
 }
 
@@ -44,6 +44,12 @@ describe('typeScript line and lint slot (#158)', () => {
 		expect(r.status, r.stderr).toBe(0);
 		expect(r.plan.units).toContain('core-typescript');
 		expect(r.plan.devDependencies?.typescript).toMatch(/^\^?6\./);
+	});
+
+	it('under --latest, core-eslint reports typescript `latest`, as the real run writes', () => {
+		const r = dryRun('core-eslint', tmp, ['--latest']);
+		expect(r.status, r.stderr).toBe(0);
+		expect(r.plan.devDependencies?.typescript).toBe('latest');
 	});
 
 	it('core-oxlint plans typescript 7.x', () => {
