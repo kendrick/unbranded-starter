@@ -4,14 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eslintDevDependencies } from '../../src/manifest/eslint-config';
-import { UNITS } from '../../src/manifest/index';
+import { PIN_LINES } from '../../src/manifest/index';
 import { PKG_ROOT } from '../../src/util/paths';
 
 const CLI = join(PKG_ROOT, 'dist/cli.js');
 // Read the pinned versions from the manifest, not literals, so the weekly pin-bump
 // PRs don't redden these tests every time a pin moves.
 const ESLINT_PIN = eslintDevDependencies('base').eslint;
-const TYPESCRIPT_PIN = UNITS.find(u => u.id === 'core-typescript')?.devDependencies?.typescript;
+// core-eslint scaffolds take the 6.x line (#158), not core-typescript's default.
+const TYPESCRIPT_PIN = PIN_LINES.find(l => l.unit === 'core-typescript' && l.when === 'core-eslint')?.devDependencies.typescript;
 
 function writeJson(path: string, obj: unknown): void {
 	writeFileSync(path, JSON.stringify(obj, null, 2));
