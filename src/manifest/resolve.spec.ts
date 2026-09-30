@@ -184,6 +184,39 @@ describe('dependentsOf', () => {
 	});
 });
 
+describe('dependentsOf through a slot', () => {
+	const units = [
+		unit('core-typescript'),
+		unit('core-eslint', { implies: ['core-typescript'] }),
+		unit('core-oxlint', { implies: ['core-typescript'] }),
+		unit('core-vitest'),
+		unit('opt-ci-github', { implies: ['core-vitest'] }),
+	];
+	const slots = [{ unit: 'opt-ci-github', anyOf: ['core-eslint', 'core-oxlint'], fallback: 'core-oxlint' }];
+
+	it('names the slot\'s unit when the target is its only installed member', () => {
+		expect(dependentsOf('core-oxlint', ['core-oxlint', 'core-typescript', 'core-vitest', 'opt-ci-github'], units, slots))
+			.toEqual(['opt-ci-github']);
+	});
+
+	it('lets either lint unit go while the other stays installed', () => {
+		const installed = ['core-eslint', 'core-oxlint', 'core-typescript', 'core-vitest', 'opt-ci-github'];
+		expect(dependentsOf('core-oxlint', installed, units, slots)).toEqual([]);
+		expect(dependentsOf('core-eslint', installed, units, slots)).toEqual([]);
+	});
+
+	it('strands the slot\'s unit when every installed member rests on the target', () => {
+		const installed = ['core-eslint', 'core-oxlint', 'core-typescript', 'core-vitest', 'opt-ci-github'];
+		expect(dependentsOf('core-typescript', installed, units, slots).sort())
+			.toEqual(['core-eslint', 'core-oxlint', 'opt-ci-github']);
+	});
+
+	it('uses the real IMPLIES_ONE_OF by default', () => {
+		expect(dependentsOf('core-oxlint', ['core-node-version', 'core-oxlint', 'core-typescript', 'core-vitest', 'opt-ci-github'], UNITS))
+			.toEqual(['opt-ci-github']);
+	});
+});
+
 describe('exclusionAgainstTracked', () => {
 	const units = [
 		unit('core-eslint'),

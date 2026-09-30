@@ -18,7 +18,7 @@ import { createJournal, formatRollbackReport, rollbackJournal } from '../fs/jour
 import { formatInstallFailure, formatKeepLine, resolveInstallFailure } from '../install/failure';
 import { isDirtyGitTree, maybeInitGit } from '../install/git';
 import { runPostInstalls } from '../install/post';
-import { writeAndInstall } from '../install/run';
+import { toLatest, writeAndInstall } from '../install/run';
 import { loadCatalog } from '../manifest/catalog';
 import { detectEslintFlavor } from '../manifest/eslint-config';
 import { IMPLIES_ONE_OF } from '../manifest/index';
@@ -151,7 +151,7 @@ function readTracked(dir: string): { ids: string[]; unsupported?: undefined } | 
 // that flow narrates through clack from its first line, and one stray chrome
 // line on stdout breaks a JSON consumer. Requires a selection (--units or
 // --config) because there is no picker to drive without a TTY story.
-export async function runPlanJson(opts: { configPath?: string; inline?: InlineFlags; targetDir?: string; preset?: string; unitsDir?: string }): Promise<number> {
+export async function runPlanJson(opts: { configPath?: string; inline?: InlineFlags; targetDir?: string; preset?: string; unitsDir?: string; latest?: boolean }): Promise<number> {
 	const inline = opts.inline ?? {};
 	if (inline.pm !== undefined)
 		assertValidPm(inline.pm);
@@ -207,6 +207,14 @@ export async function runPlanJson(opts: { configPath?: string; inline?: InlineFl
 	const selectedIds = new Set([...resolution.ids, ...tracked.ids]);
 	const units = selectedUnits.map(unit => applyPinLines(applyUnitOptions(unit, optionSelections), selectedIds));
 
+	// Same precedence as runInit (flag, then recipe). Under --latest the run writes
+	// `latest`, not the line's pin, so the envelope has to say so too; holding a pin
+	// to its line under --latest is #159.
+	const latest = opts.latest === true || config.versions === 'latest';
+	const written = latest
+		? units.map(u => ({ ...u, dependencies: toLatest(u.dependencies), devDependencies: toLatest(u.devDependencies) }))
+		: units;
+
 	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
 	const plans = units.flatMap(unit =>
 		unit.files.map(file => planFileOp(file, { pkgRoot: templateRoot(catalog, unit.id), targetDir: target.dir, projectName })),
@@ -220,8 +228,8 @@ export async function runPlanJson(opts: { configPath?: string; inline?: InlineFl
 		auto: [...resolution.auto].sort(),
 		// Merged pins, so a consumer can see which TypeScript line (#158) a run
 		// would write before anything is written.
-		dependencies: mergedPins(units, 'dependencies'),
-		devDependencies: mergedPins(units, 'devDependencies'),
+		dependencies: mergedPins(written, 'dependencies'),
+		devDependencies: mergedPins(written, 'devDependencies'),
 		// rel is native; the envelope speaks posix like every other surface.
 		files: plans.map(p => ({ path: p.rel.split(sep).join('/'), action: p.outcome })),
 	}, null, 2)}\n`);

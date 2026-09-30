@@ -290,7 +290,8 @@ export function formatDepResolutions(resolutions: DepResolution[], latest: boole
 // The `--latest` escape hatch rewrites every pinned spec to the `latest`
 // dist-tag, so the install resolves the newest published versions. The lockfile
 // still records what actually resolved, so a single run stays reproducible.
-function toLatest(deps: Record<string, string> | undefined): Record<string, string> | undefined {
+// Exported so the dry-run JSON envelope reports the same specs a real run writes.
+export function toLatest(deps: Record<string, string> | undefined): Record<string, string> | undefined {
 	if (!deps)
 		return deps;
 	return Object.fromEntries(Object.keys(deps).map(name => [name, 'latest']));
