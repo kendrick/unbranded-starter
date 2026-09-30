@@ -1,16 +1,22 @@
-import type { AnyUnit } from './types';
+import type { AnyUnit, ImpliesOneOf } from './types';
+import { IMPLIES_ONE_OF } from './index';
 
 export type ResolveResult
 	= | { kind: 'ok'; ids: string[]; auto: string[]; requiredBy: Record<string, string> }
 		| { kind: 'missing-required'; unit: string; needs: string[] }
 		| { kind: 'conflict'; pair: [string, string] };
 
-// Closes the user's selection under `implies`, then validates `requires` and
-// `excludes`. Returns either the resolved set (with separate visibility on
-// which units got auto-added) or the first violation encountered.
+// Closes the user's selection under `implies` and `slots`, then validates
+// `requires` and `excludes`. Returns either the resolved set (with separate
+// visibility on which units got auto-added) or the first violation encountered.
+//
+// `present` is units the project already tracks. They satisfy a slot without
+// joining the plan, so a project on core-eslint adding opt-ci-github doesn't get
+// core-oxlint too. Only the slot check reads it: exclusions against tracked
+// units are exclusionAgainstTracked's job.
 //
 // Pure — no prompting, no side effects. Caller decides how to surface errors.
-export function resolveSelection(seed: string[], units: AnyUnit[]): ResolveResult {
+export function resolveSelection(seed: string[], units: AnyUnit[], slots: readonly ImpliesOneOf[] = IMPLIES_ONE_OF, present: readonly string[] = []): ResolveResult {
 	const byId = new Map<string, AnyUnit>(units.map(u => [u.id, u]));
 	const seedSet = new Set(seed);
 	const selected = new Set<string>(seed);
@@ -19,33 +25,59 @@ export function resolveSelection(seed: string[], units: AnyUnit[]): ResolveResul
 	// by X)". Recorded at the add site, where the implying unit is in scope.
 	const requiredBy: Record<string, string> = {};
 
-	// Fixed-point loop: `implies` is transitive (A → B → C), so one pass isn't
-	// enough. Keep going until nothing new gets added.
-	let changed = true;
-	while (changed) {
-		changed = false;
-		for (const id of selected) {
-			const unit = byId.get(id);
-			if (!unit?.implies)
-				continue;
-			for (const implied of unit.implies) {
-				if (!selected.has(implied)) {
-					selected.add(implied);
-					if (!seedSet.has(implied)) {
-						auto.add(implied);
-						// First writer wins, which resolves to the *nearest* requirer:
-						// a Set visits mid-loop additions in insertion order, so when
-						// A→B→C, C is reached while iterating B (not A) and gets B. The
-						// `undefined` guard keeps that first attribution stable across a
-						// later diamond edge. Seed units are skipped — the user picked
-						// them, nothing "required" them.
-						if (requiredBy[implied] === undefined)
-							requiredBy[implied] = id;
+	function close(): void {
+		// Fixed-point loop: `implies` is transitive (A → B → C), so one pass isn't
+		// enough. Keep going until nothing new gets added.
+		let changed = true;
+		while (changed) {
+			changed = false;
+			for (const id of selected) {
+				const unit = byId.get(id);
+				if (!unit?.implies)
+					continue;
+				for (const implied of unit.implies) {
+					if (!selected.has(implied)) {
+						selected.add(implied);
+						if (!seedSet.has(implied)) {
+							auto.add(implied);
+							// First writer wins, which resolves to the *nearest* requirer:
+							// a Set visits mid-loop additions in insertion order, so when
+							// A→B→C, C is reached while iterating B (not A) and gets B. The
+							// `undefined` guard keeps that first attribution stable across a
+							// later diamond edge. Seed units are skipped — the user picked
+							// them, nothing "required" them.
+							if (requiredBy[implied] === undefined)
+								requiredBy[implied] = id;
+						}
+						changed = true;
 					}
-					changed = true;
 				}
 			}
 		}
+	}
+	close();
+
+	// Slots fill after the implies closure, so a lint unit some other unit implies
+	// satisfies opt-ci-github as well as one the user picked. A fill can imply more
+	// (core-oxlint → core-typescript), so close again after each round.
+	let filled = true;
+	while (filled) {
+		filled = false;
+		for (const slot of slots) {
+			// The `selected.has(fallback)` guard ends the loop even for a slot whose
+			// fallback isn't in its own anyOf, which would otherwise refill forever.
+			if (!selected.has(slot.unit) || slot.anyOf.some(id => selected.has(id) || present.includes(id)) || !byId.has(slot.fallback) || selected.has(slot.fallback))
+				continue;
+			selected.add(slot.fallback);
+			if (!seedSet.has(slot.fallback)) {
+				auto.add(slot.fallback);
+				if (requiredBy[slot.fallback] === undefined)
+					requiredBy[slot.fallback] = slot.unit;
+			}
+			filled = true;
+		}
+		if (filled)
+			close();
 	}
 
 	for (const id of selected) {

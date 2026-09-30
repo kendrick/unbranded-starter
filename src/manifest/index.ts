@@ -1,6 +1,6 @@
 import type { EslintFlavor } from './eslint-config';
 import type { OxlintFlavor } from './oxlint-config';
-import type { Unit, UnitOptionChoice } from './types';
+import type { ImpliesOneOf, PinLine, Unit, UnitOptionChoice } from './types';
 import { buildEslintConfig, ESLINT_FLAVORS, eslintDevDependencies } from './eslint-config';
 import { buildOxfmtConfig, buildOxlintConfig, OXC_DEV_DEPENDENCIES, OXLINT_FLAVORS } from './oxlint-config';
 
@@ -146,7 +146,7 @@ export const UNITS: Unit[] = [
 			{ src: 'templates/tsconfig.json', dest: 'tsconfig.json' },
 		],
 		devDependencies: {
-			'typescript': '6.0.3',
+			'typescript': '7.0.2',
 			'@types/node': '22.19.19',
 		},
 		packageJsonPatch: {
@@ -333,9 +333,10 @@ export const UNITS: Unit[] = [
 		],
 		// The shipped workflow calls pnpm lint / typecheck / test by name, so it
 		// only passes on a fresh scaffold if those scripts exist — pull in the units
-		// that define them (eslint drags in typescript via its own implies).
+		// that define them. The lint unit isn't here: either one serves, so it comes
+		// from IMPLIES_ONE_OF below, and the lint unit drags in typescript itself.
 		// core-node-version writes the packageManager field pnpm/action-setup reads.
-		implies: ['core-eslint', 'core-vitest', 'core-node-version'],
+		implies: ['core-vitest', 'core-node-version'],
 	},
 	// opt-agents and opt-renovate from the original write-up are deferred (see
 	// issue #22): opt-agents would push a whole working-memory framework, and
@@ -353,4 +354,17 @@ export const UNITS: Unit[] = [
 			turbo: '2.11.5',
 		},
 	},
+];
+
+// core-typescript ships two TypeScript lines. 7.x is its own pin; 6.x replaces it
+// whenever core-eslint resolves, because typescript-eslint peers `typescript <6.1.0`
+// and TS 7 has no JS compiler API for it to load.
+export const PIN_LINES: PinLine[] = [
+	{ unit: 'core-typescript', when: 'core-eslint', devDependencies: { typescript: '6.0.3' } },
+];
+
+// opt-ci-github's workflow runs `pnpm lint`, so it needs a lint unit, but either one
+// does. core-oxlint is the default; a set that already has core-eslint keeps it.
+export const IMPLIES_ONE_OF: ImpliesOneOf[] = [
+	{ unit: 'opt-ci-github', anyOf: ['core-eslint', 'core-oxlint'], fallback: 'core-oxlint' },
 ];
