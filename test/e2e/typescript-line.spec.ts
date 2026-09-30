@@ -85,6 +85,24 @@ describe('typeScript line and lint slot (#158)', () => {
 		expect(ci.plan.units).not.toContain('core-oxlint');
 	});
 
+	it('adding core-eslint to a project already on core-typescript\'s 7.x line rewrites typescript to 6.x', () => {
+		// core-eslint implies core-typescript, so the tracked unit rejoins the plan and
+		// its line-selected pin overwrites the 7.x one (PR #168 review).
+		const dir = mkdtempSync(join(tmp, 'ts-then-eslint-'));
+		scaffoldUnit(dir, 'core-typescript');
+		const pkgPath = join(dir, 'package.json');
+		expect(JSON.parse(readFileSync(pkgPath, 'utf-8')).devDependencies.typescript).toMatch(/^\^?7\./);
+
+		const planned = dryRun('core-eslint', dir);
+		expect(planned.status, planned.stderr).toBe(0);
+		expect(planned.plan.devDependencies?.typescript).toMatch(/^\^?6\./);
+
+		writeFileSync(join(dir, 'recipe.json'), JSON.stringify({ units: ['core-eslint'], pm: null, onConflict: 'overwrite', postInstall: 'none' }));
+		const added = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: dir, encoding: 'utf-8' });
+		expect(added.status, added.stderr).toBe(0);
+		expect(JSON.parse(readFileSync(pkgPath, 'utf-8')).devDependencies.typescript).toMatch(/^\^?6\./);
+	});
+
 	it('update keeps a core-eslint project on the 6.x line, and moves a core-oxlint one to 7.x', () => {
 		for (const [unit, line] of [['core-eslint', /^\^?6\./], ['core-oxlint', /^\^?7\./]] as const) {
 			const dir = mkdtempSync(join(tmp, `${unit}-`));
