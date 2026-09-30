@@ -57,6 +57,12 @@ describe('detectInstalledUnits', () => {
 		expect(detectInstalledUnits({ cwd: tmp, units: [unit('core-eslint')] }).has('core-eslint')).toBe(true);
 	});
 
+	it('badges core-oxlint from .oxlintrc.json, and not without it', () => {
+		expect(detectInstalledUnits({ cwd: tmp, units: [unit('core-oxlint')] }).has('core-oxlint')).toBe(false);
+		touch(tmp, '.oxlintrc.json');
+		expect(detectInstalledUnits({ cwd: tmp, units: [unit('core-oxlint')] }).has('core-oxlint')).toBe(true);
+	});
+
 	it('requires every shipped file to be present, not just some', () => {
 		const ts = unit('core-typescript', { files: [
 			{ src: 'a', dest: 'tsconfig.base.json' },

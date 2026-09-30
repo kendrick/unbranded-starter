@@ -39,7 +39,7 @@ export function detectInstalledUnits(opts: { cwd: string; units: AnyUnit[] }): S
 }
 
 function isPresent(unit: AnyUnit, cwd: string, pkg: PackageJson): boolean {
-	// Side channels for the three units whose footprint isn't a static file we ship —
+	// Side channels for the four units whose footprint isn't a static file we ship —
 	// their config is computed or varies by option, so `unit.files` can't answer.
 	if (unit.id === 'core-tailwind')
 		// Tailwind v4 is CSS-only; no config lands, the dependency is the only signal.
@@ -50,6 +50,9 @@ function isPresent(unit: AnyUnit, cwd: string, pkg: PackageJson): boolean {
 	if (unit.id === 'core-eslint')
 		// Post-#27 the config is delivered by a flavor option, not unit.files, so stat it.
 		return existsSync(join(cwd, 'eslint.config.mjs'));
+	if (unit.id === 'core-oxlint')
+		// Same shape as core-eslint: configs come from the flavor option, so unit.files is empty.
+		return existsSync(join(cwd, '.oxlintrc.json'));
 
 	// Default: installed only when every file the unit ships already exists. `every`,
 	// not `some` — a half-landed unit isn't really installed, and under-claiming is
