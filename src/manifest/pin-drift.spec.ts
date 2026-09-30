@@ -35,6 +35,13 @@ describe('manifest pins match this repo\'s own installed majors', () => {
 		expect(findPinDrift([tsUnit], tsLines, () => '5.9.3')).toEqual(['typescript: manifest pins 7.0.2 or 6.0.3, node_modules has 5.9.3']);
 	});
 
+	it('reports the real manifest\'s typescript when the install matches neither of its lines', () => {
+		// Against UNITS/PIN_LINES, not the fixture, so a line dropped or re-pinned in the
+		// manifest shows up here instead of passing silently.
+		expect(findPinDrift(UNITS, PIN_LINES, name => (name === 'typescript' ? '5.9.3' : undefined)))
+			.toEqual(['typescript: manifest pins 7.0.2 or 6.0.3, node_modules has 5.9.3']);
+	});
+
 	it('skips ranges and packages this repo doesn\'t install', () => {
 		const unit: AnyUnit = { id: 'x', category: 'types', label: '', description: '', files: [], devDependencies: { a: '^1.0.0', b: '2.0.0' } };
 		expect(findPinDrift([unit], [], name => (name === 'a' ? '9.0.0' : undefined))).toEqual([]);

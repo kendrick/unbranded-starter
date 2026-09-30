@@ -164,8 +164,9 @@ export interface PinLine {
 	devDependencies: Record<string, string>;
 }
 
-// A unit that needs one of several units. When the resolved set has none of
-// them, `fallback` joins it. opt-ci-github needs a lint unit, not a specific one.
+// Exists because `implies` names one unit, and some needs are for a role. opt-ci-github
+// needs a lint unit: implying core-eslint forced ESLint (and TS 6) on oxlint users, and
+// implying core-oxlint would collide with core-eslint through its `excludes`.
 export interface ImpliesOneOf {
 	unit: string;
 	anyOf: string[];

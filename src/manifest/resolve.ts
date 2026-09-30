@@ -25,6 +25,20 @@ export function resolveSelection(seed: string[], units: AnyUnit[], slots: readon
 	// by X)". Recorded at the add site, where the implying unit is in scope.
 	const requiredBy: Record<string, string> = {};
 
+	function add(id: string, by: string): void {
+		selected.add(id);
+		if (seedSet.has(id))
+			return;
+		auto.add(id);
+		// First writer wins, which resolves to the *nearest* requirer: a Set visits
+		// mid-loop additions in insertion order, so when A→B→C, C is reached while
+		// iterating B (not A) and gets B. The `undefined` guard keeps that first
+		// attribution stable across a later diamond edge. Seed units are skipped —
+		// the user picked them, nothing "required" them.
+		if (requiredBy[id] === undefined)
+			requiredBy[id] = by;
+	}
+
 	function close(): void {
 		// Fixed-point loop: `implies` is transitive (A → B → C), so one pass isn't
 		// enough. Keep going until nothing new gets added.
@@ -37,18 +51,7 @@ export function resolveSelection(seed: string[], units: AnyUnit[], slots: readon
 					continue;
 				for (const implied of unit.implies) {
 					if (!selected.has(implied)) {
-						selected.add(implied);
-						if (!seedSet.has(implied)) {
-							auto.add(implied);
-							// First writer wins, which resolves to the *nearest* requirer:
-							// a Set visits mid-loop additions in insertion order, so when
-							// A→B→C, C is reached while iterating B (not A) and gets B. The
-							// `undefined` guard keeps that first attribution stable across a
-							// later diamond edge. Seed units are skipped — the user picked
-							// them, nothing "required" them.
-							if (requiredBy[implied] === undefined)
-								requiredBy[implied] = id;
-						}
+						add(implied, id);
 						changed = true;
 					}
 				}
@@ -68,12 +71,7 @@ export function resolveSelection(seed: string[], units: AnyUnit[], slots: readon
 			// fallback isn't in its own anyOf, which would otherwise refill forever.
 			if (!selected.has(slot.unit) || slot.anyOf.some(id => selected.has(id) || present.includes(id)) || !byId.has(slot.fallback) || selected.has(slot.fallback))
 				continue;
-			selected.add(slot.fallback);
-			if (!seedSet.has(slot.fallback)) {
-				auto.add(slot.fallback);
-				if (requiredBy[slot.fallback] === undefined)
-					requiredBy[slot.fallback] = slot.unit;
-			}
+			add(slot.fallback, slot.unit);
 			filled = true;
 		}
 		if (filled)

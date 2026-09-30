@@ -1,7 +1,7 @@
 import type { AnyUnit, PinLine } from './types';
 
-// Pure half of pin-drift.spec: which exact pins sit on a major this repo doesn't
-// run. A pin with alternate lines (core-typescript's TS 6 and 7) passes when the
+// Split out of pin-drift.spec so the neither-line case can be tested with a fake
+// install. A pin with alternate lines (core-typescript's TS 6 and 7) passes when the
 // installed major matches any line, so the repo can sit on either during a move.
 // Option choices count as pins too, same as `outdated`: a flavor's devDependency
 // drifts just like a static one.
