@@ -12,6 +12,7 @@ import { isDirtyGitTree } from '../install/git';
 import { detectIndent } from '../install/run';
 import { loadCatalog, unitsDirsFor } from '../manifest/catalog';
 import { applyUnitOptions } from '../manifest/options';
+import { applyPinLines } from '../manifest/pin-lines';
 import { hashBuffer, readStateFile, refreshTrackedFiles, SIDECAR_DIR, unsupportedStateMessage } from '../state/state';
 import { cancelAndExit } from '../util/cancel';
 import { colorEnabled } from '../util/color';
@@ -67,11 +68,12 @@ export function planUpdate(opts: { targetDir: string; state: StateFile; units: A
 	// definition, not in the package.
 	const replay = new Map<string, { op: FileOp; content: string; root: string }>();
 	const resolved: AnyUnit[] = [];
+	const installedIds = new Set(state.units.map(u => u.id));
 	for (const { id } of state.units) {
 		const catalogUnit = byId.get(id);
 		if (!catalogUnit)
 			continue;
-		const unit = applyUnitOptions(catalogUnit, state.options ?? {});
+		const unit = applyPinLines(applyUnitOptions(catalogUnit, state.options ?? {}), installedIds);
 		resolved.push(unit);
 		const root = opts.templateRoots?.get(id) ?? opts.pkgRoot;
 		for (const op of unit.files) {

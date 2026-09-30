@@ -91,9 +91,10 @@ describe('v0.4 mundane-pain units (e2e)', () => {
 
 	it('opt-ci-github pulls in the units its workflow depends on', () => {
 		scaffold(tmp, ['opt-ci-github']);
-		// implies core-eslint (→ core-typescript), core-vitest, core-node-version, so
-		// the lint/typecheck/test scripts and the pm pin the workflow calls exist.
-		expect(existsSync(join(tmp, 'eslint.config.mjs'))).toBe(true);
+		// Fills the lint slot with core-oxlint (→ core-typescript) and implies
+		// core-vitest, core-node-version, so the lint/typecheck/test scripts and the
+		// pm pin the workflow calls exist.
+		expect(existsSync(join(tmp, '.oxlintrc.json'))).toBe(true);
 		expect(existsSync(join(tmp, 'vitest.config.ts'))).toBe(true);
 		expect(existsSync(join(tmp, '.nvmrc'))).toBe(true);
 		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8'));
