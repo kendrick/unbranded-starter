@@ -46,7 +46,10 @@ function write(dir: string, file: string, source: string): void {
 }
 
 function pnpm(dir: string, script: string): { status: number | null; output: string } {
-	const res = spawnSync('pnpm', [script], { cwd: dir, encoding: 'utf-8', env: { ...process.env, CI: 'true' } });
+	// pnpm is a .cmd shim on Windows, which spawnSync refuses to run without a
+	// shell (see src/install/spawn.ts). Without it the run never starts and
+	// status comes back null.
+	const res = spawnSync('pnpm', [script], { cwd: dir, encoding: 'utf-8', env: { ...process.env, CI: 'true' }, shell: process.platform === 'win32' });
 	return { status: res.status, output: `${res.stdout}\n${res.stderr}` };
 }
 
