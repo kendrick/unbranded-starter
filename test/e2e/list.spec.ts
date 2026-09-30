@@ -13,6 +13,7 @@ interface Catalog {
 		id: string;
 		label: string;
 		files: { dest: string }[];
+		excludes?: string[];
 		options?: { key: string; default: string; choices: { value: string }[] }[];
 	}[];
 }
@@ -56,6 +57,14 @@ describe('unbranded list', () => {
 		const flavor = eslint?.options?.find(o => o.key === 'eslintFlavor');
 		expect(flavor?.default).toBe('base');
 		expect(flavor?.choices.map(c => c.value)).toEqual(['base', 'react', 'next']);
+
+		// #157: the oxc lint unit surfaces its flavor the same way, and states which
+		// unit it can't sit beside.
+		const oxlint = parsed.units.find(u => u.id === 'core-oxlint');
+		const oxlintFlavor = oxlint?.options?.find(o => o.key === 'oxlintFlavor');
+		expect(oxlintFlavor?.default).toBe('base');
+		expect(oxlintFlavor?.choices.map(c => c.value)).toEqual(['base', 'react', 'next']);
+		expect(oxlint?.excludes).toEqual(['core-eslint']);
 
 		// Byte-for-byte determinism is the whole point of the versioned envelope.
 		const again = spawnSync('node', [CLI, 'list', '--json'], { cwd: tmp, encoding: 'utf-8' });

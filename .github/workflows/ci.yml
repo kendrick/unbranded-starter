@@ -122,6 +122,10 @@ jobs:
         run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/eslint-flavors.spec.ts
         env:
           UB_FLAVOR: ${{ matrix.flavor }}
+      - name: E2E tests (oxlint flavor)
+        run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/oxlint-flavors.spec.ts
+        env:
+          UB_FLAVOR: ${{ matrix.flavor }}
 
   e2e-scaffold:
     name: e2e scaffold lint (${{ matrix.os }})
