@@ -1,7 +1,7 @@
 // core-oxlint ships in the same three flavors as core-eslint, so a project moving
 // between the two lint units keeps what it lints for. oxlint compiles its plugins
 // into the binary, so a flavor only changes which ones the config turns on, never
-// what installs. `next` is a superset of `react`, which is a superset of `base`.
+// what installs.
 export type OxlintFlavor = 'base' | 'react' | 'next';
 
 export const OXLINT_FLAVORS: OxlintFlavor[] = ['base', 'react', 'next'];

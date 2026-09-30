@@ -586,8 +586,9 @@ async function resolveUnitOptions(
 
 // The one place an option default is computed from the environment rather than a
 // static value. F-14 will fold this into the option schema; for now the only
-// options are core-eslint's and core-oxlint's flavors, defaulted by sniffing the target's dependencies
-// (a repo that pulls next/react wants that flavor, everything else gets base).
+// options are core-eslint's and core-oxlint's flavors, defaulted by sniffing the
+// target's dependencies (a repo that pulls next/react wants that flavor,
+// everything else gets base).
 function optionDefault(option: UnitOption, targetDir: string): string {
 	if (option.key === 'eslintFlavor' || option.key === 'oxlintFlavor')
 		return detectEslintFlavor(targetDependencyNames(targetDir));
