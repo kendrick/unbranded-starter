@@ -113,6 +113,7 @@ describe('runInit exclusions against tracked units (#157)', () => {
 	afterEach(() => {
 		rmSync(tmp, { recursive: true, force: true });
 		vi.restoreAllMocks();
+		vi.mocked(writeAndInstall).mockReset();
 	});
 
 	function trackedProject(...ids: string[]): void {
@@ -143,7 +144,7 @@ describe('runInit exclusions against tracked units (#157)', () => {
 
 		await expect(runInit({ targetDir: tmp, dryRun: true, inline: { units: 'core-oxlint', yes: true, pm: 'pnpm' } })).rejects.toThrow('exit 1');
 
-		expect(messages.join('\n')).toContain(`core-oxlint and core-eslint can't both be selected`);
+		expect(messages.join('\n')).toContain(`core-oxlint and core-eslint can't both be selected (core-eslint is already installed here).`);
 	});
 
 	it('rejects the reverse direction, where the tracked unit declares the exclusion', async () => {
@@ -152,7 +153,7 @@ describe('runInit exclusions against tracked units (#157)', () => {
 
 		await expect(runInit({ targetDir: tmp, dryRun: true, inline: { units: 'core-eslint', yes: true, pm: 'pnpm' } })).rejects.toThrow('exit 1');
 
-		expect(messages.join('\n')).toContain(`core-eslint and core-oxlint can't both be selected`);
+		expect(messages.join('\n')).toContain(`core-eslint and core-oxlint can't both be selected (core-oxlint is already installed here).`);
 	});
 
 	it('fails the --dry-run --json path the same way, on stderr', async () => {
@@ -166,7 +167,34 @@ describe('runInit exclusions against tracked units (#157)', () => {
 		const code = await runPlanJson({ targetDir: tmp, inline: { units: 'core-oxlint', pm: 'pnpm' } });
 
 		expect(code).toBe(1);
-		expect(err.join('')).toContain(`core-oxlint and core-eslint can't both be selected`);
+		expect(err.join('')).toContain(`core-oxlint and core-eslint can't both be selected (core-eslint is already installed here).`);
+	});
+
+	it('refuses a newer-schema state file before writing anything', async () => {
+		trackedProject('core-eslint');
+		writeFileSync(join(tmp, STATE_FILENAME), JSON.stringify({ schema: 99, units: [], files: {} }));
+		const { messages } = trapExit();
+
+		await expect(runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', yes: true, pm: 'pnpm' } })).rejects.toThrow('exit 1');
+
+		expect(messages.join('\n')).toContain('newer unbranded');
+		expect(existsSync(join(tmp, '.editorconfig'))).toBe(false);
+		expect(vi.mocked(writeAndInstall)).not.toHaveBeenCalled();
+	});
+
+	it('refuses a newer-schema state file on the --dry-run --json path, on stderr', async () => {
+		trackedProject('core-eslint');
+		writeFileSync(join(tmp, STATE_FILENAME), JSON.stringify({ schema: 99, units: [], files: {} }));
+		const err: string[] = [];
+		vi.spyOn(process.stderr, 'write').mockImplementation(((m: string) => {
+			err.push(String(m));
+			return true;
+		}) as typeof process.stderr.write);
+
+		const code = await runPlanJson({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'pnpm' } });
+
+		expect(code).toBe(1);
+		expect(err.join('')).toContain('newer unbranded');
 	});
 
 	it('still lets a re-run re-select a tracked unit', async () => {

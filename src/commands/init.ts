@@ -24,7 +24,7 @@ import { detectEslintFlavor } from '../manifest/eslint-config';
 import { applyUnitOptions } from '../manifest/options';
 import { exclusionAgainstTracked, resolveSelection } from '../manifest/resolve';
 import { unitPicker } from '../prompts/unit-picker/prompt';
-import { readStateFile, writeStateFile } from '../state/state';
+import { readStateFile, unsupportedStateMessage, writeStateFile } from '../state/state';
 import { cancelAndExit } from '../util/cancel';
 import { EXIT_ERROR } from '../util/exit-codes';
 import { readPackageJson } from '../util/package-json';
@@ -135,9 +135,14 @@ function openCatalog(opts: { configPath?: string; preset?: string; unitsDir?: st
 	};
 }
 
-function trackedUnitIds(dir: string): string[] {
+// Refusing here, ahead of the first write, matters because writeStateFile throws on
+// a newer-schema envelope only after files are written and the install has run,
+// which strands a half-applied scaffold.
+function readTracked(dir: string): { ids: string[]; unsupported?: undefined } | { unsupported: string } {
 	const read = readStateFile(dir);
-	return read.kind === 'ok' ? read.state.units.map(u => u.id) : [];
+	if (read.kind === 'unsupported')
+		return { unsupported: unsupportedStateMessage(read.schema) };
+	return { ids: read.kind === 'ok' ? read.state.units.map(u => u.id) : [] };
 }
 
 // The machine half of --dry-run. Deliberately a separate path from runInit:
@@ -182,7 +187,12 @@ export async function runPlanJson(opts: { configPath?: string; inline?: InlineFl
 
 	const byId = new Map<string, AnyUnit>(catalog.units.map(u => [u.id, u]));
 
-	const clash = exclusionAgainstTracked(resolution.ids, trackedUnitIds(target.dir), catalog.units);
+	const tracked = readTracked(target.dir);
+	if (tracked.unsupported !== undefined) {
+		process.stderr.write(`${tracked.unsupported}\n`);
+		return EXIT_ERROR;
+	}
+	const clash = exclusionAgainstTracked(resolution.ids, tracked.ids, catalog.units);
 	if (clash) {
 		process.stderr.write(`${clash.selected} and ${clash.tracked} can't both be selected (${clash.tracked} is already installed here).\n`);
 		return EXIT_ERROR;
@@ -359,7 +369,12 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 
 	const byId = new Map<string, AnyUnit>(catalog.units.map(u => [u.id, u]));
 
-	const clash = exclusionAgainstTracked(resolution.ids, trackedUnitIds(target.dir), catalog.units);
+	const tracked = readTracked(target.dir);
+	if (tracked.unsupported !== undefined) {
+		log.error(tracked.unsupported);
+		process.exit(EXIT_ERROR);
+	}
+	const clash = exclusionAgainstTracked(resolution.ids, tracked.ids, catalog.units);
 	if (clash) {
 		log.error(`${clash.selected} and ${clash.tracked} can't both be selected (${clash.tracked} is already installed here).`);
 		process.exit(EXIT_ERROR);

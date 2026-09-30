@@ -201,6 +201,11 @@ describe('exclusionAgainstTracked', () => {
 		expect(exclusionAgainstTracked(['core-eslint'], ['core-eslint'], units)).toBeUndefined();
 	});
 
+	it('does not flag a tracked unit that is also selected, even when a selected unit excludes it', () => {
+		const hand = [unit('core-oxlint', { excludes: ['core-eslint'] }), unit('core-eslint')];
+		expect(exclusionAgainstTracked(['core-oxlint', 'core-eslint'], ['core-eslint'], hand)).toBeUndefined();
+	});
+
 	it('passes unrelated units and unknown tracked ids', () => {
 		expect(exclusionAgainstTracked(['core-vitest'], ['core-eslint', 'local:mine'], units)).toBeUndefined();
 	});
