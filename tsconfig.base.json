@@ -9,6 +9,10 @@
 		"moduleResolution": "Bundler",
 
 		"resolveJsonModule": true,
+		// TS 6 stopped loading @types/* on its own, and core-typescript installs
+		// @types/node alongside this config.
+		"types": ["node"],
+
 		// Strictness (the full suite)
 		"strict": true,
 		"noFallthroughCasesInSwitch": true,

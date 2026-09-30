@@ -24,8 +24,12 @@ export default defineConfig([
 		// tsconfig.base.json turns on `incremental`, which tsc refuses without a
 		// tsBuildInfoFile when it emits declarations. That file ships as the
 		// core-typescript template, so the override lives here rather than in a
-		// config scaffolded projects inherit.
-		dts: { compilerOptions: { incremental: false } },
+		// config scaffolded projects inherit. tsup 8.5.1's dts step always passes
+		// `baseUrl`, which TS 6 rejects with TS5101; `ignoreDeprecations` reaches
+		// that step alone and never a scaffold.
+		dts: {
+			compilerOptions: { incremental: false, ignoreDeprecations: '6.0' },
+		},
 		shims: false,
 	},
 ]);
