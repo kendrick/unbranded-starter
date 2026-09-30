@@ -211,6 +211,20 @@ describe('dependentsOf through a slot', () => {
 			.toEqual(['core-eslint', 'core-oxlint', 'opt-ci-github']);
 	});
 
+	it('counts every slot member through a node they share, so a visited set can\'t skip the second', () => {
+		// A and B (the lint units) both require X (core-typescript), which requires T
+		// (core-node-version). The second member revisits X on its way to T.
+		const shared = [
+			unit('core-node-version'),
+			unit('core-typescript', { requires: ['core-node-version'] }),
+			unit('core-eslint', { requires: ['core-typescript'] }),
+			unit('core-oxlint', { requires: ['core-typescript'] }),
+			unit('opt-ci-github'),
+		];
+		expect(dependentsOf('core-node-version', ['core-eslint', 'core-oxlint', 'core-typescript', 'core-node-version', 'opt-ci-github'], shared, slots))
+			.toContain('opt-ci-github');
+	});
+
 	it('uses the real IMPLIES_ONE_OF by default', () => {
 		expect(dependentsOf('core-oxlint', ['core-node-version', 'core-oxlint', 'core-typescript', 'core-vitest', 'opt-ci-github'], UNITS))
 			.toEqual(['opt-ci-github']);
