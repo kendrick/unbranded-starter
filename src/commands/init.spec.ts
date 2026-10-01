@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { log } from '@clack/prompts';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeAndInstall } from '../install/run';
 import { unitPicker } from '../prompts/unit-picker/prompt';
 import { STATE_FILENAME } from '../state/state';
@@ -24,7 +24,11 @@ vi.mock('@clack/prompts', async (importOriginal) => {
 
 // The install spawn is the other boundary (same seam run.spec mocks): stubbing it
 // per-test lets the error path run without a package manager in the loop.
-vi.mock('../install/run', () => ({ writeAndInstall: vi.fn() }));
+// toLatest stays real: the --dry-run --json envelope reports what it produces.
+vi.mock('../install/run', async (importOriginal) => {
+	const mod = await importOriginal<typeof import('../install/run')>();
+	return { ...mod, writeAndInstall: vi.fn() };
+});
 
 // Minimal fixture builder — formatPlan only reads id/label/files/deps.
 function unit(id: UnitId, label: string, extras: Partial<Unit> = {}): Unit {
@@ -205,6 +209,45 @@ describe('runInit exclusions against tracked units (#157)', () => {
 
 		expect(result).toEqual({ ok: true });
 		expect(messages).toEqual([]);
+	});
+});
+
+describe('runPlanJson pins under --latest (#158)', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-plan-json-latest-'));
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	async function envelope(opts: Parameters<typeof runPlanJson>[0]): Promise<{ devDependencies: Record<string, string> }> {
+		const out: string[] = [];
+		vi.spyOn(process.stdout, 'write').mockImplementation(((m: string) => {
+			out.push(String(m));
+			return true;
+		}) as typeof process.stdout.write);
+		expect(await runPlanJson(opts)).toBe(0);
+		return JSON.parse(out.join('')) as { devDependencies: Record<string, string> };
+	}
+
+	it('reports the TS line\'s pin without --latest', async () => {
+		expect((await envelope({ targetDir: tmp, inline: { units: 'core-eslint', pm: 'pnpm' } })).devDependencies.typescript).toMatch(/^6\./);
+	});
+
+	it('reports `latest` for every pin under the flag, as the real run writes', async () => {
+		const plan = await envelope({ targetDir: tmp, latest: true, inline: { units: 'core-eslint', pm: 'pnpm' } });
+		expect(plan.devDependencies.typescript).toBe('latest');
+		expect(Object.values(plan.devDependencies).every(v => v === 'latest')).toBe(true);
+	});
+
+	it('reports `latest` under a recipe\'s versions field too', async () => {
+		writeFileSync(join(tmp, 'recipe.json'), JSON.stringify({ units: ['core-eslint'], pm: null, onConflict: 'overwrite', postInstall: 'none', versions: 'latest' }));
+		expect((await envelope({ targetDir: tmp, configPath: join(tmp, 'recipe.json'), inline: { pm: 'pnpm' } })).devDependencies.typescript).toBe('latest');
 	});
 });
 

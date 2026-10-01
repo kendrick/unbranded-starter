@@ -152,3 +152,23 @@ export type UnitSource
 	= | { kind: 'builtin' }
 		| { kind: 'dir'; path: string }
 		| { kind: 'pack'; name: string; version: string };
+
+// An alternate set of devDependency pins for one unit, chosen when another unit
+// is in the resolved set. core-typescript's typescript pin uses it: 7.x by
+// default, 6.x beside core-eslint, whose typescript-eslint can't load TS 7.
+// Top-level manifest data rather than a UnitBase field, so the published unit
+// contract doesn't widen for a need only built-ins have.
+export interface PinLine {
+	unit: string;
+	when: string;
+	devDependencies: Record<string, string>;
+}
+
+// Exists because `implies` names one unit, and some needs are for a role. opt-ci-github
+// needs a lint unit: implying core-eslint forced ESLint (and TS 6) on oxlint users, and
+// implying core-oxlint would collide with core-eslint through its `excludes`.
+export interface ImpliesOneOf {
+	unit: string;
+	anyOf: string[];
+	fallback: string;
+}

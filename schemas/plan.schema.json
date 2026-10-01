@@ -20,6 +20,8 @@
 		"pm": { "enum": ["npm", "pnpm", "yarn", "bun", null] },
 		"units": { "type": "array", "items": { "type": "string" } },
 		"auto": { "type": "array", "items": { "type": "string" } },
+		"dependencies": { "type": "object", "additionalProperties": { "type": "string" } },
+		"devDependencies": { "type": "object", "additionalProperties": { "type": "string" } },
 		"files": {
 			"type": "array",
 			"items": {
