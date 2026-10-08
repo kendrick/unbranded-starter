@@ -22,6 +22,7 @@ import { toLatest, writeAndInstall } from '../install/run';
 import { loadCatalog } from '../manifest/catalog';
 import { detectEslintFlavor } from '../manifest/eslint-config';
 import { IMPLIES_ONE_OF } from '../manifest/index';
+import { applyLintStaged } from '../manifest/lint-staged';
 import { applyUnitOptions } from '../manifest/options';
 import { applyPinLines } from '../manifest/pin-lines';
 import { exclusionAgainstTracked, resolveSelection } from '../manifest/resolve';
@@ -205,7 +206,7 @@ export async function runPlanJson(opts: { configPath?: string; inline?: InlineFl
 	const selectedUnits = resolution.ids.map(id => byId.get(id)).filter((u): u is AnyUnit => u !== undefined);
 	const optionSelections = await resolveUnitOptions(selectedUnits, config.options, false, target.dir);
 	const selectedIds = new Set([...resolution.ids, ...tracked.ids]);
-	const units = selectedUnits.map(unit => applyPinLines(applyUnitOptions(unit, optionSelections), selectedIds));
+	const units = selectedUnits.map(unit => applyLintStaged(applyPinLines(applyUnitOptions(unit, optionSelections), selectedIds), selectedIds));
 
 	// Same precedence as runInit (flag, then recipe). Under --latest the run writes
 	// `latest`, not the line's pin, so the envelope has to say so too; holding a pin
@@ -417,7 +418,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	const seededOptions = { ...pickerFlavors, ...config?.options };
 	const optionSelections = await resolveUnitOptions(selectedUnits, seededOptions, !skipApply, target.dir);
 	const selectedIds = new Set([...resolution.ids, ...tracked.ids]);
-	const units = selectedUnits.map(unit => applyPinLines(applyUnitOptions(unit, optionSelections), selectedIds));
+	const units = selectedUnits.map(unit => applyLintStaged(applyPinLines(applyUnitOptions(unit, optionSelections), selectedIds), selectedIds));
 
 	note(formatPlan(units, resolution.auto, resolution.requiredBy, pm, latest), 'Plan');
 
