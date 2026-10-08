@@ -170,6 +170,8 @@ jobs:
         run: pnpm build
       - name: E2E tests (fresh-scaffold full lint)
         run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/scaffold-lint.spec.ts
+      - name: E2E tests (lint-staged commit)
+        run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/lint-staged.spec.ts
 
   e2e-presets:
     name: e2e preset ${{ matrix.preset }}
