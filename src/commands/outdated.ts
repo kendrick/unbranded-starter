@@ -1,10 +1,12 @@
-import type { Unit, UnitId } from '../manifest/types';
-import { UNITS } from '../manifest/index';
-import { DEFAULT_REGISTRY, fetchLatestVersions } from '../registry/client';
+import type { PinLine, Unit, UnitId } from '../manifest/types';
+import type { PackageVersions } from '../registry/client';
+import { PIN_LINES, UNITS } from '../manifest/index';
+import { DEFAULT_REGISTRY, fetchVersions } from '../registry/client';
 
 // Exact pins are the right default, but they rot. `outdated` is the freshness
 // check: every pin in the manifest (flavor choices included) against the
-// registry's latest dist-tag. Read-only, no TTY, exit 0 by default so a report
+// registry's latest dist-tag, or for a PIN_LINES pin the newest version inside
+// its held major (#159). Read-only, no TTY, exit 0 by default so a report
 // never fails a job; --strict trips only on majors, which is the gate the
 // maintainer-side bump automation cares about.
 export const OUTDATED_SCHEMA = 1;
@@ -14,11 +16,14 @@ export interface ManifestPin {
 	pin: string;
 	// Every unit that declares the pin, so bump PRs can group per unit.
 	units: UnitId[];
+	// Set when the pin comes from PIN_LINES: the major it's held to, so it's graded
+	// and bumped inside that line (#159). typescript-eslint can't load TS 7 (#131).
+	line?: number;
 }
 
 // Walks static deps/devDeps plus every option choice's — generic on purpose, so
 // a future option-bearing unit is covered without anyone remembering this file.
-export function collectManifestPins(units: Unit[]): ManifestPin[] {
+export function collectManifestPins(units: Unit[], lines: readonly PinLine[] = PIN_LINES): ManifestPin[] {
 	const byName = new Map<string, ManifestPin>();
 	const add = (name: string, pin: string, unit: UnitId): void => {
 		const entry = byName.get(name);
@@ -40,7 +45,44 @@ export function collectManifestPins(units: Unit[]): ManifestPin[] {
 		}
 	}
 
-	return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+	// A held pin stays its own entry rather than joining the unit walk's: it shares
+	// a name with the unheld pin but grades against a different target.
+	const held = new Map<string, ManifestPin>();
+	for (const line of lines) {
+		for (const [name, pin] of Object.entries(line.devDependencies)) {
+			// An unparsable held pin has no major to hold it to.
+			const major = /^(\d+)\.\d+\.\d+$/.exec(pin)?.[1];
+			if (major === undefined)
+				continue;
+			const key = `${name}@${pin}`;
+			const entry = held.get(key);
+			if (entry === undefined)
+				held.set(key, { name, pin, units: [line.unit as UnitId], line: Number(major) });
+			else if (!entry.units.includes(line.unit as UnitId))
+				entry.units.push(line.unit as UnitId);
+		}
+	}
+
+	return [...byName.values(), ...held.values()]
+		.sort((a, b) => a.name.localeCompare(b.name) || (a.line ?? -1) - (b.line ?? -1));
+}
+
+// The newest exact release inside `line`'s major. Prereleases stay out for the
+// same reason classifyBehind calls them unknown: nobody pins a beta on purpose.
+// '' when the line has nothing published, which grades as unknown.
+export function newestInLine(info: PackageVersions, line: number): string {
+	let best: [number, number, number] | undefined;
+	let bestSpec = '';
+	for (const spec of [...info.versions, info.latest]) {
+		const v = parseExact(spec);
+		if (!v || v[0] !== line)
+			continue;
+		if (!best || v[1] > best[1] || (v[1] === best[1] && v[2] > best[2])) {
+			best = v;
+			bestSpec = spec;
+		}
+	}
+	return bestSpec;
 }
 
 export type Behind = 'up-to-date' | 'patch' | 'minor' | 'major' | 'unknown';
@@ -82,17 +124,20 @@ export interface RunOutdatedOpts {
 	// Injected by tests; the e2e goes through a real local HTTP server instead.
 	fetchImpl?: typeof fetch;
 	timeoutMs?: number;
+	// Injected by tests so a fixture can be literal instead of the live manifest.
+	pins?: ManifestPin[];
 }
 
 export async function runOutdated(opts: RunOutdatedOpts = {}): Promise<number> {
 	// Same resolution a package manager would use: explicit flag, then the env
 	// npm/pnpm set for scripts, then the public registry.
 	const registry = opts.registry ?? process.env.npm_config_registry ?? DEFAULT_REGISTRY;
-	const pins = collectManifestPins(UNITS);
+	const pins = opts.pins ?? collectManifestPins(UNITS);
 
-	let latest: Map<string, string>;
+	let found: Map<string, PackageVersions>;
 	try {
-		latest = await fetchLatestVersions(pins.map(p => p.name), {
+		// Deduped: a held pin and its unheld twin share one packument.
+		found = await fetchVersions([...new Set(pins.map(p => p.name))], {
 			registry,
 			fetchImpl: opts.fetchImpl,
 			timeoutMs: opts.timeoutMs,
@@ -104,8 +149,9 @@ export async function runOutdated(opts: RunOutdatedOpts = {}): Promise<number> {
 	}
 
 	const entries: OutdatedEntry[] = pins.map((p) => {
-		const version = latest.get(p.name) ?? '';
-		return { ...p, latest: version, behind: classifyBehind(p.pin, version) };
+		const info = found.get(p.name) ?? { latest: '', versions: [] };
+		const target = p.line === undefined ? info.latest : newestInLine(info, p.line);
+		return { ...p, latest: target, behind: classifyBehind(p.pin, target) };
 	});
 	const majors = entries.filter(e => e.behind === 'major').length;
 
@@ -137,7 +183,8 @@ function formatOutdated(entries: OutdatedEntry[], registry: string): string {
 	const pinWidth = Math.max(...stale.map(e => e.pin.length));
 	for (const e of stale) {
 		const grade = e.behind === 'unknown' ? 'unparsable' : `${e.behind} behind`;
-		lines.push(`  ${e.name.padEnd(nameWidth)}  ${e.pin.padStart(pinWidth)} → ${e.latest || '?'}  (${grade})  [${e.units.join(', ')}]`);
+		const held = e.line === undefined ? '' : `, held to ${e.line}.x`;
+		lines.push(`  ${e.name.padEnd(nameWidth)}  ${e.pin.padStart(pinWidth)} → ${e.latest || '?'}  (${grade}${held})  [${e.units.join(', ')}]`);
 	}
 
 	const majors = stale.filter(e => e.behind === 'major').length;

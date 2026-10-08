@@ -2,7 +2,7 @@
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"$id": "https://github.com/kendrick/unbranded-starter/schemas/outdated.schema.json",
 	"title": "unbranded outdated --json",
-	"description": "Every manifest pin graded against the registry's latest dist-tag.",
+	"description": "Every manifest pin graded against the registry: the latest dist-tag, or for a held pin (`line`) the newest version inside that major.",
 	"type": "object",
 	"required": ["schema", "registry", "majorsBehind", "packages"],
 	"additionalProperties": false,
@@ -19,6 +19,7 @@
 				"properties": {
 					"name": { "type": "string" },
 					"pin": { "type": "string" },
+					"line": { "type": "integer" },
 					"latest": { "type": "string" },
 					"behind": { "enum": ["up-to-date", "patch", "minor", "major", "unknown"] },
 					"units": { "type": "array", "items": { "type": "string" } }
