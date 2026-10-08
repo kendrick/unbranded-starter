@@ -1,6 +1,6 @@
 # opt-in: husky + lint-staged
 
-Pre-commit hook that runs ESLint + Stylelint on staged files only. Pattern adapted from `nextera-livewire`.
+Pre-commit hook that runs your lint unit's fixers (oxlint and oxfmt, or ESLint) plus Stylelint on staged files only. Pattern adapted from `nextera-livewire`.
 
 ## When to use
 
@@ -13,7 +13,7 @@ Pre-commit hook that runs ESLint + Stylelint on staged files only. Pattern adapt
    ```sh
    pnpm add -D husky lint-staged
    ```
-2. Copy `.husky/` and `lint-staged.config.mjs` to repo root.
+2. Copy `.husky/` to the repo root. `unbranded` generates `lint-staged.config.mjs` from the lint unit you picked; setting it up by hand, point each glob at your linter's `--fix` command.
 3. Initialize husky:
    ```sh
    pnpm exec husky init
