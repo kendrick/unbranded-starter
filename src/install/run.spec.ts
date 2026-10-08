@@ -359,6 +359,19 @@ describe('formatDepResolutions', () => {
 		], true);
 		expect(out).toBe('--latest: rewrote 2 existing dependency spec(s) to \'latest\'.');
 	});
+
+	it('names a held line\'s caret under --latest instead of counting it as latest', () => {
+		const mixed = formatDepResolutions([
+			{ section: 'devDependencies', name: 'typescript', existing: '^7.0.0', incoming: '^6', resolution: 'overwrite' },
+			{ section: 'dependencies', name: 'clsx', existing: '2.0.0', incoming: 'latest', resolution: 'overwrite' },
+		], true);
+		expect(mixed).toBe('--latest: rewrote 1 existing dependency spec(s) to \'latest\'; held typescript to ^6.');
+
+		const onlyHeld = formatDepResolutions([
+			{ section: 'devDependencies', name: 'typescript', existing: '^7.0.0', incoming: '^6', resolution: 'overwrite' },
+		], true);
+		expect(onlyHeld).toBe('--latest: held typescript to ^6.');
+	});
 });
 
 describe('writeAndInstall install outcome (#114)', () => {

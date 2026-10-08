@@ -24,11 +24,14 @@ export interface ManifestPin {
 // Walks static deps/devDeps plus every option choice's — generic on purpose, so
 // a future option-bearing unit is covered without anyone remembering this file.
 export function collectManifestPins(units: Unit[], lines: readonly PinLine[] = PIN_LINES): ManifestPin[] {
-	const byName = new Map<string, ManifestPin>();
-	const add = (name: string, pin: string, unit: UnitId): void => {
-		const entry = byName.get(name);
+	// A held pin keys on name@pin, so it stays its own entry rather than joining
+	// the unit walk's: it shares a name with the unheld pin but grades against a
+	// different target.
+	const byKey = new Map<string, ManifestPin>();
+	const add = (key: string, pin: Omit<ManifestPin, 'units'>, unit: UnitId): void => {
+		const entry = byKey.get(key);
 		if (entry === undefined)
-			byName.set(name, { name, pin, units: [unit] });
+			byKey.set(key, { ...pin, units: [unit] });
 		else if (!entry.units.includes(unit))
 			entry.units.push(unit);
 	};
@@ -41,29 +44,20 @@ export function collectManifestPins(units: Unit[], lines: readonly PinLine[] = P
 		}
 		for (const source of sources) {
 			for (const [name, pin] of Object.entries(source ?? {}))
-				add(name, pin, unit.id);
+				add(name, { name, pin }, unit.id);
 		}
 	}
 
-	// A held pin stays its own entry rather than joining the unit walk's: it shares
-	// a name with the unheld pin but grades against a different target.
-	const held = new Map<string, ManifestPin>();
 	for (const line of lines) {
 		for (const [name, pin] of Object.entries(line.devDependencies)) {
 			// An unparsable held pin has no major to hold it to.
-			const major = /^(\d+)\.\d+\.\d+$/.exec(pin)?.[1];
-			if (major === undefined)
-				continue;
-			const key = `${name}@${pin}`;
-			const entry = held.get(key);
-			if (entry === undefined)
-				held.set(key, { name, pin, units: [line.unit as UnitId], line: Number(major) });
-			else if (!entry.units.includes(line.unit as UnitId))
-				entry.units.push(line.unit as UnitId);
+			const major = parseExact(pin)?.[0];
+			if (major !== undefined)
+				add(`${name}@${pin}`, { name, pin, line: major }, line.unit as UnitId);
 		}
 	}
 
-	return [...byName.values(), ...held.values()]
+	return [...byKey.values()]
 		.sort((a, b) => a.name.localeCompare(b.name) || (a.line ?? -1) - (b.line ?? -1));
 }
 
@@ -183,8 +177,8 @@ function formatOutdated(entries: OutdatedEntry[], registry: string): string {
 	const pinWidth = Math.max(...stale.map(e => e.pin.length));
 	for (const e of stale) {
 		const grade = e.behind === 'unknown' ? 'unparsable' : `${e.behind} behind`;
-		const held = e.line === undefined ? '' : `, held to ${e.line}.x`;
-		lines.push(`  ${e.name.padEnd(nameWidth)}  ${e.pin.padStart(pinWidth)} → ${e.latest || '?'}  (${grade}${held})  [${e.units.join(', ')}]`);
+		const heldNote = e.line === undefined ? '' : `, held to ${e.line}.x`;
+		lines.push(`  ${e.name.padEnd(nameWidth)}  ${e.pin.padStart(pinWidth)} → ${e.latest || '?'}  (${grade}${heldNote})  [${e.units.join(', ')}]`);
 	}
 
 	const majors = stale.filter(e => e.behind === 'major').length;

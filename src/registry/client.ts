@@ -1,8 +1,8 @@
-// The CLI's first network code, kept to one purpose: "what has been
-// published for these packages, and which version is latest?". Everything is injectable — fetch for
-// tests, the registry URL for corporate mirrors and the e2e's local server —
-// and every request is time-boxed, because `unbranded outdated` hanging on a
-// firewalled registry would be worse than it failing.
+// The CLI's first network code, kept to one purpose: "what has been published
+// for these packages, and which version is latest?". Everything is injectable—
+// fetch for tests, the registry URL for corporate mirrors and the e2e's local
+// server—and every request is time-boxed, because `unbranded outdated` hanging
+// on a firewalled registry would be worse than it failing.
 
 export const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
 
@@ -19,9 +19,8 @@ export interface PackageVersions {
 }
 
 // Batched lookup of the `latest` dist-tag plus every published version per
-// package. Rejects on the FIRST
-// failure with one clear error (offline degrades to a message, not a hang or a
-// half-report); the rest of the pool is abandoned.
+// package. Rejects on the FIRST failure with one clear error (offline degrades
+// to a message, not a hang or a half-report); the rest of the pool is abandoned.
 export async function fetchVersions(names: string[], opts: FetchVersionsOpts = {}): Promise<Map<string, PackageVersions>> {
 	const registry = (opts.registry ?? DEFAULT_REGISTRY).replace(/\/$/, '');
 	const fetchImpl = opts.fetchImpl ?? fetch;

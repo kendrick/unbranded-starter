@@ -98,8 +98,8 @@ export function rewritePackageJson(source, bumps) {
 			// Two TS pins share one package.json key. Only the bump that started on
 			// this range's major may move it, or the 7.x bump drags the repo's ^6
 			// onto TS 7 (#131). A 9→10 bump still lands: its `from` is 9.x.
-			const own = majorOf(from);
-			if (own !== undefined && majorOf(current) !== undefined && majorOf(current) !== own)
+			const fromMajor = majorOf(from);
+			if (fromMajor !== undefined && majorOf(current) !== undefined && majorOf(current) !== fromMajor)
 				continue;
 			// The repo mixes range styles per entry (ajv pins exact) so the
 			// prefix has to be read off this entry, not assumed.

@@ -273,10 +273,17 @@ export function formatDepResolutions(resolutions: DepResolution[], latest: boole
 		return null;
 
 	// Under `--latest` nearly every incoming spec is the same word, so a per-package
-	// column would print `latest` N times. The summary counts them instead. It
-	// still says 'latest' for a held line's caret (#159); dep-conflict.spec pins the wording.
-	if (latest)
-		return `--latest: rewrote ${resolutions.length} existing dependency spec(s) to 'latest'.`;
+	// column would print `latest` N times. The summary counts them instead, and
+	// names the few a PIN_LINES line held to a caret (#159).
+	if (latest) {
+		const held = resolutions.filter(r => r.incoming !== 'latest');
+		const toTag = resolutions.length - held.length;
+		const parts = [
+			...(toTag > 0 ? [`rewrote ${toTag} existing dependency spec(s) to 'latest'`] : []),
+			...(held.length > 0 ? [`held ${held.map(r => `${r.name} to ${r.incoming}`).join(', ')}`] : []),
+		];
+		return `--latest: ${parts.join('; ')}.`;
+	}
 
 	const width = Math.max(...resolutions.map(r => `${r.section}.${r.name}`.length));
 	const lines = resolutions.map((r) => {

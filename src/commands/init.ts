@@ -24,7 +24,7 @@ import { detectEslintFlavor } from '../manifest/eslint-config';
 import { IMPLIES_ONE_OF } from '../manifest/index';
 import { applyLintStaged } from '../manifest/lint-staged';
 import { applyUnitOptions } from '../manifest/options';
-import { applyLatest, applyPinLines } from '../manifest/pin-lines';
+import { applyPinLines, specsToWrite } from '../manifest/pin-lines';
 import { exclusionAgainstTracked, resolveSelection } from '../manifest/resolve';
 import { unitPicker } from '../prompts/unit-picker/prompt';
 import { readStateFile, unsupportedStateMessage, writeStateFile } from '../state/state';
@@ -208,10 +208,9 @@ export async function runPlanJson(opts: { configPath?: string; inline?: InlineFl
 	const selectedIds = new Set([...resolution.ids, ...tracked.ids]);
 	const units = selectedUnits.map(unit => applyLintStaged(applyPinLines(applyUnitOptions(unit, optionSelections), selectedIds), selectedIds));
 
-	// Same precedence as runInit (flag, then recipe), and the same applyLatest, so
-	// the envelope reports what the run writes.
+	// Same precedence as runInit (flag, then recipe).
 	const latest = opts.latest === true || config.versions === 'latest';
-	const written = latest ? units.map(u => applyLatest(u, selectedIds)) : units;
+	const written = specsToWrite(units, selectedIds, latest);
 
 	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
 	const plans = units.flatMap(unit =>
@@ -481,7 +480,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	const installResult = await writeAndInstall({
 		targetDir: target.dir,
 		pm,
-		units: latest ? units.map(u => applyLatest(u, selectedIds)) : units,
+		units: specsToWrite(units, selectedIds, latest),
 		latest,
 		// Undefined on an interactive run, which is what makes dependency
 		// collisions prompt. resolveConfig defaults it to 'overwrite' on every

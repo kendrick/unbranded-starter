@@ -1,6 +1,6 @@
 import type { AnyUnit, PinLine } from './types';
 import { describe, expect, it } from 'vitest';
-import { applyLatest, applyPinLines } from './pin-lines';
+import { applyLatest, applyPinLines, specsToWrite } from './pin-lines';
 
 const ts: AnyUnit = { id: 'core-typescript', category: 'types', label: '', description: '', files: [], devDependencies: { 'typescript': '7.0.2', '@types/node': '22.19.19' } };
 const LINES: PinLine[] = [{ unit: 'core-typescript', when: 'core-eslint', devDependencies: { typescript: '6.0.3' } }];
@@ -43,5 +43,24 @@ describe('applyLatest', () => {
 		const withDeps: AnyUnit = { ...held, dependencies: { clsx: '2.1.1', typescript: '6.0.3' } };
 		expect(applyLatest(withDeps, new Set(['core-eslint']), LINES).dependencies).toEqual({ clsx: 'latest', typescript: 'latest' });
 		expect(applyLatest(held, new Set(['core-eslint']), LINES).dependencies).toBeUndefined();
+	});
+
+	it('falls back to latest for a line whose pin is not exact X.Y.Z, as outdated does', () => {
+		const ranged: PinLine[] = [{ unit: 'core-typescript', when: 'core-eslint', devDependencies: { typescript: '^6.0.3' } }];
+		expect(applyLatest(held, new Set(['core-typescript', 'core-eslint']), ranged).devDependencies?.typescript).toBe('latest');
+	});
+});
+
+describe('specsToWrite', () => {
+	const selected = new Set(['core-typescript', 'core-eslint']);
+	const held: AnyUnit = { ...ts, devDependencies: { typescript: '6.0.3' } };
+
+	it('hands back the manifest\'s units untouched without --latest', () => {
+		const units = [held];
+		expect(specsToWrite(units, selected, false, LINES)).toBe(units);
+	});
+
+	it('runs every unit through applyLatest under --latest', () => {
+		expect(specsToWrite([held], selected, true, LINES).map(u => u.devDependencies)).toEqual([{ typescript: '^6' }]);
 	});
 });
