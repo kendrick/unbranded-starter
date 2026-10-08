@@ -26,8 +26,9 @@ export function oxlintPlugins(flavor: OxlintFlavor): string[] {
 }
 
 // oxlint lints node_modules unless a .gitignore says otherwise, and a fresh
-// scaffold doesn't always have one.
-const COMMON_IGNORES = ['node_modules/**', 'dist/**', 'build/**', 'out/**', '.next/**', 'coverage/**'];
+// scaffold doesn't always have one. `.unbranded/**` holds the baseline copies
+// `update` diffs against, so oxfmt must never rewrite them either.
+const COMMON_IGNORES = ['.unbranded/**', 'node_modules/**', 'dist/**', 'build/**', 'out/**', '.next/**', 'coverage/**'];
 
 // Both fixes come from running this config on a fresh Next app (kendrick/cambium#2).
 // The automatic JSX runtime makes a React import dead weight, and a stylesheet

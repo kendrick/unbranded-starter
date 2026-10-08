@@ -100,7 +100,10 @@ const JSX_A11Y_RULES: string[] = [
 	'\'jsx-a11y/tabindex-no-positive\': \'error\',',
 ];
 
+// `.unbranded` holds baseline copies of managed files; linting them reports
+// each finding twice, on files nobody edits.
 const IGNORES: string[] = [
+	'.unbranded',
 	'.next',
 	'node_modules',
 	'dist',
