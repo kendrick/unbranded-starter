@@ -24,11 +24,16 @@ import process from 'node:process';
 // missed-union hard-fail below.
 const MANIFEST_FILES = ['src/manifest/index.ts', 'src/manifest/eslint-config.ts'];
 
+const majorOf = spec => /^[\^~]?(\d+)\./.exec(spec)?.[1];
+
 // outdated's JSON → the actionable subset: anything the registry is ahead of.
 // `unknown` grades stay out — a pin the tool can't parse is a human's problem.
 export function planBumps(report) {
 	return report.packages
 		.filter(p => p.behind === 'patch' || p.behind === 'minor' || p.behind === 'major')
+		// A held entry whose latest left its line is a report from an older CLI or
+		// a hand edit; bumping it is the exact #131 break, so drop it.
+		.filter(p => p.line === undefined || Number(majorOf(p.latest)) === p.line)
 		.map(p => ({ name: p.name, from: p.pin, to: p.latest, units: p.units }));
 }
 
@@ -77,16 +82,24 @@ export function rewritePins(source, bumps) {
 // outside the version itself, and it's why the rewrite fires independent of
 // whether the existing range would already admit `to`—a caret range often
 // would, and letting that suppress the bump is how a major-version gap hides.
+// The one exception: a range on a different major than the bump's `from` is
+// left alone (see the guard below).
 export function rewritePackageJson(source, bumps) {
 	const applied = [];
 	const missed = [];
 	let out = source;
 	const pkg = JSON.parse(source);
-	for (const { name, to } of bumps) {
+	for (const { name, from, to } of bumps) {
 		let hit = false;
 		for (const map of ['dependencies', 'devDependencies']) {
 			const current = pkg[map]?.[name];
 			if (current === undefined)
+				continue;
+			// Two TS pins share one package.json key. Only the bump that started on
+			// this range's major may move it, or the 7.x bump drags the repo's ^6
+			// onto TS 7 (#131). A 9→10 bump still lands: its `from` is 9.x.
+			const own = majorOf(from);
+			if (own !== undefined && majorOf(current) !== undefined && majorOf(current) !== own)
 				continue;
 			// The repo mixes range styles per entry (ajv pins exact) so the
 			// prefix has to be read off this entry, not assumed.

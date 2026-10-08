@@ -19,6 +19,19 @@ describe('planBumps', () => {
 	});
 });
 
+describe('planBumps with held lines', () => {
+	it('maps a held 6.0.3 pin to 6.0.5, never across its line', () => {
+		const report = {
+			schema: 1,
+			packages: [
+				{ name: 'typescript', pin: '6.0.3', line: 6, latest: '6.0.5', behind: 'patch', units: ['core-typescript'] },
+				{ name: 'typescript', pin: '6.0.3', line: 6, latest: '7.0.3', behind: 'major', units: ['core-typescript'] },
+			],
+		};
+		expect(planBumps(report)).toEqual([{ name: 'typescript', from: '6.0.3', to: '6.0.5', units: ['core-typescript'] }]);
+	});
+});
+
 describe('groupByUnit', () => {
 	it('groups by the first declaring unit so each bump lands in exactly one PR', () => {
 		const groups = groupByUnit([
@@ -142,5 +155,48 @@ describe('rewritePackageJson', () => {
 		expect(source).toBe(PKG);
 		expect(applied).toEqual(['ajv']);
 		expect(missed).toEqual([]);
+	});
+});
+
+describe('rewritePackageJson across majors', () => {
+	const PKG_TS6 = `{
+	"devDependencies": {
+		"typescript": "^6.0.3"
+	}
+}
+`;
+	const PKG = `{
+	"devDependencies": {
+		"@antfu/eslint-config": "^8.2.0"
+	}
+}
+`;
+
+	it('leaves a range on another major alone: an unheld 7.x bump misses ^6', () => {
+		const r = rewritePackageJson(PKG_TS6, [{ name: 'typescript', from: '7.0.2', to: '7.0.3' }]);
+		expect(r.source).toBe(PKG_TS6);
+		expect(r.missed).toEqual(['typescript']);
+	});
+
+	it('moves the range on its own major, even when an unheld bump of the same name rides along', () => {
+		const r = rewritePackageJson(PKG_TS6, [
+			{ name: 'typescript', from: '7.0.2', to: '7.0.3' },
+			{ name: 'typescript', from: '6.0.3', to: '6.0.5' },
+		]);
+		expect(JSON.parse(r.source).devDependencies.typescript).toBe('^6.0.5');
+	});
+
+	it('still moves a major bump whose from sits on the range', () => {
+		const r = rewritePackageJson(PKG, [{ name: '@antfu/eslint-config', from: '8.2.0', to: '9.3.0' }]);
+		expect(JSON.parse(r.source).devDependencies['@antfu/eslint-config']).toBe('^9.3.0');
+	});
+});
+
+describe('rewritePins with two typescript pins', () => {
+	it('rewrites only the literal matching from', () => {
+		const src = 'const a = { typescript: \'7.0.2\' };\nconst b = { typescript: \'6.0.3\' };\n';
+		const r = rewritePins(src, [{ name: 'typescript', from: '6.0.3', to: '6.0.5' }]);
+		expect(r.source).toBe('const a = { typescript: \'7.0.2\' };\nconst b = { typescript: \'6.0.5\' };\n');
+		expect(r.applied).toEqual(['typescript']);
 	});
 });
