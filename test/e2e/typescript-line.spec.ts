@@ -47,7 +47,7 @@ describe('typeScript line and lint slot (#158)', () => {
 	});
 
 	it('under --latest, core-eslint holds typescript to `^6` and everything else goes to `latest` (#159)', () => {
-		// dryRun passes --pm pnpm, which is the issue's acceptance invocation.
+		// dryRun passes --pm pnpm, matching #159's acceptance invocation.
 		const r = dryRun('core-eslint', tmp, ['--latest']);
 		expect(r.status, r.stderr).toBe(0);
 		expect(r.plan.devDependencies?.typescript).toBe('^6');

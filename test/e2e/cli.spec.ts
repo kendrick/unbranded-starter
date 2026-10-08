@@ -205,7 +205,8 @@ describe('cli version policy (--latest / recipe versions)', () => {
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		expect(eslintSpec()).toBe('latest');
-		// core-eslint holds TS to its line, so --latest writes a caret on 6, not TS 7 (#159).
+		// core-eslint holds TS to its line, so --latest writes a caret on 6, not
+		// TS 7 (#159).
 		expect(devSpec('typescript')).toBe('^6');
 		// The plan note advertises the active policy before writing.
 		expect(result.stdout).toMatch(/latest/);

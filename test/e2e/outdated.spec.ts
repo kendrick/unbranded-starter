@@ -51,10 +51,10 @@ function run(args: string[]): Promise<{ status: number | null; stdout: string; s
 }
 
 describe('unbranded outdated (against a local registry)', () => {
-	// Echoes every real manifest pin back as published, the highest of a name as
-	// latest, minus per-test overrides—a registry where nothing moved unless the
-	// test says so. Keyed to every pin of a name, since the held TS 6 pin and the
-	// unheld TS 7 one share a packument. A bare string override replaces latest only.
+	// Echoes every real manifest pin back as published, with the highest pin of
+	// a name as latest, so nothing has moved unless a test's override says so.
+	// One packument lists every pin of a name, since the held TS 6 pin and the
+	// unheld TS 7 pin share it. A bare string override replaces only latest.
 	const allPins = collectManifestPins(UNITS);
 	const pins = new Map<string, string[]>();
 	for (const p of allPins)

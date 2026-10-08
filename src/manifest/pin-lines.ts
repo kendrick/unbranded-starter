@@ -15,10 +15,10 @@ export function applyPinLines(unit: AnyUnit, selected: ReadonlySet<string>, line
 }
 
 // Under --latest, TS 7 beside typescript-eslint is the #131 break, so a PIN_LINES
-// pin gets a caret on its own major instead of the dist-tag (#159). Only an exact
-// X.Y.Z pin is held, the rule collectManifestPins uses too, so outdated and
-// --latest agree on which pins have a line. Only the specs a run writes go
-// through applyLatest; the plan note keeps the manifest's pins.
+// pin gets a caret on its own major instead of the dist-tag (#159). A pin is held
+// only when it's an exact X.Y.Z, the same rule collectManifestPins uses, so
+// outdated and --latest agree on which pins have a line. The plan note keeps the
+// manifest's pins, because only the specs a run writes go through applyLatest.
 export function applyLatest(unit: AnyUnit, selected: ReadonlySet<string>, lines: readonly PinLine[] = PIN_LINES): AnyUnit {
 	const held = new Map<string, string>();
 	for (const line of lines.filter(l => l.unit === unit.id && selected.has(l.when))) {
@@ -28,7 +28,8 @@ export function applyLatest(unit: AnyUnit, selected: ReadonlySet<string>, lines:
 				held.set(name, `^${major}`);
 		}
 	}
-	// A PinLine only holds devDependencies, so a held name never reaches `dependencies`.
+	// A PinLine holds only devDependencies, so a held name never reaches
+	// `dependencies`.
 	const rewrite = (deps: Record<string, string> | undefined, holds: ReadonlyMap<string, string>): Record<string, string> | undefined =>
 		deps && Object.fromEntries(Object.keys(deps).map(name => [name, holds.get(name) ?? 'latest']));
 	return { ...unit, dependencies: rewrite(unit.dependencies, new Map()), devDependencies: rewrite(unit.devDependencies, held) };

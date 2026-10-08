@@ -19,8 +19,9 @@ export interface PackageVersions {
 }
 
 // Batched lookup of the `latest` dist-tag plus every published version per
-// package. Rejects on the FIRST failure with one clear error (offline degrades
-// to a message, not a hang or a half-report); the rest of the pool is abandoned.
+// package. Rejects on the FIRST failure with one clear error (offline
+// degrades to a message, not a hang or a half-report); the rest of the pool
+// is abandoned.
 export async function fetchVersions(names: string[], opts: FetchVersionsOpts = {}): Promise<Map<string, PackageVersions>> {
 	const registry = (opts.registry ?? DEFAULT_REGISTRY).replace(/\/$/, '');
 	const fetchImpl = opts.fetchImpl ?? fetch;
@@ -53,8 +54,8 @@ async function versionsOf(name: string, registry: string, fetchImpl: typeof fetc
 	try {
 		response = await fetchImpl(url, {
 			// The abbreviated packument: full documents for popular packages run to
-			// megabytes, and its `versions` keys are all a held line is graded
-			// against, so the abbreviated form still suffices.
+			// megabytes, and the abbreviated one still carries the dist-tags and the
+			// `versions` keys a held line is graded against.
 			headers: { accept: 'application/vnd.npm.install-v1+json' },
 			signal: AbortSignal.timeout(timeoutMs),
 		});

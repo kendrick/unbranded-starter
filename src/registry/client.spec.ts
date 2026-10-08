@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_REGISTRY, fetchVersions } from './client';
 
-// A fetch double serving abbreviated packuments: name → latest (+ versions).
+// A fetch double serving abbreviated packuments: name → latest, plus
+// versions when given.
 function fakeRegistry(packages: Record<string, { latest: string; versions?: string[] }>): typeof fetch {
 	return vi.fn(async (input: RequestInfo | URL) => {
 		const url = String(input);

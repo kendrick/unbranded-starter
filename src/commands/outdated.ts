@@ -16,17 +16,18 @@ export interface ManifestPin {
 	pin: string;
 	// Every unit that declares the pin, so bump PRs can group per unit.
 	units: UnitId[];
-	// Set when the pin comes from PIN_LINES: the major it's held to, so it's graded
-	// and bumped inside that line (#159). typescript-eslint can't load TS 7 (#131).
+	// Set when the pin comes from PIN_LINES: the major it's held to, so it's
+	// graded and bumped inside that line (#159). typescript-eslint can't load
+	// TS 7 (#131).
 	line?: number;
 }
 
 // Walks static deps/devDeps plus every option choice's — generic on purpose, so
 // a future option-bearing unit is covered without anyone remembering this file.
 export function collectManifestPins(units: Unit[], lines: readonly PinLine[] = PIN_LINES): ManifestPin[] {
-	// A held pin keys on name@pin, so it stays its own entry rather than joining
-	// the unit walk's: it shares a name with the unheld pin but grades against a
-	// different target.
+	// A held pin keys on name@pin, so it never merges into the unit walk's entry
+	// for the same name. The two share a name but grade against different
+	// targets.
 	const byKey = new Map<string, ManifestPin>();
 	const add = (key: string, pin: Omit<ManifestPin, 'units'>, unit: UnitId): void => {
 		const entry = byKey.get(key);
