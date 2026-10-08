@@ -278,7 +278,8 @@ export const UNITS: Unit[] = [
 		category: 'git',
 		label: 'Husky + lint-staged',
 		description: 'Pre-commit hook that runs lint-staged on changed files.',
-		// lint-staged.config.mjs is generated per lint unit (see lint-staged.ts).
+		// lint-staged.config.mjs isn't listed: its contents depend on which lint unit
+		// resolved, so applyLintStaged appends it once the set is known.
 		files: [
 			{ src: 'opt-in/husky-precommit/.husky/pre-commit', dest: '.husky/pre-commit' },
 		],

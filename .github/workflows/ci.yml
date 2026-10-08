@@ -17,7 +17,8 @@ permissions:
 # file's tests stay together), so instead each heavy install runs in its own parallel
 # job. `e2e-main` runs everything else with the heavy specs skipped, `e2e-flavors`
 # fans the three flavors out, `e2e-oxlint-flavors` does the same for oxlint's,
-# `e2e-scaffold` runs the full-project lint, `checks` carries the fast grid, and
+# `e2e-scaffold` runs the full-project lint, `e2e-lint-staged` commits through the
+# generated pre-commit hook, `checks` carries the fast grid, and
 # `launcher-smoke` is the one-off publish check. Wall-clock
 # is now the slowest single install, not the sum. Only the launcher still upgrades npm
 # (pack/version parse defensively now, so the global upgrade is gone everywhere else).
@@ -170,6 +171,23 @@ jobs:
         run: pnpm build
       - name: E2E tests (fresh-scaffold full lint)
         run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/scaffold-lint.spec.ts
+
+  e2e-lint-staged:
+    name: e2e lint-staged commit
+    # Its own job so its real install stays off another job's critical path.
+    # ubuntu-only: the commit case skips win32.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
       - name: E2E tests (lint-staged commit)
         run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/lint-staged.spec.ts
 

@@ -2,7 +2,8 @@ import type { AnyUnit } from './types';
 import { describe, expect, it } from 'vitest';
 import { applyLintStaged, buildLintStagedConfig, LINT_STAGED_DEST } from './lint-staged';
 
-// Today's static opt-in/husky-precommit/lint-staged.config.mjs, byte for byte.
+// The static config opt-husky shipped before #160. Existing ESLint + Stylelint
+// projects must keep it byte for byte so `update` changes nothing for them.
 const LEGACY = '/** @type {import(\'lint-staged\').Configuration} */\nexport default {\n\t\'*.{js,mjs,cjs,ts,tsx,jsx}\': [\'eslint --fix\'],\n\t\'*.{json,md,mdx,yaml,yml}\': [\'eslint --fix\'],\n\t\'*.{css,scss,postcss}\': [\'stylelint --fix\'],\n};\n';
 
 describe('buildLintStagedConfig (#160)', () => {
@@ -24,9 +25,14 @@ describe('buildLintStagedConfig (#160)', () => {
 		expect(out).not.toContain('stylelint');
 	});
 
-	it('writes no code or data entry without a lint unit, and still loads as a module', () => {
+	it('writes a single no-op entry without a lint unit, since lint-staged rejects an empty config', () => {
 		const out = buildLintStagedConfig(new Set(['opt-husky']));
-		expect(out).toBe('/** @type {import(\'lint-staged\').Configuration} */\nexport default {\n};\n');
+		expect(out).toBe('/** @type {import(\'lint-staged\').Configuration} */\nexport default {\n\t\'*\': [],\n};\n');
+	});
+
+	it('gives a stylelint-only set just the CSS entry', () => {
+		const out = buildLintStagedConfig(new Set(['core-stylelint', 'opt-husky']));
+		expect(out).toBe('/** @type {import(\'lint-staged\').Configuration} */\nexport default {\n\t\'*.{css,scss,postcss}\': [\'stylelint --fix\'],\n};\n');
 	});
 
 	it('adds the stylelint line only beside core-stylelint', () => {

@@ -65,6 +65,8 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main' || process.platform === 'win32
 		const config = readFileSync(join(tmp, 'lint-staged.config.mjs'), 'utf-8');
 		expect(config).toContain('oxlint');
 		expect(config).not.toContain('eslint');
+		const diff = cli(['diff', '--json'], tmp);
+		expect(diff.status, `${diff.stdout}${diff.stderr}`).toBe(0);
 
 		const git = (...args: string[]) => spawnSync('git', ['-c', 'user.name=e2e', '-c', 'user.email=e2e@example.com', ...args], { cwd: tmp, encoding: 'utf-8' });
 		expect(git('init', '-q').status).toBe(0);
