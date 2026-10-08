@@ -18,10 +18,12 @@ import { createJournal, formatRollbackReport, rollbackJournal } from '../fs/jour
 import { formatInstallFailure, formatKeepLine, resolveInstallFailure } from '../install/failure';
 import { isDirtyGitTree, maybeInitGit } from '../install/git';
 import { runPostInstalls } from '../install/post';
-import { writeAndInstall } from '../install/run';
+import { toLatest, writeAndInstall } from '../install/run';
 import { loadCatalog } from '../manifest/catalog';
 import { detectEslintFlavor } from '../manifest/eslint-config';
+import { IMPLIES_ONE_OF } from '../manifest/index';
 import { applyUnitOptions } from '../manifest/options';
+import { applyPinLines } from '../manifest/pin-lines';
 import { exclusionAgainstTracked, resolveSelection } from '../manifest/resolve';
 import { unitPicker } from '../prompts/unit-picker/prompt';
 import { readStateFile, unsupportedStateMessage, writeStateFile } from '../state/state';
@@ -149,7 +151,7 @@ function readTracked(dir: string): { ids: string[]; unsupported?: undefined } | 
 // that flow narrates through clack from its first line, and one stray chrome
 // line on stdout breaks a JSON consumer. Requires a selection (--units or
 // --config) because there is no picker to drive without a TTY story.
-export async function runPlanJson(opts: { configPath?: string; inline?: InlineFlags; targetDir?: string; preset?: string; unitsDir?: string }): Promise<number> {
+export async function runPlanJson(opts: { configPath?: string; inline?: InlineFlags; targetDir?: string; preset?: string; unitsDir?: string; latest?: boolean }): Promise<number> {
 	const inline = opts.inline ?? {};
 	if (inline.pm !== undefined)
 		assertValidPm(inline.pm);
@@ -175,7 +177,15 @@ export async function runPlanJson(opts: { configPath?: string; inline?: InlineFl
 	// can't drift: an explicit --pm wins, then the recipe's pm, then detection.
 	const pm = await detectPm(target.dir, { override: inline.pm ?? fileConfig?.pm, mode: target.mode });
 
-	const resolution = resolveSelection(config.units, catalog.units);
+	// Read before resolving: a tracked lint unit satisfies a slot without joining
+	// the plan, so a project already on core-eslint isn't handed core-oxlint.
+	const tracked = readTracked(target.dir);
+	if (tracked.unsupported !== undefined) {
+		process.stderr.write(`${tracked.unsupported}\n`);
+		return EXIT_ERROR;
+	}
+
+	const resolution = resolveSelection(config.units, catalog.units, IMPLIES_ONE_OF, tracked.ids);
 	if (resolution.kind === 'missing-required') {
 		process.stderr.write(`${resolution.unit} requires ${resolution.needs.join(', ')}, which weren't selected.\n`);
 		return 1;
@@ -186,12 +196,6 @@ export async function runPlanJson(opts: { configPath?: string; inline?: InlineFl
 	}
 
 	const byId = new Map<string, AnyUnit>(catalog.units.map(u => [u.id, u]));
-
-	const tracked = readTracked(target.dir);
-	if (tracked.unsupported !== undefined) {
-		process.stderr.write(`${tracked.unsupported}\n`);
-		return EXIT_ERROR;
-	}
 	const clash = exclusionAgainstTracked(resolution.ids, tracked.ids, catalog.units);
 	if (clash) {
 		process.stderr.write(`${clash.selected} and ${clash.tracked} can't both be selected (${clash.tracked} is already installed here).\n`);
@@ -200,7 +204,16 @@ export async function runPlanJson(opts: { configPath?: string; inline?: InlineFl
 
 	const selectedUnits = resolution.ids.map(id => byId.get(id)).filter((u): u is AnyUnit => u !== undefined);
 	const optionSelections = await resolveUnitOptions(selectedUnits, config.options, false, target.dir);
-	const units = selectedUnits.map(unit => applyUnitOptions(unit, optionSelections));
+	const selectedIds = new Set([...resolution.ids, ...tracked.ids]);
+	const units = selectedUnits.map(unit => applyPinLines(applyUnitOptions(unit, optionSelections), selectedIds));
+
+	// Same precedence as runInit (flag, then recipe). Under --latest the run writes
+	// `latest`, not the line's pin, so the envelope has to say so too; holding a pin
+	// to its line under --latest is #159.
+	const latest = opts.latest === true || config.versions === 'latest';
+	const written = latest
+		? units.map(u => ({ ...u, dependencies: toLatest(u.dependencies), devDependencies: toLatest(u.devDependencies) }))
+		: units;
 
 	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
 	const plans = units.flatMap(unit =>
@@ -213,10 +226,21 @@ export async function runPlanJson(opts: { configPath?: string; inline?: InlineFl
 		pm,
 		units: [...resolution.ids].sort(),
 		auto: [...resolution.auto].sort(),
+		// Merged pins, so a consumer can see which TypeScript line (#158) a run
+		// would write before anything is written.
+		dependencies: mergedPins(written, 'dependencies'),
+		devDependencies: mergedPins(written, 'devDependencies'),
 		// rel is native; the envelope speaks posix like every other surface.
 		files: plans.map(p => ({ path: p.rel.split(sep).join('/'), action: p.outcome })),
 	}, null, 2)}\n`);
 	return 0;
+}
+
+function mergedPins(units: AnyUnit[], field: 'dependencies' | 'devDependencies'): Record<string, string> {
+	const merged: Record<string, string> = {};
+	for (const u of units)
+		Object.assign(merged, u[field] ?? {});
+	return Object.fromEntries(Object.keys(merged).sort().map(k => [k, merged[k] as string]));
 }
 
 export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
@@ -357,7 +381,14 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		return { ok: true };
 	}
 
-	const resolution = resolveSelection(selection, catalog.units);
+	// Read before resolving; see runPlanJson.
+	const tracked = readTracked(target.dir);
+	if (tracked.unsupported !== undefined) {
+		log.error(tracked.unsupported);
+		process.exit(EXIT_ERROR);
+	}
+
+	const resolution = resolveSelection(selection, catalog.units, IMPLIES_ONE_OF, tracked.ids);
 	if (resolution.kind === 'missing-required') {
 		log.error(`${resolution.unit} requires ${resolution.needs.join(', ')}, which weren't selected.`);
 		process.exit(1);
@@ -368,12 +399,6 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	}
 
 	const byId = new Map<string, AnyUnit>(catalog.units.map(u => [u.id, u]));
-
-	const tracked = readTracked(target.dir);
-	if (tracked.unsupported !== undefined) {
-		log.error(tracked.unsupported);
-		process.exit(EXIT_ERROR);
-	}
 	const clash = exclusionAgainstTracked(resolution.ids, tracked.ids, catalog.units);
 	if (clash) {
 		log.error(`${clash.selected} and ${clash.tracked} can't both be selected (${clash.tracked} is already installed here).`);
@@ -391,7 +416,8 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// inside resolveUnitOptions no longer fires — cycling ←/→ replaced it.
 	const seededOptions = { ...pickerFlavors, ...config?.options };
 	const optionSelections = await resolveUnitOptions(selectedUnits, seededOptions, !skipApply, target.dir);
-	const units = selectedUnits.map(unit => applyUnitOptions(unit, optionSelections));
+	const selectedIds = new Set([...resolution.ids, ...tracked.ids]);
+	const units = selectedUnits.map(unit => applyPinLines(applyUnitOptions(unit, optionSelections), selectedIds));
 
 	note(formatPlan(units, resolution.auto, resolution.requiredBy, pm, latest), 'Plan');
 
