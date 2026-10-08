@@ -179,11 +179,15 @@ describe('cli version policy (--latest / recipe versions)', () => {
 		rmSync(tmp, { recursive: true, force: true });
 	});
 
-	function eslintSpec(): string {
+	function devSpec(name: string): string | undefined {
 		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as {
 			devDependencies: Record<string, string>;
 		};
-		return pkg.devDependencies.eslint;
+		return pkg.devDependencies[name];
+	}
+
+	function eslintSpec(): string | undefined {
+		return devSpec('eslint');
 	}
 
 	it('the --latest flag rewrites deps to the latest tag', () => {
@@ -201,6 +205,8 @@ describe('cli version policy (--latest / recipe versions)', () => {
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		expect(eslintSpec()).toBe('latest');
+		// core-eslint holds TS to its line, so --latest writes a caret on 6, not TS 7 (#159).
+		expect(devSpec('typescript')).toBe('^6');
 		// The plan note advertises the active policy before writing.
 		expect(result.stdout).toMatch(/latest/);
 	});
@@ -218,6 +224,7 @@ describe('cli version policy (--latest / recipe versions)', () => {
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		expect(eslintSpec()).toBe('latest');
+		expect(devSpec('typescript')).toBe('^6');
 	});
 
 	it('defaults to the manifest pins', () => {

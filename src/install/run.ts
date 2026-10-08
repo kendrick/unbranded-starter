@@ -17,8 +17,8 @@ export interface WriteAndInstallOpts {
 	targetDir: string;
 	pm: Pm | null;
 	units: AnyUnit[];
-	// When true, every dependency spec is rewritten to the `latest` dist-tag
-	// instead of the manifest's pinned version. Off by default (reproducible).
+	// `--latest`. The caller has already rewritten the specs (applyLatest), so this
+	// only skips the collision prompt and switches the report to its summary line.
 	latest?: boolean;
 	// How to settle a dependency whose existing spec differs from the manifest's
 	// pin. A set value means the run never prompts, the same contract
@@ -95,8 +95,8 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 	const computedWrites: ComputedWrite[] = [];
 
 	const patches: MergeInput[] = opts.units.map(u => ({
-		dependencies: opts.latest ? toLatest(u.dependencies) : u.dependencies,
-		devDependencies: opts.latest ? toLatest(u.devDependencies) : u.devDependencies,
+		dependencies: u.dependencies,
+		devDependencies: u.devDependencies,
 		scripts: u.packageJsonPatch?.scripts,
 		engines: u.packageJsonPatch?.engines,
 		packageManager: u.packageJsonPatch?.packageManager,
@@ -272,8 +272,9 @@ export function formatDepResolutions(resolutions: DepResolution[], latest: boole
 	if (resolutions.length === 0)
 		return null;
 
-	// Under `--latest` every incoming spec is the same word, so a per-package
-	// column would print `latest` N times. The summary counts them instead.
+	// Under `--latest` nearly every incoming spec is the same word, so a per-package
+	// column would print `latest` N times. The summary counts them instead. It
+	// still says 'latest' for a held line's caret (#159); dep-conflict.spec pins the wording.
 	if (latest)
 		return `--latest: rewrote ${resolutions.length} existing dependency spec(s) to 'latest'.`;
 
@@ -285,16 +286,6 @@ export function formatDepResolutions(resolutions: DepResolution[], latest: boole
 			: `  kept       ${name}  ${r.existing}  (manifest pins ${r.incoming})`;
 	});
 	return `package.json dependency conflicts:\n${lines.join('\n')}`;
-}
-
-// The `--latest` escape hatch rewrites every pinned spec to the `latest`
-// dist-tag, so the install resolves the newest published versions. The lockfile
-// still records what actually resolved, so a single run stays reproducible.
-// Exported so the dry-run JSON envelope reports the same specs a real run writes.
-export function toLatest(deps: Record<string, string> | undefined): Record<string, string> | undefined {
-	if (!deps)
-		return deps;
-	return Object.fromEntries(Object.keys(deps).map(name => [name, 'latest']));
 }
 
 // Match the existing file's indentation so we don't reformat what the user

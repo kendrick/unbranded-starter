@@ -89,6 +89,13 @@ const UNIT: Unit = {
 	devDependencies: { eslint: '9.39.4', typescript: '5.9.3' },
 };
 
+// What init hands writeAndInstall under --latest once applyLatest has run.
+const LATEST_UNIT: Unit = {
+	...UNIT,
+	dependencies: { clsx: 'latest' },
+	devDependencies: { eslint: 'latest', typescript: 'latest' },
+};
+
 describe('writeAndInstall version policy', () => {
 	let tmp: string;
 
@@ -114,10 +121,12 @@ describe('writeAndInstall version policy', () => {
 		expect(writtenPkg().dependencies).toMatchObject({ clsx: '2.1.1' });
 	});
 
-	it('rewrites every dependency to the latest tag when latest is set', async () => {
+	it('writes the specs it is handed; --latest no longer rewrites them', async () => {
+		// The caller rewrites under --latest (applyLatest), so a held line's caret
+		// survives here instead of being flattened back to the dist-tag (#159).
 		await writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT], latest: true });
-		expect(writtenPkg().devDependencies).toEqual({ eslint: 'latest', typescript: 'latest' });
-		expect(writtenPkg().dependencies).toEqual({ clsx: 'latest' });
+		expect(writtenPkg().devDependencies).toEqual({ eslint: '9.39.4', typescript: '5.9.3' });
+		expect(writtenPkg().dependencies).toEqual({ clsx: '2.1.1' });
 	});
 
 	it('pins .nvmrc and engines from the running node major when core-node-version is selected', async () => {
@@ -310,7 +319,7 @@ describe('writeAndInstall dependency conflicts (#113)', () => {
 			dependencies: { clsx: '2.0.0' },
 			devDependencies: { typescript: '^6.0.3' },
 		}));
-		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT], latest: true });
+		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [LATEST_UNIT], latest: true });
 		expect(select).not.toHaveBeenCalled();
 		expect(result.depResolutions).toEqual([
 			{ section: 'dependencies', name: 'clsx', existing: '2.0.0', incoming: 'latest', resolution: 'overwrite' },
