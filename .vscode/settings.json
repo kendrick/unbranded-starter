@@ -1,36 +1,18 @@
 {
-	// Format on save — ESLint is the source of truth (because @antfu/eslint-config handles formatting).
+	// Format on save with oxfmt, then apply oxlint's fixes. "file" mode formats
+	// the whole file, which is what lint-staged's oxfmt run does at commit.
 	"editor.formatOnSave": true,
+	"editor.formatOnSaveMode": "file",
 	"editor.codeActionsOnSave": {
-		"source.fixAll.eslint": "explicit",
+		"source.fixAll.oxc": "explicit",
 		"source.fixAll.stylelint": "explicit"
 	},
-	"editor.defaultFormatter": "dbaeumer.vscode-eslint",
+	"editor.defaultFormatter": "oxc.oxc-vscode",
 
-	// Tabs (matching .prettierrc and .editorconfig)
+	// Tabs (matching .editorconfig and .oxfmtrc.json)
 	"editor.insertSpaces": false,
 	"editor.tabSize": 2,
 	"editor.detectIndentation": false,
-
-	// ESLint
-	"eslint.useFlatConfig": true,
-	"eslint.format.enable": false, // Use ESLint's auto-fix instead of format command
-	// Markdown deliberately omitted: Prettier is the source of truth there
-	// (see [markdown] override below). Keeping it here makes the ESLint
-	// extension load the full antfu chain on every .md save and hang the
-	// editor on "Getting code actions from 'ESLint'". CLI `pnpm lint` still
-	// formats markdown via the formatters block in eslint.config.mjs.
-	"eslint.validate": [
-		"javascript",
-		"javascriptreact",
-		"typescript",
-		"typescriptreact",
-		"json",
-		"jsonc",
-		"yaml",
-		"css",
-		"html"
-	],
 
 	// Stylelint
 	"stylelint.validate": ["css", "postcss", "scss"],
@@ -44,9 +26,8 @@
 	},
 
 	// JSON / JSONC: VS Code's built-in formatter (respects insertSpaces/tabSize).
-	// Why not ESLint? @antfu's default GLOB_EXCLUDE includes '**/.claude' which
-	// ESLint can't unignore. The built-in JSON formatter runs everywhere and
-	// produces identical 2-tab output to @antfu for our codebase.
+	// Why not oxfmt? .oxfmtrc.json ignores .claude/**, and the built-in formatter
+	// still covers the settings files that live there.
 	"[json]": {
 		"editor.defaultFormatter": "vscode.json-language-features"
 	},
@@ -54,10 +35,9 @@
 		"editor.defaultFormatter": "vscode.json-language-features"
 	},
 
-	// Markdown: Prettier (only place it's still used).
-	// @antfu's markdown formatter is functional but Prettier handles prose-wrap,
-	// list reflow, and link tables better. Scope-limited to .md/.mdx, so it can't
-	// conflict with @antfu on JS/TS.
+	// Markdown: Prettier (only place it's still used). Prettier handles
+	// prose-wrap and list reflow, and it's scoped to .md/.mdx, so it can't fight
+	// oxfmt on JS/TS.
 	"[markdown]": {
 		"editor.defaultFormatter": "esbenp.prettier-vscode"
 	},

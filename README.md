@@ -258,7 +258,7 @@ Every file gets one verdict: `would create`, `would merge`, `would append`, `ide
 
 ```bash
 pnpm install
-pnpm build        # tsup
+pnpm build        # tsdown
 pnpm test         # vitest, unit
 pnpm test:e2e     # builds first, then the end-to-end suite
 pnpm test:all     # both suites

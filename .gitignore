@@ -48,7 +48,6 @@ test-results/
 .playwright/
 
 # --- Linters / formatters --------------------------------------------------
-.eslintcache
 .stylelintcache
 .prettiercache
 

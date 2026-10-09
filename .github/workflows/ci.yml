@@ -52,7 +52,7 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Lint (includes formatting via @antfu)
+      - name: Lint
         run: pnpm lint
 
       - name: Unit tests
@@ -61,7 +61,7 @@ jobs:
       - name: Build
         run: pnpm build
 
-      # Catches the case where tsup succeeds but the bundle itself doesn't
+      # Catches the case where tsdown succeeds but the bundle itself doesn't
       # run (e.g. a runtime import error, broken shebang, missing PKG_ROOT).
       - name: Smoke-test built CLI
         run: node dist/cli.js --version
