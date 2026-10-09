@@ -38,7 +38,7 @@ No command below needs a TTY. Anything interactive has a flag that answers it.
 | `list --json`      | `schemas/catalog.schema.json`  | 2              |
 | `diff --json`      | `schemas/diff.schema.json`     | 1              |
 | `doctor --json`    | `schemas/doctor.schema.json`   | 2              |
-| `outdated --json`  | `schemas/outdated.schema.json` | 1              |
+| `outdated --json`  | `schemas/outdated.schema.json` | 2              |
 | `--dry-run --json` | `schemas/plan.schema.json`     | 1              |
 | `.unbranded.json`  | `schemas/state.schema.json`    | 2              |
 | `validate --json`  | `schemas/validate.schema.json` | 1              |

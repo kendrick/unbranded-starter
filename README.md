@@ -171,7 +171,7 @@ The pieces that make unbranded worth keeping in a repo rather than running once 
 - **`unbranded doctor`** audits any repo, whether unbranded scaffolded it or not: missing config, coexisting lockfiles, absent version pins, and more, each named with the unit or command that closes it. It writes nothing; `--strict` turns findings into a non-zero exit.
 - **`unbranded doctor --fix`** hands the fixable findings to the apply pipeline, opening the picker with those units preselected (or applying them outright with `--fix --yes`). Findings no unit can close are printed as manual steps, never run.
 - **`unbranded update`** three-way merges newer template versions into your tracked files against their recorded baseline: untouched files update silently, non-overlapping edits merge, and a real conflict asks per file. `--strategy <ours|theirs|markers>` answers globally for CI.
-- **`unbranded outdated`** grades every manifest pin against the npm registry (patch, minor, major). It exits 0 by default so a report never fails a job; `--strict` gates on majors, `--registry` points at a mirror.
+- **`unbranded outdated`** grades every manifest pin against the npm registry (patch, minor, major); a pin held to its major, like TypeScript 6 under `core-eslint`, is graded against the newest release in that line. It exits 0 by default so a report never fails a job; `--strict` gates on majors, `--registry` points at a mirror.
 - **`unbranded remove <unit>`** backs a unit out: it deletes the unit's unmodified files, drops the package.json entries no remaining unit still claims, and refuses to strand a dependent unless you pass `--cascade`. `--dry-run` previews the whole thing.
 
 Every run records what it wrote in `.unbranded.json` plus an `.unbranded/` sidecar of byte-exact baselines (the merge base `update` needs), so commit both. Doctor findings are opinions, and some won't apply to your repo; accept one by adding its id to a `doctor.ignore` array in the state file. The full non-interactive contract, the JSON schemas under `schemas/`, and the agent loop end to end live in [AGENTS.md](AGENTS.md) and [docs/agent-cookbook.md](docs/agent-cookbook.md). Authoring your own units and using them alongside the built-ins is covered in [docs/authoring-units.md](docs/authoring-units.md).
@@ -199,7 +199,7 @@ The flags you'll reach for most, with `unbranded --help` for the full set:
 | `--pm <npm\|pnpm\|yarn\|bun>` | set the package manager and skip detection                    |
 | `--yes`                       | apply without the confirm prompt (needs `--units`/`--config`) |
 | `--dry-run`                   | resolve and report, write nothing                             |
-| `--latest`                    | take the newest versions, not the pins                        |
+| `--latest`                    | take newest versions, not pins; held pins keep their major    |
 | `--target <dir>`              | scaffold against `<dir>` instead of the current directory     |
 
 `--help` covers the rest, including `--force`, `--json`, `--fix`, `--cascade`, `--strategy`, and `--registry`.
