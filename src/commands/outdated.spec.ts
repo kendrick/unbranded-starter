@@ -179,7 +179,7 @@ describe('runOutdated', () => {
 			majorsBehind: number;
 			packages: { name: string; pin: string; latest: string; behind: string; units: string[] }[];
 		};
-		expect(parsed.schema).toBe(1);
+		expect(parsed.schema).toBe(2);
 		expect(parsed.registry).toBe('https://reg.test');
 		expect(parsed.majorsBehind).toBe(1);
 		const eslint = parsed.packages.find(p => p.name === 'eslint');

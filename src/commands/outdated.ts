@@ -9,7 +9,7 @@ import { DEFAULT_REGISTRY, fetchVersions } from '../registry/client';
 // its held major (#159). Read-only, no TTY, exit 0 by default so a report
 // never fails a job; --strict trips only on majors, which is the gate the
 // maintainer-side bump automation cares about.
-export const OUTDATED_SCHEMA = 1;
+export const OUTDATED_SCHEMA = 2;
 
 export interface ManifestPin {
 	name: string;

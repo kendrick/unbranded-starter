@@ -104,7 +104,7 @@ describe('unbranded outdated (against a local registry)', () => {
 		expect(gated.status).toBe(1);
 	});
 
-	it('emits the schema-1 JSON envelope for tooling', async () => {
+	it('emits the schema-2 JSON envelope for tooling', async () => {
 		overrides.vitest = oneMinorAhead(pins.get('vitest')![0]!);
 
 		const result = await run(['outdated', '--json', '--registry', registry]);
@@ -114,7 +114,7 @@ describe('unbranded outdated (against a local registry)', () => {
 			majorsBehind: number;
 			packages: { name: string; behind: string; units: string[] }[];
 		};
-		expect(parsed.schema).toBe(1);
+		expect(parsed.schema).toBe(2);
 		expect(parsed.majorsBehind).toBe(0);
 		expect(parsed.packages.find(p => p.name === 'vitest')?.behind).toBe('minor');
 	});
