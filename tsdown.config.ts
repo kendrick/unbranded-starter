@@ -24,7 +24,9 @@ export default defineConfig([
 		target: 'node22',
 		platform: 'node',
 		fixedExtension: false,
-		// Runs second; cleaning here would wipe dist/cli.js.
+		// tsdown cleans once for the whole array before any config builds, so this
+		// value can't wipe dist/cli.js either way. The cli config's `clean: true`
+		// already empties dist/.
 		clean: false,
 		// tsconfig.base.json sets `incremental`, which the dts emit refuses without
 		// a tsBuildInfoFile. That file ships as the core-typescript template, so the

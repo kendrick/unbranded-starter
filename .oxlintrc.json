@@ -1,7 +1,10 @@
-// The rule set is #142's parity set (SPIKE-142.md), generated from the resolved
-// @antfu/eslint-config, not oxlint's defaults. The correctness category stays off
-// because it would add rules the ESLint setup never ran, and adopting those is a
-// separate call.
+// The rule set is #142's parity set, generated from the resolved
+// @antfu/eslint-config, not oxlint's defaults. The full parity table, with every
+// rule's status, is SPIKE-142.md on the spike branch's last commit:
+// https://github.com/kendrick/unbranded-starter/blob/7a9a352de92fb70db1e48697fbd8c3a6014cc3ad/SPIKE-142.md#rule-parity-table-deliverable-2
+//
+// The correctness category stays off because it would add rules the ESLint
+// setup never ran, and adopting those is a separate call.
 //
 // ESLint rules with no oxlint equivalent. Each one's coverage is gone unless a
 // replacement is named.
@@ -24,6 +27,9 @@
 //     catches a duplicate disable, since the second one suppresses nothing.
 //   - e18e/{prefer-array-fill,prefer-string-fromcharcode,prefer-timer-args,
 //     prefer-url-canparse}: gap accepted.
+//   - yaml/{no-empty-key,no-empty-sequence-entry,no-irregular-whitespace,
+//     vue-custom-block/no-parsing-error}: gap accepted. oxlint doesn't read
+//     YAML files at all.
 //   - yaml/sort-keys and the other eslint-plugin-pnpm rules: gap accepted here,
 //     since this repo has no root pnpm-workspace.yaml.
 //
@@ -34,6 +40,10 @@
 //     ESLint version accepted (src/fs/journal.spec.ts, src/fs/copy.spec.ts).
 //   - typescript/prefer-nullish-coalescing: the type-aware stand-in for
 //     e18e/prefer-nullish-coalescing, but stricter; it flags code e18e passed.
+//
+// Off in the ESLint config and absent from oxlint, so nothing to turn off here:
+//   - node/prefer-global/{process,buffer}: this is a Node-only CLI, and both are
+//     globals at every entry point it ships, so importing them is noise.
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
 	"plugins": ["eslint", "typescript", "unicorn", "import", "node", "jsdoc", "vitest"],
@@ -513,6 +523,9 @@
 		"typescript/restrict-plus-operands": "error",
 		"typescript/restrict-template-expressions": "error",
 		"typescript/return-await": ["error", "in-try-catch"],
+		// Nullable strings and numbers in a conditional (`if (someOptionalString)`)
+		// are idiomatic here. allowNullableString and allowNullableNumber keep the
+		// rule from flagging them.
 		"typescript/strict-boolean-expressions": [
 			"error",
 			{
@@ -607,6 +620,9 @@
 				]
 			}
 		},
+		// These files are linted but sit outside tsconfig.json's `include`, so the
+		// type-aware rules have no program to check them against. opt-in/ can never
+		// join, since its templates import deps this repo doesn't install.
 		{
 			"files": [
 				"test/e2e/**",

@@ -1,5 +1,6 @@
 # Normalize line endings to LF in the working tree on every platform. Without
-# this, the Windows CI runner checks out CRLF and the @antfu markdown formatter
-# (Prettier) fails the lint step on files it sees as mixed-ending. text=auto
-# still lets git treat detected binaries as binary.
+# this, the Windows CI runner checks out CRLF. Its e2e leg runs pack.spec.ts,
+# which splits test/fixtures/expected-pack.txt on a bare '\n', so every line but
+# the last keeps a stray '\r' and the compare fails. text=auto still lets git
+# treat detected binaries as binary.
 * text=auto eol=lf
