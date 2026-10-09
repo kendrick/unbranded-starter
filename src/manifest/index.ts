@@ -1,6 +1,6 @@
 import type { EslintFlavor } from './eslint-config';
 import type { OxlintFlavor } from './oxlint-config';
-import type { Unit, UnitOptionChoice } from './types';
+import type { ImpliesOneOf, PinLine, Unit, UnitOptionChoice } from './types';
 import { buildEslintConfig, ESLINT_FLAVORS, eslintDevDependencies } from './eslint-config';
 import { buildOxfmtConfig, buildOxlintConfig, OXC_DEV_DEPENDENCIES, OXLINT_FLAVORS } from './oxlint-config';
 
@@ -164,7 +164,7 @@ export const UNITS: Unit[] = [
 			{ src: 'stylelint.config.mjs', dest: 'stylelint.config.mjs' },
 		],
 		devDependencies: {
-			'stylelint': '17.15.0',
+			'stylelint': '17.16.0',
 			'stylelint-config-standard': '40.0.0',
 			'@dreamsicle.io/stylelint-config-tailwindcss': '1.2.2',
 		},
@@ -278,9 +278,10 @@ export const UNITS: Unit[] = [
 		category: 'git',
 		label: 'Husky + lint-staged',
 		description: 'Pre-commit hook that runs lint-staged on changed files.',
+		// lint-staged.config.mjs isn't listed: its contents depend on which lint unit
+		// resolved, so applyLintStaged appends it once the set is known.
 		files: [
 			{ src: 'opt-in/husky-precommit/.husky/pre-commit', dest: '.husky/pre-commit' },
-			{ src: 'opt-in/husky-precommit/lint-staged.config.mjs', dest: 'lint-staged.config.mjs' },
 		],
 		devDependencies: {
 			'husky': '9.1.7',
@@ -333,9 +334,10 @@ export const UNITS: Unit[] = [
 		],
 		// The shipped workflow calls pnpm lint / typecheck / test by name, so it
 		// only passes on a fresh scaffold if those scripts exist — pull in the units
-		// that define them (eslint drags in typescript via its own implies).
+		// that define them. The lint unit isn't here: either one serves, so it comes
+		// from IMPLIES_ONE_OF below, and the lint unit drags in typescript itself.
 		// core-node-version writes the packageManager field pnpm/action-setup reads.
-		implies: ['core-eslint', 'core-vitest', 'core-node-version'],
+		implies: ['core-vitest', 'core-node-version'],
 	},
 	// opt-agents and opt-renovate from the original write-up are deferred (see
 	// issue #22): opt-agents would push a whole working-memory framework, and
@@ -350,7 +352,20 @@ export const UNITS: Unit[] = [
 			{ src: 'opt-in/monorepo/turbo.json', dest: 'turbo.json' },
 		],
 		devDependencies: {
-			turbo: '2.11.5',
+			turbo: '2.11.7',
 		},
 	},
+];
+
+// core-typescript ships two TypeScript lines. 7.x is its own pin; 6.x replaces it
+// whenever core-eslint resolves, because typescript-eslint peers `typescript <6.1.0`
+// and TS 7 has no JS compiler API for it to load.
+export const PIN_LINES: PinLine[] = [
+	{ unit: 'core-typescript', when: 'core-eslint', devDependencies: { typescript: '6.0.3' } },
+];
+
+// opt-ci-github's workflow runs `pnpm lint`, so it needs a lint unit, but either one
+// does. core-oxlint is the default; a set that already has core-eslint keeps it.
+export const IMPLIES_ONE_OF: ImpliesOneOf[] = [
+	{ unit: 'opt-ci-github', anyOf: ['core-eslint', 'core-oxlint'], fallback: 'core-oxlint' },
 ];

@@ -32,15 +32,21 @@ describe('unbranded --preset', () => {
 		expect(result.status, `stdout: ${result.stdout}\nstderr: ${result.stderr}`).toBe(0);
 
 		expect(existsSync(join(tmp, '.editorconfig'))).toBe(true);
-		expect(existsSync(join(tmp, 'eslint.config.mjs'))).toBe(true);
+		expect(existsSync(join(tmp, '.oxlintrc.json'))).toBe(true);
+		expect(existsSync(join(tmp, 'eslint.config.mjs'))).toBe(false);
 		expect(existsSync(join(tmp, '.github', 'workflows', 'ci.yml'))).toBe(true);
 		// cli deliberately omits the git hooks.
 		expect(existsSync(join(tmp, 'lint-staged.config.mjs'))).toBe(false);
 
 		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as { units: { id: string }[]; options?: Record<string, string> };
-		expect(state.units.map(u => u.id)).toContain('core-eslint');
+		expect(state.units.map(u => u.id)).toContain('core-oxlint');
 		expect(state.units.map(u => u.id)).not.toContain('opt-husky');
-		expect(state.options?.eslintFlavor).toBe('base');
+		expect(state.options?.oxlintFlavor).toBe('base');
+
+		// core-typescript pins the TS 7 line only when core-eslint is absent.
+		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as { devDependencies?: Record<string, string> };
+		expect(pkg.devDependencies?.typescript).toMatch(/^\^?7\./);
+		expect(pkg.devDependencies).not.toHaveProperty('eslint');
 	});
 
 	it('extends a preset with --units instead of replacing it', () => {
@@ -49,7 +55,7 @@ describe('unbranded --preset', () => {
 
 		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as { units: { id: string }[] };
 		// Both the preset's set and the addition survive.
-		expect(state.units.map(u => u.id)).toContain('core-eslint');
+		expect(state.units.map(u => u.id)).toContain('core-oxlint');
 		expect(state.units.map(u => u.id)).toContain('opt-vscode');
 	});
 

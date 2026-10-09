@@ -274,6 +274,34 @@ describe('runRemove', () => {
 		expect(await runRemove('not-a-unit', { cwd: tmp, yes: true })).toBe(1);
 	});
 
+	// opt-ci-github's lint unit comes from a slot, not an implies edge (#158), so
+	// only the slot rule stops remove from leaving ci.yml running a missing `pnpm lint`.
+	function scaffoldCi(lintUnits: string[]): void {
+		writeFileSync(join(tmp, 'package.json'), `${JSON.stringify({ name: 'fixture' }, null, '\t')}\n`);
+		writeFileSync(join(tmp, 'ci.yml'), 'jobs: {}\n');
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-node-version', ...lintUnits, 'core-typescript', 'core-vitest', 'opt-ci-github']),
+			writes: [{ dest: join(tmp, 'ci.yml'), unit: 'opt-ci-github', mode: 'copy' }],
+		});
+	}
+
+	it('refuses to remove opt-ci-github\'s only lint unit, changing nothing', async () => {
+		scaffoldCi(['core-oxlint']);
+		const before = readFileSync(join(tmp, '.unbranded.json'), 'utf-8');
+
+		expect(await runRemove('core-oxlint', { cwd: tmp, yes: true })).toBe(1);
+		expect(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')).toBe(before);
+	});
+
+	it('removes one lint unit when another still fills opt-ci-github\'s slot', async () => {
+		scaffoldCi(['core-eslint', 'core-oxlint']);
+
+		expect(await runRemove('core-oxlint', { cwd: tmp, yes: true })).toBe(0);
+		const read = readStateFile(tmp);
+		expect(read.kind === 'ok' && read.state.units.map(u => u.id).sort()).toEqual(['core-eslint', 'core-node-version', 'core-typescript', 'core-vitest', 'opt-ci-github']);
+	});
+
 	it('errors when there is no state file at all', async () => {
 		expect(await runRemove('core-tailwind', { cwd: tmp, yes: true })).toBe(1);
 	});

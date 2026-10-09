@@ -1,6 +1,8 @@
 import type { AnyUnit } from '../../manifest/types';
 import type { PickerOption } from './options';
+import { applyLintStaged } from '../../manifest/lint-staged';
 import { applyUnitOptions } from '../../manifest/options';
+import { applyPinLines } from '../../manifest/pin-lines';
 import { resolveSelection } from '../../manifest/resolve';
 import { buildUnitPickerOptions } from './options';
 
@@ -153,7 +155,7 @@ export function reducePicker(state: PickerState, event: PickerEvent): PickerStat
 // than reading as zero — the same reason formatPlan counts against resolved units.
 export function pickerSummary(state: PickerState): { units: number; files: number; deps: number } {
 	const effective = new Set<string>([...state.selected, ...state.auto]);
-	const units = state.units.filter(u => effective.has(u.id)).map(u => applyUnitOptions(u, state.flavors));
+	const units = state.units.filter(u => effective.has(u.id)).map(u => applyLintStaged(applyPinLines(applyUnitOptions(u, state.flavors), effective), effective));
 	return {
 		units: units.length,
 		files: units.reduce((n, u) => n + u.files.length, 0),

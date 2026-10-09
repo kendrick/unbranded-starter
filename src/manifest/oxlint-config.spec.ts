@@ -27,6 +27,7 @@ describe('oxlint flavors', () => {
 			expect(config.plugins).toEqual(oxlintPlugins(flavor));
 			expect(config.categories).toEqual({ correctness: 'error', suspicious: 'error' });
 			expect(config.ignorePatterns).toContain('node_modules/**');
+			expect(config.ignorePatterns).toContain('.unbranded/**');
 		}
 	});
 

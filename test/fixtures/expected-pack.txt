@@ -7,12 +7,10 @@ dist/index.d.ts
 dist/index.js
 docs/agent-cookbook.md
 docs/authoring-units.md
-eslint.config.mjs
 opt-in/ci-github/README.md
 opt-in/ci-github/ci.yml
 opt-in/husky-precommit/.husky/pre-commit
 opt-in/husky-precommit/README.md
-opt-in/husky-precommit/lint-staged.config.mjs
 opt-in/monorepo/README.md
 opt-in/monorepo/pnpm-workspace.yaml
 opt-in/monorepo/turbo.json

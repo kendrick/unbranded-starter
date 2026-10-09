@@ -87,3 +87,10 @@ describe('buildEslintConfig', () => {
 		expect(src).toContain('import jsxA11y from \'eslint-plugin-jsx-a11y\';');
 	});
 });
+
+describe('buildEslintConfig ignores', () => {
+	it('skips the .unbranded sidecar for every flavor', () => {
+		for (const flavor of ESLINT_FLAVORS)
+			expect(buildEslintConfig(flavor)).toContain('\t\t\t\'.unbranded\',');
+	});
+});

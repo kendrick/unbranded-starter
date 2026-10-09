@@ -12,20 +12,20 @@ export const ESLINT_FLAVORS: EslintFlavor[] = ['base', 'react', 'next'];
 // React-ecosystem package so `base` stays lean, per the AC.
 const BASE_DEPS: Record<string, string> = {
 	'@antfu/eslint-config': '9.5.1',
-	'eslint': '10.11.0',
+	'eslint': '10.12.0',
 	'eslint-plugin-format': '2.0.1',
 };
 
 // antfu opts into these via `react: true`; jsx-a11y is our own strict a11y pass
 // appended on top. Without them installed the config fails to load.
 const REACT_DEPS: Record<string, string> = {
-	'@eslint-react/eslint-plugin': '5.21.1',
+	'@eslint-react/eslint-plugin': '5.24.4',
 	'eslint-plugin-jsx-a11y': '6.10.2',
 	'eslint-plugin-react-refresh': '0.5.7',
 };
 
 const NEXT_DEPS: Record<string, string> = {
-	'@next/eslint-plugin-next': '16.3.6',
+	'@next/eslint-plugin-next': '16.3.8',
 };
 
 // The exact devDependencies a flavor installs. Pinned like every other unit; the
@@ -100,7 +100,10 @@ const JSX_A11Y_RULES: string[] = [
 	'\'jsx-a11y/tabindex-no-positive\': \'error\',',
 ];
 
+// `.unbranded` holds baseline copies of managed files; linting them reports
+// each finding twice, on files nobody edits.
 const IGNORES: string[] = [
+	'.unbranded',
 	'.next',
 	'node_modules',
 	'dist',

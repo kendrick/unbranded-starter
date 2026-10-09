@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 // Manifest entries write `src` paths relative to a known anchor so they don't
-// have to know whether the CLI is running from src/ (tests, tsup --watch) or
+// have to know whether the CLI is running from src/ (tests, tsdown --watch) or
 // from a bundled dist/cli.js (publish, npx). PKG_ROOT is that anchor: the
 // nearest package.json walking up from this file.
 //

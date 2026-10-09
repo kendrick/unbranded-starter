@@ -33,7 +33,7 @@ export default {
 				ignoreFunctions: ['theme', 'screen', 'spacing', 'alpha'],
 			},
 		],
-		// Indentation is handled by ESLint's CSS formatter
+		// stylelint 16+ has no stylistic rules, so this config doesn't check CSS indentation
 		// Allow empty lines in custom properties blocks
 		'custom-property-empty-line-before': null,
 		// Don't require quotes in font-family (Tailwind uses unquoted)
