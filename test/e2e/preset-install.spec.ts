@@ -38,12 +38,16 @@ function writeStubProject(dir: string): void {
 }
 
 function runPreset(name: string, tmp: string): void {
-	// Tab-indented on purpose: augment mode preserves the existing file's indent
-	// (#48's accepted tension), and the scaffold's own lint enforces tabs — a
-	// two-space seed here would fail the very lint this test exists to run.
+	// Tab-indented on purpose. Augment mode preserves the existing file's indent
+	// (#48's accepted tension), so the seed sets the indent of the patched package.json.
 	writeFileSync(join(tmp, 'package.json'), `${JSON.stringify({ name: `preset-${name}`, version: '0.0.0', private: true }, null, '\t')}\n`);
 	const scaffold = spawnSync('node', [CLI, '--preset', name, '--pm', 'pnpm', '--on-conflict', 'overwrite'], { cwd: tmp, encoding: 'utf-8' });
 	expect(scaffold.status, `scaffold stderr: ${scaffold.stderr}\nstdout: ${scaffold.stdout}`).toBe(0);
+	// core-typescript pins TS 7 only when core-eslint is absent, so an ESLint unit
+	// creeping back into a preset would also drag TypeScript back to 6.
+	const dev = (JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as { devDependencies?: Record<string, string> }).devDependencies ?? {};
+	expect(dev.typescript).toMatch(/^\^?7\./);
+	expect(dev).not.toHaveProperty('eslint');
 	// Every preset pulls Vitest -> esbuild, whose build pnpm blocks by default, so
 	// the scaffold seeds pnpm-workspace.yaml with the allowlist itself now (#67) —
 	// version-aware, see pnpm-builds.ts. That the install above already succeeded
@@ -55,8 +59,8 @@ function runPreset(name: string, tmp: string): void {
 	writeStubProject(tmp);
 }
 
-// The scaffold's own scripts, via its own package manager. CI=true forces
-// antfu's full ruleset, same as the flavor and scaffold-lint suites.
+// The scaffold's own scripts, via its own package manager. CI=true matches the
+// environment the scaffold's CI job runs them in, as the flavor suites do.
 function script(tmp: string, name: string): { status: number | null; output: string } {
 	const res = spawnSync('pnpm', [name], { cwd: tmp, encoding: 'utf-8', env: { ...process.env, CI: 'true' } });
 	return { status: res.status, output: `${res.stdout}\n${res.stderr}` };
