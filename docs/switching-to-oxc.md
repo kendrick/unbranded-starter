@@ -16,6 +16,8 @@ Stay on ESLint if you depend on ESLint plugins or rules that oxlint doesn't cove
 
 Commit or stash your work. The steps below change `package.json`, delete files, and reformat your tree, so you want a clean baseline to review against.
 
+Before you remove anything, write down which units the project has. Each entry in the `units` array of `.unbranded.json` names one by its `id`. Step 1's cascade drops units from that file, and step 2 needs the original list.
+
 ## Steps
 
 1. Remove `core-eslint`. If `opt-ci-github` is installed, the plain `remove` refuses, because its workflow runs `pnpm lint` and depends on `core-eslint` through the lint slot:
