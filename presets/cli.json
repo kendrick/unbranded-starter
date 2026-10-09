@@ -4,12 +4,12 @@
 		"core-editorconfig",
 		"core-gitattributes",
 		"core-node-version",
-		"core-eslint",
+		"core-oxlint",
 		"core-typescript",
 		"core-vitest",
 		"opt-ci-github"
 	],
-	"options": { "eslintFlavor": "base" },
+	"options": { "oxlintFlavor": "base" },
 	"pm": null,
 	"onConflict": "skip",
 	"postInstall": "none"

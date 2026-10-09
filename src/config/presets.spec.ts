@@ -35,7 +35,18 @@ describe('shipped presets', () => {
 		const nextApp = loadPreset('next-app', KNOWN, SCHEMA).config;
 		for (const unit of nodeLib.units)
 			expect(nextApp.units, unit).toContain(unit);
-		expect(nextApp.options?.eslintFlavor).toBe('next');
+		expect(nextApp.options?.oxlintFlavor).toBe('next');
+	});
+
+	it('no preset scaffolds ESLint', () => {
+		// Presets lint with core-oxlint. core-eslint stays in the catalog for
+		// `--units` and recipes, so the check reads the presets alone.
+		for (const name of presetNames()) {
+			const { config } = loadPreset(name, KNOWN, SCHEMA);
+			expect(config.units, name).not.toContain('core-eslint');
+			expect(config.units, name).toContain('core-oxlint');
+			expect(config.options ?? {}, name).not.toHaveProperty('eslintFlavor');
+		}
 	});
 
 	it('presets default to the safe run: no install, no clobber, no hooks', () => {

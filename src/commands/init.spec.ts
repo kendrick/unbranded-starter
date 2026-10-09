@@ -60,9 +60,9 @@ describe('runInit preselect', () => {
 
 		const picker = vi.mocked(unitPicker).mock.calls[0]?.[0];
 		expect(picker?.initialSelected).toContain('opt-shadcn');
-		expect(picker?.initialSelected).toContain('core-eslint');
+		expect(picker?.initialSelected).toContain('core-oxlint');
 		// The preset's recorded flavor beats the environment sniff.
-		expect(picker?.initialFlavors?.eslintFlavor).toBe('next');
+		expect(picker?.initialFlavors?.oxlintFlavor).toBe('next');
 	});
 
 	it('opens the picker with the preselected units checked', async () => {
