@@ -92,7 +92,7 @@ A run looks roughly like this:
 │
 ◇  Apply? Yes
 │
-●  Files: 3 written, 0 overwritten, 0 merged, 0 appended, 0 skipped.
+●  Files: 4 written, 0 overwritten, 0 merged, 0 appended, 0 skipped.
 │
 ○  Installing dependencies via pnpm
 │
