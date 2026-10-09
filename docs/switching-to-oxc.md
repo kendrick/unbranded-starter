@@ -36,13 +36,13 @@ Commit or stash your work. The steps below change `package.json`, delete files, 
 
    Without `opt-ci-github`, skip `--cascade`. The command deletes `eslint.config.mjs` if you haven't modified it, and drops `@antfu/eslint-config`, `eslint`, `eslint-plugin-format`, `lint`, and `lint:fix` from `package.json`. A file you've edited stays on disk and you delete it yourself.
 
-2. Add `core-oxlint`, and add back any unit the cascade took out. This run also moves `typescript` to 7.x and installs `oxlint` and `oxfmt`:
+2. Add `core-oxlint`, and add back every unit you had whose files call ESLint. That is `opt-ci-github`, which the cascade removed, and `opt-husky`, whose `lint-staged.config.mjs` runs `eslint --fix` until you regenerate it. This run also moves `typescript` to 7.x, installs `oxlint` and `oxfmt`, and rewrites the lint-staged config to call them:
 
    ```bash
-   npx unbranded --units core-oxlint,opt-ci-github --pm pnpm --yes
+   npx unbranded --units core-oxlint,opt-ci-github,opt-husky --pm pnpm --yes
    ```
 
-   Drop `opt-ci-github` from `--units` if you didn't have it. Replace `pnpm` with your package manager.
+   Drop `opt-ci-github` or `opt-husky` from `--units` if you didn't have it. Replace `pnpm` with your package manager. `opt-vscode` doesn't regenerate its `.vscode/settings.json`, so edit out the ESLint entries there by hand.
 
 3. Format the tree once:
 
