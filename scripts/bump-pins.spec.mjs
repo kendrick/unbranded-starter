@@ -190,6 +190,13 @@ describe('rewritePackageJson across majors', () => {
 		const r = rewritePackageJson(PKG, [{ name: '@antfu/eslint-config', from: '8.2.0', to: '9.3.0' }]);
 		expect(JSON.parse(r.source).devDependencies['@antfu/eslint-config']).toBe('^9.3.0');
 	});
+
+	it('advances a range already on the target major: manifest 8.x to 9.3.0 moves ^9.2.0', () => {
+		const ahead = PKG.replace('^8.2.0', '^9.2.0');
+		const r = rewritePackageJson(ahead, [{ name: '@antfu/eslint-config', from: '8.2.0', to: '9.3.0' }]);
+		expect(JSON.parse(r.source).devDependencies['@antfu/eslint-config']).toBe('^9.3.0');
+		expect(r.applied).toEqual(['@antfu/eslint-config']);
+	});
 });
 
 describe('rewritePins with two typescript pins', () => {

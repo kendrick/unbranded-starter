@@ -82,8 +82,8 @@ export function rewritePins(source, bumps) {
 // outside the version itself, and it's why the rewrite fires independent of
 // whether the existing range would already admit `to`—a caret range often
 // would, and letting that suppress the bump is how a major-version gap hides.
-// The one exception: a range on a different major than the bump's `from` is
-// left alone (see the guard below).
+// The one exception: a range on neither the bump's `from` major nor its `to`
+// major is left alone (see the guard below).
 export function rewritePackageJson(source, bumps) {
 	const applied = [];
 	const missed = [];
@@ -95,12 +95,21 @@ export function rewritePackageJson(source, bumps) {
 			const current = pkg[map]?.[name];
 			if (current === undefined)
 				continue;
-			// Two TS pins share one package.json key. Only the bump that started on
-			// this range's major may move it, or the 7.x bump drags the repo's ^6
-			// onto TS 7 (#131). A 9→10 bump still lands: its `from` is 9.x.
+			// Two TS pins share one package.json key, so a bump may only move a range
+			// on its own `from` or `to` major. Else the 7.x bump drags the repo's ^6
+			// onto TS 7 (#131). `to` counts too: a root already on the target major
+			// (^9.2.0 when the manifest goes 8.x→9.3.0) must still advance with it.
 			const fromMajor = majorOf(from);
-			if (fromMajor !== undefined && majorOf(current) !== undefined && majorOf(current) !== fromMajor)
+			const toMajor = majorOf(to);
+			const currentMajor = majorOf(current);
+			if (
+				fromMajor !== undefined
+				&& currentMajor !== undefined
+				&& currentMajor !== fromMajor
+				&& currentMajor !== toMajor
+			) {
 				continue;
+			}
 			// The repo mixes range styles per entry (ajv pins exact) so the
 			// prefix has to be read off this entry, not assumed.
 			const prefix = /^[\^~]/.test(current) ? current[0] : '';
