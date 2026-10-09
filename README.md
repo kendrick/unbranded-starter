@@ -81,14 +81,14 @@ A run looks roughly like this:
 ◇  What do you want to install?
 │  [Foundation] EditorConfig
 │  [Foundation] Node version pin
-│  [Linting]    ESLint
+│  [Linting]    oxlint + oxfmt
 │  [TypeScript] TypeScript
 │  …
 │
 □  Plan
-│  • ESLint
+│  • oxlint + oxfmt
 │  • TypeScript (auto)
-│  2 units · 3 files · 7 deps · install via pnpm
+│  2 units · 4 files · 4 deps · install via pnpm
 │
 ◇  Apply? Yes
 │
@@ -101,7 +101,7 @@ A run looks roughly like this:
 
 ## What You Can Install
 
-Fifteen units, grouped by category. Selecting one can pull in others: ESLint implies TypeScript, PostCSS and shadcn/ui imply Tailwind, and the GitHub Actions unit implies the lint and test units its workflow runs. Auto-added units are tagged `(auto)` in the plan.
+Sixteen units, grouped by category. Selecting one can pull in others: either lint unit (oxlint + oxfmt or ESLint) implies TypeScript, PostCSS and shadcn/ui imply Tailwind, and the GitHub Actions unit implies the lint and test units its workflow runs. Auto-added units are tagged `(auto)` in the plan.
 
 **Foundation**
 
@@ -111,7 +111,8 @@ Fifteen units, grouped by category. Selecting one can pull in others: ESLint imp
 
 **Linting**
 
-- **ESLint** — `@antfu/eslint-config` in a base, react, or next flavor. Base is TypeScript-only, for Node libraries and CLIs; react and next layer on React, hooks, and a strict jsx-a11y block, and next adds Next's performance rules. Tabs, single quotes, arrow parens, with dprint formatting the non-code files.
+- **oxlint + oxfmt**—the default. oxlint and oxfmt in a base, react, or next flavor. Base is TypeScript-only, for Node libraries and CLIs; react adds React and jsx-a11y rules, and next adds Next.js rules on top. Both tools ship as native binaries, so there are no plugins to install, and TypeScript stays on 7.
+- **ESLint**—the alternative, for projects that want `@antfu/eslint-config` in a base, react, or next flavor. Base is TypeScript-only; react and next layer on React, hooks, and a strict jsx-a11y block, and next adds Next's performance rules. Tabs, single quotes, arrow parens, with dprint formatting the non-code files. This unit holds TypeScript at 6.x because typescript-eslint doesn't support TS 7 yet. It excludes oxlint + oxfmt, so pick one of the two. To move an existing `core-eslint` project over, follow [docs/switching-to-oxc.md](docs/switching-to-oxc.md).
 
 **TypeScript**
 
@@ -157,9 +158,9 @@ Run `unbranded list` for the same catalog in your terminal, or `unbranded list -
 
 Three shipped recipes bundle the common answers, and the interactive flow offers them as a starting point before the picker:
 
-- **node-lib** — a typed, tested, linted Node library: strict TypeScript, ESLint (base flavor), Vitest, pre-commit hooks, CI, and the editor/git hygiene units.
-- **next-app** — everything node-lib has plus the front-end stack: Tailwind v4, PostCSS, Stylelint, shadcn/ui, Playwright with axe, and a shared VS Code workspace, with ESLint on the next flavor.
-- **cli** — node-lib without the git hooks, for command-line tools.
+- **node-lib** — a typed, tested, linted Node library: strict TypeScript, oxlint and oxfmt (base flavor), Vitest, pre-commit hooks, CI, and the editor/git hygiene units.
+- **next-app** — everything node-lib has, plus the front-end stack: Tailwind v4, PostCSS, Stylelint, shadcn/ui, Playwright with axe, and a shared VS Code workspace. oxlint runs the next flavor.
+- **cli** — node-lib without the git hooks, for command-line tools. After scaffolding, point your bundler at a bin entry and add a shebang; the shipped tsconfig works as-is for a single-entry CLI.
 
 `--preset <name>` behaves like `--config` pointed at the bundled file, with one twist: `--units` _adds_ to a preset instead of replacing its list, because a preset is a starting point. Presets default to the safe run (no install, no overwrites, your existing dependency specs kept); pass `--pm` to install and `--on-conflict overwrite` to clobber. The files live in [presets/](presets/) as plain recipe JSON, so they double as documentation.
 
@@ -214,7 +215,7 @@ unbranded --config recipe.json
 
 ```json
 {
-	"units": ["core-eslint", "core-vitest"],
+	"units": ["core-oxlint", "core-vitest"],
 	"pm": "pnpm",
 	"onConflict": "overwrite",
 	"postInstall": "all",
@@ -249,8 +250,8 @@ Every file gets one verdict: `would create`, `would merge`, `would append`, `ide
 
 ## Philosophy
 
-- **`@antfu/eslint-config` over `eslint-config-next`** alone. @antfu gives uniform style, a11y, and formatting across every kind of project, not just Next ones.
-- **Tabs over spaces**, because @antfu does tabs and I'm not picking that fight.
+- **oxlint + oxfmt by default.** They run fast and need no plugin tree. @antfu's ESLint config stays available as the `core-eslint` alternative, and it beats `eslint-config-next` alone with uniform style, a11y, and formatting across every kind of project.
+- **Tabs over spaces**, because the shipped oxfmt and EditorConfig settings use tabs and I'm not picking that fight.
 - **Strict TypeScript is non-negotiable.** `noUncheckedIndexedAccess` catches the bugs the basic `strict` flag misses.
 - **`.vscode/` is committed**, and there's a unit for it. If you work in VS Code, a clone should just work.
 
