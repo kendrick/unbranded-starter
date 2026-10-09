@@ -4,7 +4,7 @@ This is for projects scaffolded with `core-eslint`, which includes anything an o
 
 ## What Doesn't Change on Its Own
 
-Nothing happens to your project when you upgrade `unbranded`. `update` keeps `typescript` on 6.x for as long as `core-eslint` is installed, because typescript-eslint peers `typescript <6.1.0` and the main entry point of TypeScript 7 exports no `createProgram` for it to load. Your lint setup keeps working, and you can stay on it indefinitely.
+`update` keeps pulling template changes, but it holds `typescript` on 6.x for as long as `core-eslint` is installed. typescript-eslint peers `typescript <6.1.0`, and the main entry point of TypeScript 7 exports no `createProgram` for it to load. Your ESLint setup keeps working, and you can stay on it indefinitely.
 
 ## Why Switch, and Why Not To
 
@@ -50,7 +50,7 @@ Commit or stash your work. The steps below change `package.json`, delete files, 
    pnpm format
    ```
 
-   This is the whole-tree reformat. oxfmt lays code out differently than the ESLint setup did, so expect a large diff. Commit it on its own, with nothing else in it, so `git blame` and your review stay readable.
+   `pnpm format` reformats the whole tree once. oxfmt lays code out differently than the ESLint setup did, so expect a large diff. Commit the reformat by itself so `git blame` and your review stay readable.
 
 ## Check the Result
 
@@ -66,8 +66,6 @@ Both exit 0. Then confirm the TypeScript line:
 grep '"typescript"' package.json
 ```
 
-The version starts with `7.`. After `pnpm format` reformats files, `npx unbranded diff` reports the reformatted files as user-modified.
+The version starts with `7.`.
 
-## Staying on ESLint
-
-If you keep `core-eslint`, do nothing. `update` continues to pull template changes and holds `typescript` on 6.x. When you're ready, the steps above work at any time.
+After `pnpm format`, `npx unbranded diff` lists the rewritten files as user-modified. Judge the switch by lint and typecheck.
