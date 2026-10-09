@@ -46,8 +46,16 @@ describe('typeScript line and lint slot (#158)', () => {
 		expect(r.plan.devDependencies?.typescript).toMatch(/^\^?6\./);
 	});
 
-	it('under --latest, core-eslint reports typescript `latest`, as the real run writes', () => {
+	it('under --latest, core-eslint holds typescript to `^6` and everything else goes to `latest` (#159)', () => {
+		// dryRun passes --pm pnpm, matching #159's acceptance invocation.
 		const r = dryRun('core-eslint', tmp, ['--latest']);
+		expect(r.status, r.stderr).toBe(0);
+		expect(r.plan.devDependencies?.typescript).toBe('^6');
+		expect(r.plan.devDependencies?.eslint).toBe('latest');
+	});
+
+	it('under --latest, core-typescript alone still reports typescript `latest`', () => {
+		const r = dryRun('core-typescript', tmp, ['--latest']);
 		expect(r.status, r.stderr).toBe(0);
 		expect(r.plan.devDependencies?.typescript).toBe('latest');
 	});

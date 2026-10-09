@@ -164,7 +164,7 @@ export const UNITS: Unit[] = [
 			{ src: 'stylelint.config.mjs', dest: 'stylelint.config.mjs' },
 		],
 		devDependencies: {
-			'stylelint': '17.15.0',
+			'stylelint': '17.16.0',
 			'stylelint-config-standard': '40.0.0',
 			'@dreamsicle.io/stylelint-config-tailwindcss': '1.2.2',
 		},
@@ -278,9 +278,10 @@ export const UNITS: Unit[] = [
 		category: 'git',
 		label: 'Husky + lint-staged',
 		description: 'Pre-commit hook that runs lint-staged on changed files.',
+		// lint-staged.config.mjs isn't listed: its contents depend on which lint unit
+		// resolved, so applyLintStaged appends it once the set is known.
 		files: [
 			{ src: 'opt-in/husky-precommit/.husky/pre-commit', dest: '.husky/pre-commit' },
-			{ src: 'opt-in/husky-precommit/lint-staged.config.mjs', dest: 'lint-staged.config.mjs' },
 		],
 		devDependencies: {
 			'husky': '9.1.7',
@@ -351,7 +352,7 @@ export const UNITS: Unit[] = [
 			{ src: 'opt-in/monorepo/turbo.json', dest: 'turbo.json' },
 		],
 		devDependencies: {
-			turbo: '2.11.5',
+			turbo: '2.11.7',
 		},
 	},
 ];

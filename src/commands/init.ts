@@ -18,12 +18,13 @@ import { createJournal, formatRollbackReport, rollbackJournal } from '../fs/jour
 import { formatInstallFailure, formatKeepLine, resolveInstallFailure } from '../install/failure';
 import { isDirtyGitTree, maybeInitGit } from '../install/git';
 import { runPostInstalls } from '../install/post';
-import { toLatest, writeAndInstall } from '../install/run';
+import { writeAndInstall } from '../install/run';
 import { loadCatalog } from '../manifest/catalog';
 import { detectEslintFlavor } from '../manifest/eslint-config';
 import { IMPLIES_ONE_OF } from '../manifest/index';
+import { applyLintStaged } from '../manifest/lint-staged';
 import { applyUnitOptions } from '../manifest/options';
-import { applyPinLines } from '../manifest/pin-lines';
+import { applyPinLines, specsToWrite } from '../manifest/pin-lines';
 import { exclusionAgainstTracked, resolveSelection } from '../manifest/resolve';
 import { unitPicker } from '../prompts/unit-picker/prompt';
 import { readStateFile, unsupportedStateMessage, writeStateFile } from '../state/state';
@@ -205,15 +206,11 @@ export async function runPlanJson(opts: { configPath?: string; inline?: InlineFl
 	const selectedUnits = resolution.ids.map(id => byId.get(id)).filter((u): u is AnyUnit => u !== undefined);
 	const optionSelections = await resolveUnitOptions(selectedUnits, config.options, false, target.dir);
 	const selectedIds = new Set([...resolution.ids, ...tracked.ids]);
-	const units = selectedUnits.map(unit => applyPinLines(applyUnitOptions(unit, optionSelections), selectedIds));
+	const units = selectedUnits.map(unit => applyLintStaged(applyPinLines(applyUnitOptions(unit, optionSelections), selectedIds), selectedIds));
 
-	// Same precedence as runInit (flag, then recipe). Under --latest the run writes
-	// `latest`, not the line's pin, so the envelope has to say so too; holding a pin
-	// to its line under --latest is #159.
+	// Same precedence as runInit (flag, then recipe).
 	const latest = opts.latest === true || config.versions === 'latest';
-	const written = latest
-		? units.map(u => ({ ...u, dependencies: toLatest(u.dependencies), devDependencies: toLatest(u.devDependencies) }))
-		: units;
+	const written = specsToWrite(units, selectedIds, latest);
 
 	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
 	const plans = units.flatMap(unit =>
@@ -417,7 +414,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	const seededOptions = { ...pickerFlavors, ...config?.options };
 	const optionSelections = await resolveUnitOptions(selectedUnits, seededOptions, !skipApply, target.dir);
 	const selectedIds = new Set([...resolution.ids, ...tracked.ids]);
-	const units = selectedUnits.map(unit => applyPinLines(applyUnitOptions(unit, optionSelections), selectedIds));
+	const units = selectedUnits.map(unit => applyLintStaged(applyPinLines(applyUnitOptions(unit, optionSelections), selectedIds), selectedIds));
 
 	note(formatPlan(units, resolution.auto, resolution.requiredBy, pm, latest), 'Plan');
 
@@ -478,10 +475,12 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		+ `${count('merged')} merged, ${count('appended')} appended, ${count('skipped')} skipped.`,
 	);
 
+	// Only package.json takes the --latest specs; the plan note and post-installs
+	// keep the manifest's `units`.
 	const installResult = await writeAndInstall({
 		targetDir: target.dir,
 		pm,
-		units,
+		units: specsToWrite(units, selectedIds, latest),
 		latest,
 		// Undefined on an interactive run, which is what makes dependency
 		// collisions prompt. resolveConfig defaults it to 'overwrite' on every

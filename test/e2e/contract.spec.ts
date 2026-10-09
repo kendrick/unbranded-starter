@@ -158,12 +158,17 @@ describe('the shipped schemas accept live CLI output', () => {
 
 	it('outdated: against a local echo registry', async () => {
 		// Same in-process registry trick as the outdated e2e, so the envelope
-		// being validated came off a real network round trip.
-		const pins = new Map(collectManifestPins(UNITS).map(p => [p.name, p.pin]));
+		// being validated came off a real network round trip. Every pin of a name
+		// is published, so the held TS 6 pin grades inside its line.
+		const pins = new Map<string, string[]>();
+		for (const p of collectManifestPins(UNITS))
+			pins.set(p.name, [...(pins.get(p.name) ?? []), p.pin]);
 		const server = createServer((req, res) => {
 			const name = decodeURIComponent((req.url ?? '/').slice(1));
+			const published = pins.get(name) ?? [];
+			const latest = [...published].sort((a, b) => a.localeCompare(b, 'en', { numeric: true })).at(-1) ?? '0.0.0';
 			res.setHeader('content-type', 'application/json');
-			res.end(JSON.stringify({ 'dist-tags': { latest: pins.get(name) ?? '0.0.0' } }));
+			res.end(JSON.stringify({ 'dist-tags': { latest }, 'versions': Object.fromEntries(published.map(v => [v, {}])) }));
 		});
 		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 		const registry = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -178,7 +183,10 @@ describe('the shipped schemas accept live CLI output', () => {
 				child.on('close', status => resolve({ status, stdout }));
 			});
 			expect(result.status).toBe(0);
-			expectValid('outdated', JSON.parse(result.stdout));
+			const parsed = JSON.parse(result.stdout) as { packages: { line?: number }[] };
+			expectValid('outdated', parsed);
+			// Validating only proves the schema allows `line`; this proves it's emitted.
+			expect(parsed.packages.some(p => p.line === 6)).toBe(true);
 		}
 		finally {
 			await new Promise(resolve => server.close(resolve));

@@ -1,6 +1,6 @@
 {
 	"recommendations": [
-		"dbaeumer.vscode-eslint",
+		"oxc.oxc-vscode",
 		"stylelint.vscode-stylelint",
 		"bradlc.vscode-tailwindcss",
 		"unifiedjs.vscode-mdx",

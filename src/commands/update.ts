@@ -11,6 +11,7 @@ import { mergePackageJson } from '../fs/merge-json';
 import { isDirtyGitTree } from '../install/git';
 import { detectIndent } from '../install/run';
 import { loadCatalog, unitsDirsFor } from '../manifest/catalog';
+import { applyLintStaged } from '../manifest/lint-staged';
 import { applyUnitOptions } from '../manifest/options';
 import { applyPinLines } from '../manifest/pin-lines';
 import { hashBuffer, readStateFile, refreshTrackedFiles, SIDECAR_DIR, unsupportedStateMessage } from '../state/state';
@@ -73,7 +74,7 @@ export function planUpdate(opts: { targetDir: string; state: StateFile; units: A
 		const catalogUnit = byId.get(id);
 		if (!catalogUnit)
 			continue;
-		const unit = applyPinLines(applyUnitOptions(catalogUnit, state.options ?? {}), installedIds);
+		const unit = applyLintStaged(applyPinLines(applyUnitOptions(catalogUnit, state.options ?? {}), installedIds), installedIds);
 		resolved.push(unit);
 		const root = opts.templateRoots?.get(id) ?? opts.pkgRoot;
 		for (const op of unit.files) {

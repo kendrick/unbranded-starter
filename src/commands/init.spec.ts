@@ -1,5 +1,5 @@
 import type { Unit, UnitId } from '../manifest/types';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { log } from '@clack/prompts';
@@ -24,7 +24,6 @@ vi.mock('@clack/prompts', async (importOriginal) => {
 
 // The install spawn is the other boundary (same seam run.spec mocks): stubbing it
 // per-test lets the error path run without a package manager in the loop.
-// toLatest stays real: the --dry-run --json envelope reports what it produces.
 vi.mock('../install/run', async (importOriginal) => {
 	const mod = await importOriginal<typeof import('../install/run')>();
 	return { ...mod, writeAndInstall: vi.fn() };
@@ -61,9 +60,9 @@ describe('runInit preselect', () => {
 
 		const picker = vi.mocked(unitPicker).mock.calls[0]?.[0];
 		expect(picker?.initialSelected).toContain('opt-shadcn');
-		expect(picker?.initialSelected).toContain('core-eslint');
+		expect(picker?.initialSelected).toContain('core-oxlint');
 		// The preset's recorded flavor beats the environment sniff.
-		expect(picker?.initialFlavors?.eslintFlavor).toBe('next');
+		expect(picker?.initialFlavors?.oxlintFlavor).toBe('next');
 	});
 
 	it('opens the picker with the preselected units checked', async () => {
@@ -239,15 +238,47 @@ describe('runPlanJson pins under --latest (#158)', () => {
 		expect((await envelope({ targetDir: tmp, inline: { units: 'core-eslint', pm: 'pnpm' } })).devDependencies.typescript).toMatch(/^6\./);
 	});
 
-	it('reports `latest` for every pin under the flag, as the real run writes', async () => {
+	it('holds typescript to its line\'s major under the flag and reports `latest` for every other pin (#159)', async () => {
 		const plan = await envelope({ targetDir: tmp, latest: true, inline: { units: 'core-eslint', pm: 'pnpm' } });
-		expect(plan.devDependencies.typescript).toBe('latest');
-		expect(Object.values(plan.devDependencies).every(v => v === 'latest')).toBe(true);
+		expect(plan.devDependencies.typescript).toBe('^6');
+		const { typescript: _held, ...rest } = plan.devDependencies;
+		expect(Object.keys(rest).length).toBeGreaterThan(0);
+		expect(Object.values(rest).every(v => v === 'latest')).toBe(true);
 	});
 
-	it('reports `latest` under a recipe\'s versions field too', async () => {
+	it('holds the line under a recipe\'s versions field too', async () => {
 		writeFileSync(join(tmp, 'recipe.json'), JSON.stringify({ units: ['core-eslint'], pm: null, onConflict: 'overwrite', postInstall: 'none', versions: 'latest' }));
-		expect((await envelope({ targetDir: tmp, configPath: join(tmp, 'recipe.json'), inline: { pm: 'pnpm' } })).devDependencies.typescript).toBe('latest');
+		expect((await envelope({ targetDir: tmp, configPath: join(tmp, 'recipe.json'), inline: { pm: 'pnpm' } })).devDependencies.typescript).toBe('^6');
+	});
+
+	it('reports `latest` for typescript when no lint unit holds its line', async () => {
+		expect((await envelope({ targetDir: tmp, latest: true, inline: { units: 'core-typescript', pm: 'pnpm' } })).devDependencies.typescript).toBe('latest');
+	});
+});
+
+describe('runInit under --latest (#159)', () => {
+	let tmp: string;
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+		vi.mocked(writeAndInstall).mockReset();
+	});
+
+	it('hands writeAndInstall the held caret and records manifest units in state', async () => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-latest-'));
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		vi.mocked(writeAndInstall).mockResolvedValue({ wrote: true, installed: false, cancelled: false, failed: false, computedWrites: [] });
+
+		const result = await runInit({ targetDir: tmp, latest: true, inline: { units: 'core-eslint', pm: 'pnpm', yes: true } });
+
+		expect(result).toEqual({ ok: true });
+		const passed = vi.mocked(writeAndInstall).mock.calls[0]?.[0];
+		expect(passed?.latest).toBe(true);
+		const ts = passed?.units.find(u => u.id === 'core-typescript');
+		expect(ts?.devDependencies?.typescript).toBe('^6');
+		expect(passed?.units.find(u => u.id === 'core-eslint')?.devDependencies?.eslint).toBe('latest');
+		const state = JSON.parse(readFileSync(join(tmp, STATE_FILENAME), 'utf-8')) as { units: { id: string }[] };
+		expect(state.units.map(u => u.id)).toEqual(expect.arrayContaining(['core-eslint', 'core-typescript']));
 	});
 });
 
