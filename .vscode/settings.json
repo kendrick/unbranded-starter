@@ -35,9 +35,8 @@
 		"editor.defaultFormatter": "vscode.json-language-features"
 	},
 
-	// Markdown and MDX: oxfmt formats both, and oxc.oxc-vscode activates on both
-	// languages. A save then writes the bytes `oxfmt --check` accepts in `pnpm lint`.
-	// Prettier is a second formatter with its own output, so it is left out.
+	// Markdown and MDX: oxc.oxc-vscode runs oxfmt, so a save writes what
+	// `oxfmt --check` in `pnpm lint` accepts.
 	"[markdown]": {
 		"editor.defaultFormatter": "oxc.oxc-vscode"
 	},
