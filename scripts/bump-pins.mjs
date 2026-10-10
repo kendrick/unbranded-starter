@@ -24,17 +24,19 @@ import process from 'node:process';
 // missed-union hard-fail below.
 const MANIFEST_FILES = ['src/manifest/index.ts', 'src/manifest/eslint-config.ts'];
 
-const majorOf = spec => /^[\^~]?(\d+)\./.exec(spec)?.[1];
+const majorOf = (spec) => /^[\^~]?(\d+)\./.exec(spec)?.[1];
 
 // outdated's JSON → the actionable subset: anything the registry is ahead of.
 // `unknown` grades stay out — a pin the tool can't parse is a human's problem.
 export function planBumps(report) {
-	return report.packages
-		.filter(p => p.behind === 'patch' || p.behind === 'minor' || p.behind === 'major')
-		// A held entry whose latest left its line is a report from an older CLI or
-		// a hand edit; bumping it is the exact #131 break, so drop it.
-		.filter(p => p.line === undefined || Number(majorOf(p.latest)) === p.line)
-		.map(p => ({ name: p.name, from: p.pin, to: p.latest, units: p.units }));
+	return (
+		report.packages
+			.filter((p) => p.behind === 'patch' || p.behind === 'minor' || p.behind === 'major')
+			// A held entry whose latest left its line is a report from an older CLI or
+			// a hand edit; bumping it is the exact #131 break, so drop it.
+			.filter((p) => p.line === undefined || Number(majorOf(p.latest)) === p.line)
+			.map((p) => ({ name: p.name, from: p.pin, to: p.latest, units: p.units }))
+	);
 }
 
 // One PR per unit. A pin shared across units lands in the FIRST declarer's PR
@@ -62,7 +64,10 @@ export function rewritePins(source, bumps) {
 	let out = source;
 	for (const { name, from, to } of bumps) {
 		const n = escapeRegExp(name);
-		const pattern = new RegExp(`(^|[^\\w@/.-])((?:'${n}'|"${n}"|${n}):\\s*')${escapeRegExp(from)}(')`, 'g');
+		const pattern = new RegExp(
+			`(^|[^\\w@/.-])((?:'${n}'|"${n}"|${n}):\\s*')${escapeRegExp(from)}(')`,
+			'g',
+		);
 		let hit = false;
 		out = out.replace(pattern, (_m, pre, key, quote) => {
 			hit = true;
@@ -93,8 +98,7 @@ export function rewritePackageJson(source, bumps) {
 		let hit = false;
 		for (const map of ['dependencies', 'devDependencies']) {
 			const current = pkg[map]?.[name];
-			if (current === undefined)
-				continue;
+			if (current === undefined) continue;
 			// Two TS pins share one package.json key, so a bump may only move a range
 			// on its own `from` or `to` major. Else the 7.x bump drags the repo's ^6
 			// onto TS 7 (#131). `to` counts too: a root already on the target major
@@ -103,10 +107,10 @@ export function rewritePackageJson(source, bumps) {
 			const toMajor = majorOf(to);
 			const currentMajor = majorOf(current);
 			if (
-				fromMajor !== undefined
-				&& currentMajor !== undefined
-				&& currentMajor !== fromMajor
-				&& currentMajor !== toMajor
+				fromMajor !== undefined &&
+				currentMajor !== undefined &&
+				currentMajor !== fromMajor &&
+				currentMajor !== toMajor
 			) {
 				continue;
 			}
@@ -151,22 +155,28 @@ function main() {
 	let missedAny = false;
 
 	for (const [unit, bumps] of groups) {
-		const lines = bumps.map(b => `${b.name} ${b.from} → ${b.to}`);
+		const lines = bumps.map((b) => `${b.name} ${b.from} → ${b.to}`);
 
 		if (dryRun) {
 			// Runs both rewrites in memory so a dry run surfaces the same
 			// per-file misses the real run would, without writing anything.
-			process.stdout.write(`bump/${unit}\n${lines.map(l => `  ${l}`).join('\n')}\n`);
-			const missed = new Set(bumps.map(b => b.name));
+			process.stdout.write(`bump/${unit}\n${lines.map((l) => `  ${l}`).join('\n')}\n`);
+			const missed = new Set(bumps.map((b) => b.name));
 			for (const path of MANIFEST_FILES) {
 				const result = rewritePins(readFileSync(path, 'utf-8'), bumps);
 				for (const name of result.applied) missed.delete(name);
-				process.stdout.write(`  ${path}: ${result.applied.length > 0 ? result.applied.join(', ') : '(none)'}\n`);
+				process.stdout.write(
+					`  ${path}: ${result.applied.length > 0 ? result.applied.join(', ') : '(none)'}\n`,
+				);
 			}
 			const pkgResult = rewritePackageJson(readFileSync('package.json', 'utf-8'), bumps);
-			process.stdout.write(`  package.json: ${pkgResult.applied.length > 0 ? pkgResult.applied.join(', ') : '(none)'}\n`);
+			process.stdout.write(
+				`  package.json: ${pkgResult.applied.length > 0 ? pkgResult.applied.join(', ') : '(none)'}\n`,
+			);
 			if (missed.size > 0) {
-				process.stderr.write(`bump/${unit}: no pin literal found for ${[...missed].join(', ')} — manifest moved since outdated ran?\n`);
+				process.stderr.write(
+					`bump/${unit}: no pin literal found for ${[...missed].join(', ')} — manifest moved since outdated ran?\n`,
+				);
 				missedAny = true;
 			}
 			continue;
@@ -175,14 +185,16 @@ function main() {
 		const branch = `bump/${unit}`;
 		sh('git', ['checkout', '-B', branch, base]);
 
-		const missed = new Set(bumps.map(b => b.name));
+		const missed = new Set(bumps.map((b) => b.name));
 		for (const path of MANIFEST_FILES) {
 			const result = rewritePins(readFileSync(path, 'utf-8'), bumps);
 			writeFileSync(path, result.source);
 			for (const name of result.applied) missed.delete(name);
 		}
 		if (missed.size > 0) {
-			process.stderr.write(`bump/${unit}: no pin literal found for ${[...missed].join(', ')} — manifest moved since outdated ran?\n`);
+			process.stderr.write(
+				`bump/${unit}: no pin literal found for ${[...missed].join(', ')} — manifest moved since outdated ran?\n`,
+			);
 			missedAny = true;
 			sh('git', ['checkout', base]);
 			continue;
@@ -205,20 +217,30 @@ function main() {
 		sh('git', ['commit', '-am', `${title}\n\n${lines.join('\n')}`]);
 		sh('git', ['push', '-f', 'origin', branch]);
 		try {
-			sh('gh', ['pr', 'create', '--title', title, '--base', 'main', '--head', branch, '--body', `Weekly pin refresh for ${unit}, from \`unbranded outdated --json\`. Merge gate is this unit's own CI.\n\n${lines.map(l => `- ${l}`).join('\n')}`]);
-			process.stdout.write(`Opened PR for ${branch} (${bumps.length} pin${bumps.length === 1 ? '' : 's'}).\n`);
-		}
-		catch {
+			sh('gh', [
+				'pr',
+				'create',
+				'--title',
+				title,
+				'--base',
+				'main',
+				'--head',
+				branch,
+				'--body',
+				`Weekly pin refresh for ${unit}, from \`unbranded outdated --json\`. Merge gate is this unit's own CI.\n\n${lines.map((l) => `- ${l}`).join('\n')}`,
+			]);
+			process.stdout.write(
+				`Opened PR for ${branch} (${bumps.length} pin${bumps.length === 1 ? '' : 's'}).\n`,
+			);
+		} catch {
 			// Branch force-pushed into an existing PR: the PR is already refreshed.
 			process.stdout.write(`PR for ${branch} already open; branch refreshed.\n`);
 		}
 		sh('git', ['checkout', base]);
 	}
 
-	if (missedAny)
-		process.exit(1);
+	if (missedAny) process.exit(1);
 }
 
 // Import-safe: vitest pulls the pure functions without running the git glue.
-if (process.argv[1]?.endsWith('bump-pins.mjs'))
-	main();
+if (process.argv[1]?.endsWith('bump-pins.mjs')) main();

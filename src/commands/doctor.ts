@@ -62,12 +62,15 @@ export interface SuppressionResult {
 
 // Pure partition of a finding list against an accept-list. The ignore ids come from
 // readDoctorIgnore, not from here, so this stays a plain data transform to test.
-export function applySuppression(findings: Finding[], ignore: readonly string[]): SuppressionResult {
+export function applySuppression(
+	findings: Finding[],
+	ignore: readonly string[],
+): SuppressionResult {
 	const ignoreSet = new Set(ignore);
 	return {
-		active: findings.filter(f => !ignoreSet.has(f.id)),
-		suppressed: findings.filter(f => ignoreSet.has(f.id)),
-		unknownIgnored: [...new Set(ignore.filter(id => !KNOWN_FINDING_IDS.has(id)))],
+		active: findings.filter((f) => !ignoreSet.has(f.id)),
+		suppressed: findings.filter((f) => ignoreSet.has(f.id)),
+		unknownIgnored: [...new Set(ignore.filter((id) => !KNOWN_FINDING_IDS.has(id)))],
 	};
 }
 
@@ -85,7 +88,9 @@ export function readDoctorIgnore(state: StateFile | undefined): string[] {
 function readIgnoreOrWarn(cwd: string): string[] {
 	const read = readStateFile(cwd);
 	if (read.kind === 'unsupported') {
-		process.stderr.write(`unbranded doctor: ${unsupportedStateMessage(read.schema)} Ignoring the accept-list for this run.\n`);
+		process.stderr.write(
+			`unbranded doctor: ${unsupportedStateMessage(read.schema)} Ignoring the accept-list for this run.\n`,
+		);
 		return [];
 	}
 	return readDoctorIgnore(read.kind === 'ok' ? read.state : undefined);
@@ -94,7 +99,13 @@ function readIgnoreOrWarn(cwd: string): string[] {
 // Lockfile precedence, copied from pm.ts's lockfileSignal so the "which one would
 // detection pick" answer here matches what a real run resolves. First present
 // wins.
-const LOCKFILES = ['pnpm-lock.yaml', 'bun.lock', 'bun.lockb', 'yarn.lock', 'package-lock.json'] as const;
+const LOCKFILES = [
+	'pnpm-lock.yaml',
+	'bun.lock',
+	'bun.lockb',
+	'yarn.lock',
+	'package-lock.json',
+] as const;
 
 const LOCKFILE_PM: Record<string, Pm> = {
 	'pnpm-lock.yaml': 'pnpm',
@@ -112,7 +123,7 @@ export function auditRepo(opts: { cwd: string }): AuditResult {
 	const catalog = buildCatalog();
 	const findings: Finding[] = [];
 	const stateRead = readStateFile(cwd);
-	const tracked = stateRead.kind === 'ok' ? stateRead.state.units.map(u => u.id) : [];
+	const tracked = stateRead.kind === 'ok' ? stateRead.state.units.map((u) => u.id) : [];
 
 	const read = readPackageJson(cwd);
 	if (read.kind === 'malformed') {
@@ -127,29 +138,46 @@ export function auditRepo(opts: { cwd: string }): AuditResult {
 
 	// --- File-presence checks (run regardless of a package.json) ---
 	if (!existsSync(join(cwd, '.editorconfig'))) {
-		findings.push(missingFile(catalog, '.editorconfig', 'No .editorconfig, so editors won\'t agree on whitespace.', 'missing-editorconfig'));
+		findings.push(
+			missingFile(
+				catalog,
+				'.editorconfig',
+				"No .editorconfig, so editors won't agree on whitespace.",
+				'missing-editorconfig',
+			),
+		);
 	}
 	if (!existsSync(join(cwd, '.gitattributes'))) {
-		findings.push(missingFile(catalog, '.gitattributes', 'No .gitattributes, so line endings can differ across platforms.', 'missing-gitattributes'));
+		findings.push(
+			missingFile(
+				catalog,
+				'.gitattributes',
+				'No .gitattributes, so line endings can differ across platforms.',
+				'missing-gitattributes',
+			),
+		);
 	}
 	if (!hasCiWorkflow(cwd)) {
 		const unit = unitForDest(catalog, '.github/workflows/ci.yml');
 		findings.push({
 			id: 'no-ci-workflow',
 			message: 'No CI workflow found (.github/workflows or .gitlab-ci.yml).',
-			fix: fixForUnit(unit, 'Add a CI workflow, e.g. .github/workflows/ci.yml, to run lint and tests on push.'),
+			fix: fixForUnit(
+				unit,
+				'Add a CI workflow, e.g. .github/workflows/ci.yml, to run lint and tests on push.',
+			),
 			unit,
 		});
 	}
 
 	// --- Lockfile checks (new logic on top of inspectPm's signals) ---
-	const present = LOCKFILES.filter(f => existsSync(join(cwd, f)));
+	const present = LOCKFILES.filter((f) => existsSync(join(cwd, f)));
 	const picked = present[0]; // precedence-first, matches detection
 	if (present.length > 1 && picked) {
 		findings.push({
 			id: 'multiple-lockfiles',
 			message: `Multiple lockfiles present (${present.join(', ')}); detection would pick ${picked}.`,
-			fix: `Keep ${picked} and remove the others: ${present.filter(f => f !== picked).join(', ')}.`,
+			fix: `Keep ${picked} and remove the others: ${present.filter((f) => f !== picked).join(', ')}.`,
 		});
 	}
 
@@ -189,22 +217,48 @@ export function auditRepo(opts: { cwd: string }): AuditResult {
 			});
 		}
 		if (!hasScript(pkg, 'test')) {
-			findings.push(missingScript(catalog, tracked, 'test', 'no-test-script', 'No test script in package.json.'));
+			findings.push(
+				missingScript(
+					catalog,
+					tracked,
+					'test',
+					'no-test-script',
+					'No test script in package.json.',
+				),
+			);
 		}
 		if (!hasScript(pkg, 'lint')) {
-			findings.push(missingScript(catalog, tracked, 'lint', 'no-lint-script', 'No lint script in package.json.'));
+			findings.push(
+				missingScript(
+					catalog,
+					tracked,
+					'lint',
+					'no-lint-script',
+					'No lint script in package.json.',
+				),
+			);
 		}
 
 		const hasTsDep = Boolean(hasDep(pkg, 'typescript'));
 		const hasTsconfig = existsSync(join(cwd, 'tsconfig.json'));
 		if (hasTsDep && !hasTsconfig) {
-			findings.push(missingFile(catalog, 'tsconfig.json', 'TypeScript is a dependency but there\'s no tsconfig.json.', 'ts-dep-no-tsconfig'));
+			findings.push(
+				missingFile(
+					catalog,
+					'tsconfig.json',
+					"TypeScript is a dependency but there's no tsconfig.json.",
+					'ts-dep-no-tsconfig',
+				),
+			);
 		}
 		if (hasTsconfig && !hasTsDep) {
 			findings.push({
 				id: 'tsconfig-no-ts-dep',
-				message: 'tsconfig.json is present but typescript isn\'t a dependency.',
-				fix: fixForUnit(unitForDest(catalog, 'tsconfig.json'), 'Add typescript as a devDependency.'),
+				message: "tsconfig.json is present but typescript isn't a dependency.",
+				fix: fixForUnit(
+					unitForDest(catalog, 'tsconfig.json'),
+					'Add typescript as a devDependency.',
+				),
 				unit: unitForDest(catalog, 'tsconfig.json'),
 			});
 		}
@@ -239,15 +293,20 @@ export function runDoctor(opts: RunDoctorOpts = {}): number {
 	const { active, suppressed, unknownIgnored } = applySuppression(findings, readIgnoreOrWarn(cwd));
 
 	if (opts.json) {
-		process.stdout.write(`${JSON.stringify({
-			schema: DOCTOR_SCHEMA,
-			ok: active.length === 0,
-			findings: active,
-			suppressed,
-			ignoredUnknown: unknownIgnored,
-		}, null, 2)}\n`);
-	}
-	else {
+		process.stdout.write(
+			`${JSON.stringify(
+				{
+					schema: DOCTOR_SCHEMA,
+					ok: active.length === 0,
+					findings: active,
+					suppressed,
+					ignoredUnknown: unknownIgnored,
+				},
+				null,
+				2,
+			)}\n`,
+		);
+	} else {
 		process.stdout.write(formatDoctor(active, suppressed, unknownIgnored));
 	}
 
@@ -263,10 +322,9 @@ export function runDoctor(opts: RunDoctorOpts = {}): number {
 export function partitionFixable(findings: Finding[]): { units: string[]; manual: Finding[] } {
 	const units: string[] = [];
 	for (const f of findings) {
-		if (f.unit !== undefined && !units.includes(f.unit))
-			units.push(f.unit);
+		if (f.unit !== undefined && !units.includes(f.unit)) units.push(f.unit);
 	}
-	return { units, manual: findings.filter(f => f.unit === undefined) };
+	return { units, manual: findings.filter((f) => f.unit === undefined) };
 }
 
 export interface RunDoctorFixOpts {
@@ -297,7 +355,10 @@ export async function runDoctorFix(opts: RunDoctorFixOpts = {}): Promise<number>
 	// Manual findings are listed, never executed: their remedies delete or edit
 	// things, and --fix's contract is "only ever installs units".
 	if (manual.length > 0)
-		note(manual.map(f => `• ${f.message}\n  ${f.fix}`).join('\n'), 'Manual steps (--fix won\'t touch these)');
+		note(
+			manual.map((f) => `• ${f.message}\n  ${f.fix}`).join('\n'),
+			"Manual steps (--fix won't touch these)",
+		);
 
 	if (units.length === 0) {
 		process.stdout.write('unbranded doctor: nothing for --fix to install.\n');
@@ -306,8 +367,17 @@ export async function runDoctorFix(opts: RunDoctorFixOpts = {}): Promise<number>
 
 	const shared = { targetDir: cwd, dryRun: opts.dryRun, diff: opts.diff, force: opts.force };
 	const result = opts.yes
-		? await runInit({ ...shared, unitsDir: opts.unitsDir, inline: { units: units.join(','), pm: opts.pm, yes: true } })
-		: await runInit({ ...shared, unitsDir: opts.unitsDir, inline: { pm: opts.pm }, preselect: units });
+		? await runInit({
+				...shared,
+				unitsDir: opts.unitsDir,
+				inline: { units: units.join(','), pm: opts.pm, yes: true },
+			})
+		: await runInit({
+				...shared,
+				unitsDir: opts.unitsDir,
+				inline: { pm: opts.pm },
+				preselect: units,
+			});
 	return result.ok ? 0 : 1;
 }
 
@@ -316,8 +386,7 @@ function formatDoctor(active: Finding[], suppressed: Finding[], unknownIgnored: 
 
 	if (active.length === 0) {
 		lines.push('unbranded doctor: no issues found.');
-	}
-	else {
+	} else {
 		lines.push('unbranded doctor found:', '');
 		for (const f of active) {
 			lines.push(`  • ${f.message}`);
@@ -330,24 +399,39 @@ function formatDoctor(active: Finding[], suppressed: Finding[], unknownIgnored: 
 	// A one-line tally keeps accepted findings visible without re-listing them; the
 	// ids themselves live in --json for anyone who needs to audit the accept-list.
 	if (suppressed.length > 0)
-		lines.push(`${suppressed.length} finding${suppressed.length === 1 ? '' : 's'} suppressed (doctor.ignore).`);
+		lines.push(
+			`${suppressed.length} finding${suppressed.length === 1 ? '' : 's'} suppressed (doctor.ignore).`,
+		);
 
 	// A typo in doctor.ignore protects nothing, so surface it, but only as a warning
 	// since the repo itself may be perfectly healthy.
 	if (unknownIgnored.length > 0)
-		lines.push(`warning: doctor.ignore lists unknown finding id${unknownIgnored.length === 1 ? '' : 's'}: ${unknownIgnored.map(id => `"${id}"`).join(', ')}. Check for typos.`);
+		lines.push(
+			`warning: doctor.ignore lists unknown finding id${unknownIgnored.length === 1 ? '' : 's'}: ${unknownIgnored.map((id) => `"${id}"`).join(', ')}. Check for typos.`,
+		);
 
 	return `${lines.join('\n')}\n`;
 }
 
 // --- helpers ---
 
-function missingFile(catalog: ReturnType<typeof buildCatalog>, dest: string, message: string, id = `missing-${basename(dest)}`): Finding {
+function missingFile(
+	catalog: ReturnType<typeof buildCatalog>,
+	dest: string,
+	message: string,
+	id = `missing-${basename(dest)}`,
+): Finding {
 	const unit = unitForDest(catalog, dest);
 	return { id, message, fix: fixForUnit(unit, `Add ${dest}.`), unit };
 }
 
-function missingScript(catalog: ReturnType<typeof buildCatalog>, tracked: string[], script: string, id: string, message: string): Finding {
+function missingScript(
+	catalog: ReturnType<typeof buildCatalog>,
+	tracked: string[],
+	script: string,
+	id: string,
+	message: string,
+): Finding {
 	const unit = unitForScript(catalog, tracked, script);
 	return { id, message, fix: fixForUnit(unit, `Add a "${script}" script to package.json.`), unit };
 }
@@ -359,50 +443,55 @@ function fixForUnit(unit: string | undefined, fallback: string): string {
 // Faithful to the public catalog rather than the raw manifest: a finding names a
 // unit only if the catalog advertises a file writing that destination.
 function unitForDest(catalog: ReturnType<typeof buildCatalog>, dest: string): string | undefined {
-	return catalog.units.find(u => u.files.some(f => effectiveDest(f) === dest))?.id;
+	return catalog.units.find((u) => u.files.some((f) => effectiveDest(f) === dest))?.id;
 }
 
 // core-eslint and core-oxlint both provide `lint`. Catalog order alone would send an
 // oxlint scaffold to core-eslint, whose fix installs the unit it excludes, so a unit
 // the project already tracks wins over the first catalog hit.
-function unitForScript(catalog: ReturnType<typeof buildCatalog>, tracked: string[], script: string): string | undefined {
-	const providers = catalog.units.filter(u => u.packageJsonPatch?.scripts && script in u.packageJsonPatch.scripts);
-	return (providers.find(u => tracked.includes(u.id)) ?? providers[0])?.id;
+function unitForScript(
+	catalog: ReturnType<typeof buildCatalog>,
+	tracked: string[],
+	script: string,
+): string | undefined {
+	const providers = catalog.units.filter(
+		(u) => u.packageJsonPatch?.scripts && script in u.packageJsonPatch.scripts,
+	);
+	return (providers.find((u) => tracked.includes(u.id)) ?? providers[0])?.id;
 }
 
 // For units whose fix isn't discoverable by a destination file — core-node-version
 // computes its output instead of shipping a template, so it has no catalog dest.
 // Verifies the id is really in the catalog rather than trusting a bare string.
 function unitForId(catalog: ReturnType<typeof buildCatalog>, id: string): string | undefined {
-	return catalog.units.find(u => u.id === id)?.id;
+	return catalog.units.find((u) => u.id === id)?.id;
 }
 
 function hasCiWorkflow(cwd: string): boolean {
 	if (existsSync(join(cwd, '.gitlab-ci.yml')) || existsSync(join(cwd, '.circleci', 'config.yml')))
 		return true;
 	const workflows = join(cwd, '.github', 'workflows');
-	if (!existsSync(workflows))
-		return false;
+	if (!existsSync(workflows)) return false;
 	try {
-		return readdirSync(workflows).some(f => /\.ya?ml$/.test(f));
-	}
-	catch {
+		return readdirSync(workflows).some((f) => /\.ya?ml$/.test(f));
+	} catch {
 		return false;
 	}
 }
 
 function parsePackageManagerPm(field: unknown): Pm | undefined {
-	if (typeof field !== 'string')
-		return undefined;
+	if (typeof field !== 'string') return undefined;
 	const match = /^(pnpm|yarn|npm|bun)@/.exec(field);
 	return match?.[1] as Pm | undefined;
 }
 
-function nodeVersionMismatch(cwd: string, pkg: PackageJson): { engines: string; nvmrc: string } | undefined {
+function nodeVersionMismatch(
+	cwd: string,
+	pkg: PackageJson,
+): { engines: string; nvmrc: string } | undefined {
 	const enginesNode = engines(pkg)?.node;
 	const nvmrcPath = join(cwd, '.nvmrc');
-	if (typeof enginesNode !== 'string' || !existsSync(nvmrcPath))
-		return undefined;
+	if (typeof enginesNode !== 'string' || !existsSync(nvmrcPath)) return undefined;
 	const nvmrcRaw = readFileSync(nvmrcPath, 'utf-8').trim();
 	const enginesMajor = majorOf(enginesNode);
 	const nvmrcMajor = majorOf(nvmrcRaw);

@@ -55,13 +55,20 @@ describe('planUpdate', () => {
 		writeFileSync(join(tmp, 'config.txt'), OLD);
 		writeBaseline(OLD);
 		const { files } = planUpdate({ targetDir: tmp, state: state(), units: catalog, pkgRoot: tmp });
-		expect(files).toEqual([{ rel: 'config.txt', status: 'clean-update', proposed: NEW, theirs: NEW, existing: OLD }]);
+		expect(files).toEqual([
+			{ rel: 'config.txt', status: 'clean-update', proposed: NEW, theirs: NEW, existing: OLD },
+		]);
 	});
 
 	it('is up-to-date when the template never moved, whatever the user did', () => {
 		writeFileSync(join(tmp, 'config.txt'), 'user rewrote everything\n');
 		writeBaseline(NEW); // baseline already matches the shipped template
-		const { files } = planUpdate({ targetDir: tmp, state: state({ files: { 'config.txt': h(NEW) } }), units: catalog, pkgRoot: tmp });
+		const { files } = planUpdate({
+			targetDir: tmp,
+			state: state({ files: { 'config.txt': h(NEW) } }),
+			units: catalog,
+			pkgRoot: tmp,
+		});
 		expect(files[0]?.status).toBe('up-to-date');
 	});
 
@@ -101,7 +108,13 @@ describe('planUpdate', () => {
 	});
 
 	it('routes merge-json files through the structured merge, never text', () => {
-		const jsonCatalog = [unit('opt-vscode', { files: [{ content: '{\n\t"a": 1,\n\t"b": 2\n}\n', dest: 'settings.json', mode: 'merge-json' }] })];
+		const jsonCatalog = [
+			unit('opt-vscode', {
+				files: [
+					{ content: '{\n\t"a": 1,\n\t"b": 2\n}\n', dest: 'settings.json', mode: 'merge-json' },
+				],
+			}),
+		];
 		writeFileSync(join(tmp, 'settings.json'), '{\n\t"a": 1,\n\t"user": true\n}\n');
 		const s = state({
 			units: builtinUnits(['opt-vscode']),
@@ -115,7 +128,11 @@ describe('planUpdate', () => {
 	});
 
 	it('surfaces a merge-json value collision as needs-choice', () => {
-		const jsonCatalog = [unit('opt-vscode', { files: [{ content: '{\n\t"a": 2\n}\n', dest: 'settings.json', mode: 'merge-json' }] })];
+		const jsonCatalog = [
+			unit('opt-vscode', {
+				files: [{ content: '{\n\t"a": 2\n}\n', dest: 'settings.json', mode: 'merge-json' }],
+			}),
+		];
 		writeFileSync(join(tmp, 'settings.json'), '{\n\t"a": 1\n}\n');
 		const s = state({
 			units: builtinUnits(['opt-vscode']),
@@ -128,7 +145,13 @@ describe('planUpdate', () => {
 	});
 
 	it('re-appends template lines an append-if-missing file lost', () => {
-		const appendCatalog = [unit('core-gitattributes', { files: [{ content: 'rule one\nrule two\n', dest: '.gitattributes', mode: 'append-if-missing' }] })];
+		const appendCatalog = [
+			unit('core-gitattributes', {
+				files: [
+					{ content: 'rule one\nrule two\n', dest: '.gitattributes', mode: 'append-if-missing' },
+				],
+			}),
+		];
 		writeFileSync(join(tmp, '.gitattributes'), 'rule one\nuser rule\n');
 		const s = state({
 			units: builtinUnits(['core-gitattributes']),
@@ -146,37 +169,66 @@ describe('planUpdate', () => {
 		const s = state({
 			units: builtinUnits(['core-editorconfig', 'core-node-version']),
 			files: { 'orphan.txt': h('x\n'), 'config.txt': h(OLD), '.nvmrc': h('22\n') },
-			attribution: { 'orphan.txt': 'core-editorconfig', 'config.txt': 'core-editorconfig', '.nvmrc': 'core-node-version' },
+			attribution: {
+				'orphan.txt': 'core-editorconfig',
+				'config.txt': 'core-editorconfig',
+				'.nvmrc': 'core-node-version',
+			},
 			modes: { 'orphan.txt': 'copy', 'config.txt': 'copy', '.nvmrc': 'computed' },
 		});
 		const { files } = planUpdate({ targetDir: tmp, state: s, units: catalog, pkgRoot: tmp });
-		const byRel = new Map(files.map(f => [f.rel, f.status]));
+		const byRel = new Map(files.map((f) => [f.rel, f.status]));
 		expect(byRel.get('orphan.txt')).toBe('template-gone');
 		expect(byRel.get('config.txt')).toBe('user-deleted');
 		expect(byRel.get('.nvmrc')).toBe('computed');
 	});
 
 	it('recomputes package.json through the structured merge and reports drift', () => {
-		const pkgCatalog = [unit('core-vitest', {
-			devDependencies: { vitest: '2.1.9' },
-			packageJsonPatch: { scripts: { 'test': 'vitest run', 'test:watch': 'vitest' } },
-		})];
+		const pkgCatalog = [
+			unit('core-vitest', {
+				devDependencies: { vitest: '2.1.9' },
+				packageJsonPatch: { scripts: { 'test': 'vitest run', 'test:watch': 'vitest' } },
+			}),
+		];
 		// The user deleted test:watch and the vitest dep; update restores both.
-		writeFileSync(join(tmp, 'package.json'), `${JSON.stringify({ name: 'x', scripts: { test: 'vitest run' } }, null, '\t')}\n`);
-		const s = state({ units: builtinUnits(['core-vitest']), files: {}, attribution: {}, modes: {} });
+		writeFileSync(
+			join(tmp, 'package.json'),
+			`${JSON.stringify({ name: 'x', scripts: { test: 'vitest run' } }, null, '\t')}\n`,
+		);
+		const s = state({
+			units: builtinUnits(['core-vitest']),
+			files: {},
+			attribution: {},
+			modes: {},
+		});
 
 		const { pkg } = planUpdate({ targetDir: tmp, state: s, units: pkgCatalog, pkgRoot: tmp });
 		expect(pkg.changed).toBe(true);
-		const proposed = JSON.parse(pkg.proposed ?? '') as { scripts: Record<string, string>; devDependencies: Record<string, string> };
+		const proposed = JSON.parse(pkg.proposed ?? '') as {
+			scripts: Record<string, string>;
+			devDependencies: Record<string, string>;
+		};
 		expect(proposed.scripts['test:watch']).toBe('vitest');
 		expect(proposed.devDependencies.vitest).toBe('2.1.9');
 	});
 
 	it('reports package.json unchanged when everything is already there', () => {
-		const pkgCatalog = [unit('core-vitest', { packageJsonPatch: { scripts: { test: 'vitest run' } } })];
-		writeFileSync(join(tmp, 'package.json'), `${JSON.stringify({ name: 'x', scripts: { test: 'user harness' } }, null, '\t')}\n`);
-		const s = state({ units: builtinUnits(['core-vitest']), files: {}, attribution: {}, modes: {} });
+		const pkgCatalog = [
+			unit('core-vitest', { packageJsonPatch: { scripts: { test: 'vitest run' } } }),
+		];
+		writeFileSync(
+			join(tmp, 'package.json'),
+			`${JSON.stringify({ name: 'x', scripts: { test: 'user harness' } }, null, '\t')}\n`,
+		);
+		const s = state({
+			units: builtinUnits(['core-vitest']),
+			files: {},
+			attribution: {},
+			modes: {},
+		});
 		// mergeAdditive: an existing script wins, so nothing changes.
-		expect(planUpdate({ targetDir: tmp, state: s, units: pkgCatalog, pkgRoot: tmp }).pkg.changed).toBe(false);
+		expect(
+			planUpdate({ targetDir: tmp, state: s, units: pkgCatalog, pkgRoot: tmp }).pkg.changed,
+		).toBe(false);
 	});
 });

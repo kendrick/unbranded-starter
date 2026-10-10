@@ -26,10 +26,12 @@ function onePatchAhead(pin: string): string {
 
 function highest(versions: string[]): string | undefined {
 	const key = (v: string): number[] => v.split('.').map(Number);
-	return [...versions].sort((a, b) => {
-		const [x, y] = [key(a), key(b)];
-		return (x[0]! - y[0]!) || (x[1]! - y[1]!) || (x[2]! - y[2]!);
-	}).at(-1);
+	return [...versions]
+		.sort((a, b) => {
+			const [x, y] = [key(a), key(b)];
+			return x[0]! - y[0]! || x[1]! - y[1]! || x[2]! - y[2]!;
+		})
+		.at(-1);
 }
 
 // The registry lives in THIS process, so the CLI must be spawned async —
@@ -46,7 +48,7 @@ function run(args: string[]): Promise<{ status: number | null; stdout: string; s
 		child.stderr.on('data', (d: Buffer) => {
 			stderr += d.toString();
 		});
-		child.on('close', status => resolve({ status, stdout, stderr }));
+		child.on('close', (status) => resolve({ status, stdout, stderr }));
 	});
 }
 
@@ -57,8 +59,7 @@ describe('unbranded outdated (against a local registry)', () => {
 	// unheld TS 7 pin share it. A bare string override replaces only latest.
 	const allPins = collectManifestPins(UNITS);
 	const pins = new Map<string, string[]>();
-	for (const p of allPins)
-		pins.set(p.name, [...(pins.get(p.name) ?? []), p.pin]);
+	for (const p of allPins) pins.set(p.name, [...(pins.get(p.name) ?? []), p.pin]);
 	const overrides: Record<string, { latest: string; versions?: string[] } | string> = {};
 	let server: Server;
 	let registry: string;
@@ -68,13 +69,16 @@ describe('unbranded outdated (against a local registry)', () => {
 			const name = decodeURIComponent((req.url ?? '/').slice(1));
 			res.setHeader('content-type', 'application/json');
 			const published = pins.get(name) ?? [];
-			const override = typeof overrides[name] === 'string' ? { latest: overrides[name] } : overrides[name];
-			res.end(JSON.stringify({
-				'dist-tags': { latest: override?.latest ?? highest(published) ?? '0.0.0' },
-				'versions': Object.fromEntries((override?.versions ?? published).map(v => [v, {}])),
-			}));
+			const override =
+				typeof overrides[name] === 'string' ? { latest: overrides[name] } : overrides[name];
+			res.end(
+				JSON.stringify({
+					'dist-tags': { latest: override?.latest ?? highest(published) ?? '0.0.0' },
+					'versions': Object.fromEntries((override?.versions ?? published).map((v) => [v, {}])),
+				}),
+			);
 		});
-		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
 		registry = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 	});
 
@@ -83,7 +87,7 @@ describe('unbranded outdated (against a local registry)', () => {
 	});
 
 	afterAll(async () => {
-		await new Promise(resolve => server.close(resolve));
+		await new Promise((resolve) => server.close(resolve));
 	});
 
 	it('exits 0 with a clean bill when every pin matches the registry', async () => {
@@ -116,21 +120,26 @@ describe('unbranded outdated (against a local registry)', () => {
 		};
 		expect(parsed.schema).toBe(2);
 		expect(parsed.majorsBehind).toBe(0);
-		expect(parsed.packages.find(p => p.name === 'vitest')?.behind).toBe('minor');
+		expect(parsed.packages.find((p) => p.name === 'vitest')?.behind).toBe('minor');
 	});
 
 	it('holds the 6.x pin to its line: --strict exits 0 when only it is behind, inside 6', async () => {
-		const heldPin = allPins.find(p => p.name === 'typescript' && p.line === 6)!.pin;
-		const unheldPin = allPins.find(p => p.name === 'typescript' && p.line === undefined)!.pin;
-		overrides.typescript = { latest: unheldPin, versions: [heldPin, onePatchAhead(heldPin), unheldPin] };
+		const heldPin = allPins.find((p) => p.name === 'typescript' && p.line === 6)!.pin;
+		const unheldPin = allPins.find((p) => p.name === 'typescript' && p.line === undefined)!.pin;
+		overrides.typescript = {
+			latest: unheldPin,
+			versions: [heldPin, onePatchAhead(heldPin), unheldPin],
+		};
 
 		const result = await run(['outdated', '--json', '--strict', '--registry', registry]);
 		expect(result.status, result.stderr).toBe(0);
-		const parsed = JSON.parse(result.stdout) as { packages: { name: string; line?: number; latest: string; behind: string }[] };
-		const held = parsed.packages.find(p => p.name === 'typescript' && p.line === 6);
+		const parsed = JSON.parse(result.stdout) as {
+			packages: { name: string; line?: number; latest: string; behind: string }[];
+		};
+		const held = parsed.packages.find((p) => p.name === 'typescript' && p.line === 6);
 		expect(held).toMatchObject({ behind: 'patch', line: 6, latest: onePatchAhead(heldPin) });
 		// Nothing else moved, so the held pin is the only non-current entry.
-		expect(parsed.packages.filter(p => p.behind !== 'up-to-date')).toEqual([held]);
+		expect(parsed.packages.filter((p) => p.behind !== 'up-to-date')).toEqual([held]);
 	});
 
 	it('fails fast with a clear error when the registry is unreachable', async () => {

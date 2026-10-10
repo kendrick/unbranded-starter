@@ -1,5 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -22,12 +30,16 @@ function readState(dir: string): StateFile {
 	return JSON.parse(readFileSync(join(dir, '.unbranded.json'), 'utf-8')) as StateFile;
 }
 
-function unit(parentDir: string, name: string, definition: unknown, templates: Record<string, string> = {}): string {
+function unit(
+	parentDir: string,
+	name: string,
+	definition: unknown,
+	templates: Record<string, string> = {},
+): string {
 	const dir = join(parentDir, name);
 	mkdirSync(dir, { recursive: true });
 	writeFileSync(join(dir, 'unit.json'), JSON.stringify(definition, null, 2));
-	for (const [file, body] of Object.entries(templates))
-		writeFileSync(join(dir, file), body);
+	for (const [file, body] of Object.entries(templates)) writeFileSync(join(dir, file), body);
 	return dir;
 }
 
@@ -61,13 +73,23 @@ function unitsFixture(tmp: string): string {
 	return dir;
 }
 
-function scaffold(tmp: string, recipe: Record<string, unknown>): ReturnType<typeof spawnSync<string>> {
-	writeFileSync(join(tmp, 'recipe.json'), JSON.stringify({
-		pm: null,
-		onConflict: 'overwrite',
-		postInstall: 'none',
-		...recipe,
-	}, null, 2));
+function scaffold(
+	tmp: string,
+	recipe: Record<string, unknown>,
+): ReturnType<typeof spawnSync<string>> {
+	writeFileSync(
+		join(tmp, 'recipe.json'),
+		JSON.stringify(
+			{
+				pm: null,
+				onConflict: 'overwrite',
+				postInstall: 'none',
+				...recipe,
+			},
+			null,
+			2,
+		),
+	);
 	return run(['--config', 'recipe.json'], tmp);
 }
 
@@ -76,7 +98,10 @@ describe('unbranded --units-dir', () => {
 
 	beforeEach(() => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-units-dir-'));
-		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'units-dir-e2e', version: '0.0.0' }, null, 2));
+		writeFileSync(
+			join(tmp, 'package.json'),
+			JSON.stringify({ name: 'units-dir-e2e', version: '0.0.0' }, null, 2),
+		);
 	});
 
 	afterEach(() => {
@@ -101,7 +126,7 @@ describe('unbranded --units-dir', () => {
 		const state = readState(tmp);
 		expect(state.schema).toBe(3);
 
-		const byId = new Map(state.units.map(u => [u.id, u]));
+		const byId = new Map(state.units.map((u) => [u.id, u]));
 		// Relative, with the leading ./. The state file is committed and read on
 		// someone else's machine, where the absolute path this run resolved would name nothing.
 		expect(byId.get('my-units/banner')?.source).toEqual({ kind: 'dir', path: './my-units' });
@@ -109,7 +134,11 @@ describe('unbranded --units-dir', () => {
 		// Cross-source implies: strict-docs pulled in its sibling (qualified) and the
 		// built-in (still bare; a local unit implying a built-in doesn't relabel it).
 		expect(byId.get('core-editorconfig')?.source).toEqual({ kind: 'builtin' });
-		expect(state.units.map(u => u.id).sort()).toEqual(['core-editorconfig', 'my-units/banner', 'my-units/strict-docs']);
+		expect(state.units.map((u) => u.id).sort()).toEqual([
+			'core-editorconfig',
+			'my-units/banner',
+			'my-units/strict-docs',
+		]);
 
 		expect(state.attribution?.['BANNER.txt']).toBe('my-units/banner');
 	});
@@ -187,7 +216,7 @@ describe('unbranded --units-dir', () => {
 		expect(readFileSync(join(tmp, 'BANNER.txt'), 'utf-8')).toBe(BANNER_CONTENT);
 
 		const state = readState(tmp);
-		const byId = new Map(state.units.map(u => [u.id, u]));
+		const byId = new Map(state.units.map((u) => [u.id, u]));
 		expect(byId.get('my-units/banner')?.source).toEqual({ kind: 'dir', path: './my-units' });
 	});
 

@@ -17,16 +17,22 @@ describe('cli --target', () => {
 		work = mkdtempSync(join(tmpdir(), 'unbranded-e2e-target-'));
 		// The recipe lives in the invocation dir and is referenced by a relative
 		// path; if --target changed how it resolved, this file wouldn't be found.
-		writeFileSync(join(work, 'recipe.json'), JSON.stringify({
-			units: ['core-editorconfig'],
-			pm: null,
-			onConflict: 'overwrite',
-			postInstall: 'none',
-		}));
+		writeFileSync(
+			join(work, 'recipe.json'),
+			JSON.stringify({
+				units: ['core-editorconfig'],
+				pm: null,
+				onConflict: 'overwrite',
+				postInstall: 'none',
+			}),
+		);
 		// An existing package.json makes the target an augment shape, so no name
 		// prompt is needed and the run stays non-interactive.
 		mkdirSync(join(work, 'app'));
-		writeFileSync(join(work, 'app', 'package.json'), JSON.stringify({ name: 'app', version: '0.0.0' }));
+		writeFileSync(
+			join(work, 'app', 'package.json'),
+			JSON.stringify({ name: 'app', version: '0.0.0' }),
+		);
 	});
 
 	afterEach(() => {

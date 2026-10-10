@@ -15,7 +15,7 @@ export function buildOptionSchema(units: AnyUnit[]): OptionSchema {
 	for (const unit of units) {
 		for (const option of unit.options ?? []) {
 			byUnit.set(unit.id, option);
-			values.set(option.key, new Set(option.choices.map(c => c.value)));
+			values.set(option.key, new Set(option.choices.map((c) => c.value)));
 		}
 	}
 	return { byUnit, values };
@@ -29,8 +29,7 @@ export function buildOptionSchema(units: AnyUnit[]): OptionSchema {
 // a safe build rather than an empty one. The `options` field is dropped from the
 // result — a resolved unit has no more choices to make.
 export function applyUnitOptions(unit: AnyUnit, selections: Record<string, string>): AnyUnit {
-	if (!unit.options?.length)
-		return unit;
+	if (!unit.options?.length) return unit;
 
 	let files = unit.files;
 	let dependencies = unit.dependencies;
@@ -38,17 +37,14 @@ export function applyUnitOptions(unit: AnyUnit, selections: Record<string, strin
 
 	for (const option of unit.options) {
 		const requested = selections[option.key];
-		const choice = option.choices.find(c => c.value === requested)
-			?? option.choices.find(c => c.value === option.default);
-		if (!choice)
-			continue;
+		const choice =
+			option.choices.find((c) => c.value === requested) ??
+			option.choices.find((c) => c.value === option.default);
+		if (!choice) continue;
 
-		if (choice.files)
-			files = [...files, ...choice.files];
-		if (choice.dependencies)
-			dependencies = { ...dependencies, ...choice.dependencies };
-		if (choice.devDependencies)
-			devDependencies = { ...devDependencies, ...choice.devDependencies };
+		if (choice.files) files = [...files, ...choice.files];
+		if (choice.dependencies) dependencies = { ...dependencies, ...choice.dependencies };
+		if (choice.devDependencies) devDependencies = { ...devDependencies, ...choice.devDependencies };
 	}
 
 	const { options: _options, ...rest } = unit;

@@ -12,7 +12,10 @@
 			"required": ["id", "source"],
 			"additionalProperties": false,
 			"properties": {
-				"id": { "type": "string", "description": "Bare for a built-in (core-eslint), namespaced as source/id for anything else (my-units/banner)." },
+				"id": {
+					"type": "string",
+					"description": "Bare for a built-in (core-eslint), namespaced as source/id for anything else (my-units/banner)."
+				},
 				"source": {
 					"description": "Where this unit's definition came from, so day-2 commands can read it again.",
 					"oneOf": [
@@ -54,7 +57,10 @@
 		"files": { "type": "object", "additionalProperties": { "type": "string" } },
 		"options": { "type": "object", "additionalProperties": { "type": "string" } },
 		"attribution": { "type": "object", "additionalProperties": { "type": "string" } },
-		"modes": { "type": "object", "additionalProperties": { "enum": ["copy", "merge-json", "append-if-missing", "computed"] } },
+		"modes": {
+			"type": "object",
+			"additionalProperties": { "enum": ["copy", "merge-json", "append-if-missing", "computed"] }
+		},
 		"doctor": {
 			"type": "object",
 			"additionalProperties": false,

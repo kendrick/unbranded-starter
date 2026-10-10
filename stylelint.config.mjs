@@ -43,6 +43,9 @@ export default {
 		// Allow alpha values in oklch
 		'alpha-value-notation': null,
 		// Don't require empty lines before consecutive comments
-		'comment-empty-line-before': ['always', { except: ['first-nested'], ignore: ['after-comment'] }],
+		'comment-empty-line-before': [
+			'always',
+			{ except: ['first-nested'], ignore: ['after-comment'] },
+		],
 	},
 };

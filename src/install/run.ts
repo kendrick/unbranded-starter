@@ -94,7 +94,7 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 	// Files this run writes outside the copy loop, collected for the state file.
 	const computedWrites: ComputedWrite[] = [];
 
-	const patches: MergeInput[] = opts.units.map(u => ({
+	const patches: MergeInput[] = opts.units.map((u) => ({
 		dependencies: u.dependencies,
 		devDependencies: u.devDependencies,
 		scripts: u.packageJsonPatch?.scripts,
@@ -111,7 +111,7 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 	// engines, and packageManager all have to reflect the running environment.
 	// Materialize it here, appending a computed patch and writing .nvmrc, so a
 	// single source drives all three and existing user pins still win the merge.
-	if (opts.units.some(u => u.id === NODE_VERSION_UNIT_ID)) {
+	if (opts.units.some((u) => u.id === NODE_VERSION_UNIT_ID)) {
 		const pins = computeNodeVersion({
 			nodeVersion: process.versions.node,
 			pm: opts.pm,
@@ -134,16 +134,24 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 	// recommendation set only makes sense relative to the units actually picked,
 	// so it can't be a static template. Generate it here and union it into any
 	// file the user already has.
-	if (opts.units.some(u => u.id === VSCODE_UNIT_ID))
-		computedWrites.push({ path: writeVscodeExtensions(opts.targetDir, opts.units, opts.journal), unit: VSCODE_UNIT_ID });
+	if (opts.units.some((u) => u.id === VSCODE_UNIT_ID))
+		computedWrites.push({
+			path: writeVscodeExtensions(opts.targetDir, opts.units, opts.journal),
+			unit: VSCODE_UNIT_ID,
+		});
 
 	// A pnpm scaffold that pulls a native-build dependency (esbuild, via Vitest)
 	// has to allowlist the build or `pnpm install` fails on pnpm 11. Seed the
 	// approval before the install spawn below, so our own install sees it, and
 	// record it for the state file. All the gating lives in seedPnpmWorkspace.
-	const pnpmWorkspace = seedPnpmWorkspace({ targetDir: opts.targetDir, pm: opts.pm, pmVersion, units: opts.units, journal: opts.journal });
-	if (pnpmWorkspace)
-		computedWrites.push(pnpmWorkspace);
+	const pnpmWorkspace = seedPnpmWorkspace({
+		targetDir: opts.targetDir,
+		pm: opts.pm,
+		pmVersion,
+		units: opts.units,
+		journal: opts.journal,
+	});
+	if (pnpmWorkspace) computedWrites.push(pnpmWorkspace);
 
 	// A spec the user already chose is a decision, so replacing it in silence is
 	// a downgrade they discover by reading the diff: a project on a newer
@@ -156,19 +164,17 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 		// `--latest` is already the instruction to move every spec, so prompting
 		// per package would only ask the user to re-confirm the flag they typed.
 		const resolution = opts.latest
-			? 'overwrite' as const
+			? ('overwrite' as const)
 			: await resolveDepConflict(collision, opts.onConflict);
 		depResolutions.push({ ...collision, resolution });
-		if (resolution === 'keep')
-			keepExisting.add(depKey(collision));
+		if (resolution === 'keep') keepExisting.add(depKey(collision));
 	}
 
 	const report = formatDepResolutions(depResolutions, Boolean(opts.latest));
-	if (report)
-		log.info(report);
+	if (report) log.info(report);
 	// Manifest pins are chosen and tested as a set, so a kept spec leaves
 	// package.json holding a combination nobody has run.
-	if (depResolutions.some(r => r.resolution === 'keep'))
+	if (depResolutions.some((r) => r.resolution === 'keep'))
 		log.warn('Kept pins may not match the versions the other manifest deps were tested against.');
 
 	const merged = mergePackageJson(existing, patches, keepExisting);
@@ -182,7 +188,15 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 	writeFileSync(pkgPath, `${JSON.stringify(merged, null, indent)}\n`);
 
 	if (!opts.pm) {
-		return { wrote: true, installed: false, cancelled: false, failed: false, computedWrites, depResolutions, addedScripts };
+		return {
+			wrote: true,
+			installed: false,
+			cancelled: false,
+			failed: false,
+			computedWrites,
+			depResolutions,
+			addedScripts,
+		};
 	}
 
 	const s = spinner();
@@ -191,11 +205,27 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 
 	if (result.cancelled) {
 		s.stop('Install interrupted.');
-		return { wrote: true, installed: false, cancelled: true, failed: false, computedWrites, depResolutions, addedScripts };
+		return {
+			wrote: true,
+			installed: false,
+			cancelled: true,
+			failed: false,
+			computedWrites,
+			depResolutions,
+			addedScripts,
+		};
 	}
 	if (result.success) {
 		s.stop('Dependencies installed.');
-		return { wrote: true, installed: true, cancelled: false, failed: false, computedWrites, depResolutions, addedScripts };
+		return {
+			wrote: true,
+			installed: true,
+			cancelled: false,
+			failed: false,
+			computedWrites,
+			depResolutions,
+			addedScripts,
+		};
 	}
 	// Just closes the spinner. The exit code rides out on the result instead, so
 	// the caller's failure report can carry it without saying it twice in a row.
@@ -221,11 +251,14 @@ async function promptDepConflict(collision: DepCollision): Promise<'overwrite' |
 		message: `Conflict: ${collision.section}.${collision.name} is ${collision.existing}, manifest pins ${collision.incoming}`,
 		options: [
 			{ value: 'overwrite', label: `Overwrite with ${collision.incoming}` },
-			{ value: 'keep', label: `Keep ${collision.existing}`, hint: 'may not match sibling manifest pins' },
+			{
+				value: 'keep',
+				label: `Keep ${collision.existing}`,
+				hint: 'may not match sibling manifest pins',
+			},
 		],
 	});
-	if (isCancel(choice))
-		return cancelAndExit();
+	if (isCancel(choice)) return cancelAndExit();
 	return choice;
 }
 
@@ -236,8 +269,7 @@ async function resolveDepConflict(
 	collision: DepCollision,
 	onConflict: 'overwrite' | 'skip' | undefined,
 ): Promise<'overwrite' | 'keep'> {
-	if (onConflict === undefined)
-		return promptDepConflict(collision);
+	if (onConflict === undefined) return promptDepConflict(collision);
 	return onConflict === 'skip' ? 'keep' : 'overwrite';
 }
 
@@ -254,38 +286,38 @@ export function collectAddedScripts(
 	const after = asScripts(merged.scripts);
 	const added: Record<string, string> = {};
 	for (const [name, script] of Object.entries(after)) {
-		if (!(name in before))
-			added[name] = script;
+		if (!(name in before)) added[name] = script;
 	}
 	return added;
 }
 
 function asScripts(value: unknown): Record<string, string> {
 	return value !== null && typeof value === 'object' && !Array.isArray(value)
-		? value as Record<string, string>
+		? (value as Record<string, string>)
 		: {};
 }
 
 // Pure and clack-free, so tests can call it directly. Plain ASCII on purpose:
 // nothing here is colorized, so `--no-color` has nothing to strip.
 export function formatDepResolutions(resolutions: DepResolution[], latest: boolean): string | null {
-	if (resolutions.length === 0)
-		return null;
+	if (resolutions.length === 0) return null;
 
 	// Under `--latest` nearly every incoming spec is the same word, so a per-package
 	// column would print `latest` N times. The summary counts them instead, and
 	// names the few a PIN_LINES line held to a caret (#159).
 	if (latest) {
-		const held = resolutions.filter(r => r.incoming !== 'latest');
+		const held = resolutions.filter((r) => r.incoming !== 'latest');
 		const toTag = resolutions.length - held.length;
 		const parts = [
 			...(toTag > 0 ? [`rewrote ${toTag} existing dependency spec(s) to 'latest'`] : []),
-			...(held.length > 0 ? [`held ${held.map(r => `${r.name} to ${r.incoming}`).join(', ')}`] : []),
+			...(held.length > 0
+				? [`held ${held.map((r) => `${r.name} to ${r.incoming}`).join(', ')}`]
+				: []),
 		];
 		return `--latest: ${parts.join('; ')}.`;
 	}
 
-	const width = Math.max(...resolutions.map(r => `${r.section}.${r.name}`.length));
+	const width = Math.max(...resolutions.map((r) => `${r.section}.${r.name}`.length));
 	const lines = resolutions.map((r) => {
 		const name = `${r.section}.${r.name}`.padEnd(width);
 		return r.resolution === 'overwrite'
@@ -302,8 +334,7 @@ export function formatDepResolutions(resolutions: DepResolution[], latest: boole
 export function detectIndent(content: string): string {
 	for (const line of content.split('\n')) {
 		const match = /^([ \t]+)\S/.exec(line);
-		if (match?.[1])
-			return match[1];
+		if (match?.[1]) return match[1];
 	}
 	return '  ';
 }
@@ -313,7 +344,11 @@ export function detectIndent(content: string): string {
 // when the user already has one we detect their indent, keep their existing
 // `recommendations` (and any sibling keys like unwantedRecommendations), and
 // only fold our additions in. Returns the path written so the caller can record it.
-function writeVscodeExtensions(targetDir: string, units: AnyUnit[], journal?: WriteJournal): string {
+function writeVscodeExtensions(
+	targetDir: string,
+	units: AnyUnit[],
+	journal?: WriteJournal,
+): string {
 	const dir = join(targetDir, '.vscode');
 	const path = join(dir, 'extensions.json');
 
@@ -357,8 +392,7 @@ async function runInstall(cwd: string, pm: Pm): Promise<InstallResult> {
 			cancelled = true;
 			child.kill('SIGTERM');
 			setTimeout(() => {
-				if (!child.killed)
-					child.kill('SIGKILL');
+				if (!child.killed) child.kill('SIGKILL');
 			}, 5000).unref();
 		};
 		process.on('SIGINT', onSigint);

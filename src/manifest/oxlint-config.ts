@@ -18,17 +18,23 @@ const REACT_PLUGINS = [...BASE_PLUGINS, 'react', 'jsx-a11y'];
 const NEXT_PLUGINS = [...REACT_PLUGINS, 'nextjs'];
 
 export function oxlintPlugins(flavor: OxlintFlavor): string[] {
-	if (flavor === 'base')
-		return [...BASE_PLUGINS];
-	if (flavor === 'react')
-		return [...REACT_PLUGINS];
+	if (flavor === 'base') return [...BASE_PLUGINS];
+	if (flavor === 'react') return [...REACT_PLUGINS];
 	return [...NEXT_PLUGINS];
 }
 
 // oxlint lints node_modules unless a .gitignore says otherwise, and a fresh
 // scaffold doesn't always have one. `.unbranded/**` holds the baseline copies
 // `update` diffs against, so oxfmt must never rewrite them either.
-const COMMON_IGNORES = ['.unbranded/**', 'node_modules/**', 'dist/**', 'build/**', 'out/**', '.next/**', 'coverage/**'];
+const COMMON_IGNORES = [
+	'.unbranded/**',
+	'node_modules/**',
+	'dist/**',
+	'build/**',
+	'out/**',
+	'.next/**',
+	'coverage/**',
+];
 
 // Both fixes come from running this config on a fresh Next app (kendrick/cambium#2).
 // The automatic JSX runtime makes a React import dead weight, and a stylesheet
@@ -43,7 +49,10 @@ export function buildOxlintConfig(flavor: OxlintFlavor): string {
 		$schema: './node_modules/oxlint/configuration_schema.json',
 		plugins: oxlintPlugins(flavor),
 		categories: { correctness: 'error', suspicious: 'error' },
-		env: flavor === 'base' ? { builtin: true, node: true } : { builtin: true, browser: true, node: true },
+		env:
+			flavor === 'base'
+				? { builtin: true, node: true }
+				: { builtin: true, browser: true, node: true },
 		...(flavor === 'base' ? {} : { rules: JSX_RULES }),
 		ignorePatterns: flavor === 'next' ? [...COMMON_IGNORES, 'next-env.d.ts'] : COMMON_IGNORES,
 	};
@@ -63,7 +72,13 @@ export function buildOxfmtConfig(): string {
 		singleQuote: true,
 		trailingComma: 'all',
 		endOfLine: 'lf',
-		ignorePatterns: [...COMMON_IGNORES, 'pnpm-lock.yaml', 'package-lock.json', 'package.json', '**/*.md'],
+		ignorePatterns: [
+			...COMMON_IGNORES,
+			'pnpm-lock.yaml',
+			'package-lock.json',
+			'package.json',
+			'**/*.md',
+		],
 	};
 	return `${JSON.stringify(config, null, '\t')}\n`;
 }

@@ -31,7 +31,18 @@ describe('cli inline flags (non-interactive)', () => {
 
 		const result = spawnSync(
 			'node',
-			[CLI, '--units', 'core-editorconfig,core-node-version', '--pm', 'npm', '--on-conflict', 'overwrite', '--post-install', 'none', '--yes'],
+			[
+				CLI,
+				'--units',
+				'core-editorconfig,core-node-version',
+				'--pm',
+				'npm',
+				'--on-conflict',
+				'overwrite',
+				'--post-install',
+				'none',
+				'--yes',
+			],
 			{ cwd: tmp, encoding: 'utf-8' },
 		);
 
@@ -80,7 +91,10 @@ describe('cli inline flags (non-interactive)', () => {
 	it('surfaces recipe-identical validation errors for a bad inline unit', () => {
 		writeJson(join(tmp, 'package.json'), { name: 'inline-app', version: '0.0.0' });
 
-		const result = spawnSync('node', [CLI, '--units', 'not-a-real-unit', '--yes'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--units', 'not-a-real-unit', '--yes'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status).toBe(1);
 		expect(result.stderr + result.stdout).toMatch(/unknown ids: not-a-real-unit/);
@@ -89,10 +103,14 @@ describe('cli inline flags (non-interactive)', () => {
 	it('rejects a bad --pm with the recipe-style message', () => {
 		writeJson(join(tmp, 'package.json'), { name: 'inline-app', version: '0.0.0' });
 
-		const result = spawnSync('node', [CLI, '--units', 'core-editorconfig', '--pm', 'cargo', '--yes'], {
-			cwd: tmp,
-			encoding: 'utf-8',
-		});
+		const result = spawnSync(
+			'node',
+			[CLI, '--units', 'core-editorconfig', '--pm', 'cargo', '--yes'],
+			{
+				cwd: tmp,
+				encoding: 'utf-8',
+			},
+		);
 
 		expect(result.status).toBe(1);
 		expect(result.stderr + result.stdout).toMatch(/pm must be one of/);

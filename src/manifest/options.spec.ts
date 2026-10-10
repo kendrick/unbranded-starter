@@ -13,24 +13,42 @@ const flavored: Unit = {
 	files: [],
 	packageJsonPatch: { scripts: { lint: 'eslint .' } },
 	implies: ['core-typescript'],
-	options: [{
-		key: 'eslintFlavor',
-		label: 'ESLint flavor',
-		default: 'base',
-		choices: [
-			{ value: 'base', label: 'Base', files: [{ content: 'BASE\n', dest: 'eslint.config.mjs' }], devDependencies: { eslint: '9' } },
-			{ value: 'react', label: 'React', files: [{ content: 'REACT\n', dest: 'eslint.config.mjs' }], devDependencies: { 'eslint': '9', 'eslint-plugin-jsx-a11y': '6' } },
-		],
-	}],
+	options: [
+		{
+			key: 'eslintFlavor',
+			label: 'ESLint flavor',
+			default: 'base',
+			choices: [
+				{
+					value: 'base',
+					label: 'Base',
+					files: [{ content: 'BASE\n', dest: 'eslint.config.mjs' }],
+					devDependencies: { eslint: '9' },
+				},
+				{
+					value: 'react',
+					label: 'React',
+					files: [{ content: 'REACT\n', dest: 'eslint.config.mjs' }],
+					devDependencies: { 'eslint': '9', 'eslint-plugin-jsx-a11y': '6' },
+				},
+			],
+		},
+	],
 };
 
 describe('applyUnitOptions', () => {
 	it('returns a unit without options untouched', () => {
-		const plain: Unit = { id: 'core-vitest', category: 'test', label: 'Vitest', description: '', files: [] };
+		const plain: Unit = {
+			id: 'core-vitest',
+			category: 'test',
+			label: 'Vitest',
+			description: '',
+			files: [],
+		};
 		expect(applyUnitOptions(plain, {})).toEqual(plain);
 	});
 
-	it('bakes the selected choice\'s files and devDependencies into a concrete unit', () => {
+	it("bakes the selected choice's files and devDependencies into a concrete unit", () => {
 		const concrete = applyUnitOptions(flavored, { eslintFlavor: 'react' });
 		expect(concrete.files).toEqual([{ content: 'REACT\n', dest: 'eslint.config.mjs' }]);
 		expect(concrete.devDependencies).toEqual({ 'eslint': '9', 'eslint-plugin-jsx-a11y': '6' });

@@ -12,14 +12,27 @@ const CLI = join(PKG_ROOT, 'dist/cli.js');
 // in package.json (pm: null keeps it install-free). That chain is the whole
 // test bed — removal must respect both the dependents edge and the ref-count.
 function scaffold(tmp: string): void {
-	writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'remove-me', version: '0.0.0' }, null, 2));
-	writeFileSync(join(tmp, 'recipe.json'), JSON.stringify({
-		units: ['opt-shadcn'],
-		pm: null,
-		onConflict: 'overwrite',
-		postInstall: 'none',
-	}, null, 2));
-	const applied = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+	writeFileSync(
+		join(tmp, 'package.json'),
+		JSON.stringify({ name: 'remove-me', version: '0.0.0' }, null, 2),
+	);
+	writeFileSync(
+		join(tmp, 'recipe.json'),
+		JSON.stringify(
+			{
+				units: ['opt-shadcn'],
+				pm: null,
+				onConflict: 'overwrite',
+				postInstall: 'none',
+			},
+			null,
+			2,
+		),
+	);
+	const applied = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+		cwd: tmp,
+		encoding: 'utf-8',
+	});
 	expect(applied.status, `scaffold stderr: ${applied.stderr}`).toBe(0);
 }
 
@@ -27,7 +40,10 @@ function run(args: string[], cwd: string): ReturnType<typeof spawnSync<string>> 
 	return spawnSync('node', [CLI, ...args], { cwd, encoding: 'utf-8' });
 }
 
-function pkg(tmp: string): { dependencies?: Record<string, string>; devDependencies?: Record<string, string> } {
+function pkg(tmp: string): {
+	dependencies?: Record<string, string>;
+	devDependencies?: Record<string, string>;
+} {
 	return JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as ReturnType<typeof pkg>;
 }
 
@@ -56,7 +72,9 @@ describe('unbranded remove', () => {
 		// …but tailwindcss survives: core-tailwind is still installed and claims it.
 		expect(pkg(tmp).devDependencies?.tailwindcss).toBeDefined();
 
-		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as { units: string[] };
+		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as {
+			units: string[];
+		};
 		expect(state.units).toEqual([{ id: 'core-tailwind', source: { kind: 'builtin' } }]);
 	});
 

@@ -23,15 +23,16 @@ export const DIFF_SCHEMA = 1;
 // Pure core: three hashes in, a verdict out. `onDisk` undefined means the file
 // was deleted — still a user edit. `template` undefined means no shipped template
 // backs this record anymore, so the template axis can't be judged.
-export function classify(hashes: { recorded: string; onDisk?: string; template?: string }): DiffCategory {
+export function classify(hashes: {
+	recorded: string;
+	onDisk?: string;
+	template?: string;
+}): DiffCategory {
 	const userModified = hashes.onDisk !== hashes.recorded;
 	const templateUpdated = hashes.template !== undefined && hashes.template !== hashes.recorded;
-	if (userModified && templateUpdated)
-		return 'both';
-	if (userModified)
-		return 'user-modified';
-	if (templateUpdated)
-		return 'template-updated';
+	if (userModified && templateUpdated) return 'both';
+	if (userModified) return 'user-modified';
+	if (templateUpdated) return 'template-updated';
 	return 'unchanged';
 }
 
@@ -63,7 +64,7 @@ export interface ComputeDiffOpts {
 export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 	const fallbackRoot = opts.pkgRoot ?? PKG_ROOT;
 	const units = opts.catalog?.units ?? UNITS;
-	const byId = new Map<string, AnyUnit>(units.map(u => [u.id, u]));
+	const byId = new Map<string, AnyUnit>(units.map((u) => [u.id, u]));
 
 	const planByRel = new Map<string, FilePlan>();
 	for (const { id } of opts.state.units) {
@@ -71,11 +72,14 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 		// A unit whose definition we can't load leaves its files judged on the user
 		// axis alone: no plan means no template hash, and classify already reads that
 		// as "the template axis can't be judged" rather than as drift.
-		if (!unit)
-			continue;
+		if (!unit) continue;
 		const pkgRoot = opts.catalog?.templateRoots.get(id) ?? fallbackRoot;
 		for (const op of unit.files) {
-			const plan = planFileOp(op, { pkgRoot, targetDir: opts.targetDir, projectName: opts.projectName });
+			const plan = planFileOp(op, {
+				pkgRoot,
+				targetDir: opts.targetDir,
+				projectName: opts.projectName,
+			});
 			planByRel.set(toPosix(plan.rel), plan);
 		}
 	}
@@ -89,7 +93,7 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 		files.push({ path: rel, status: classify({ recorded, onDisk, template }), plan });
 	}
 
-	return { drift: files.some(f => f.status !== 'unchanged'), files };
+	return { drift: files.some((f) => f.status !== 'unchanged'), files };
 }
 
 export interface RunDiffOpts {
@@ -122,31 +126,43 @@ export function runDiff(opts: RunDiffOpts = {}): number {
 
 	if (!state) {
 		if (opts.json) {
-			process.stdout.write(`${JSON.stringify({ schema: DIFF_SCHEMA, tracked: false, drift: false, files: [] }, null, 2)}\n`);
-		}
-		else {
-			process.stdout.write(`No ${STATE_FILENAME} here. Run \`unbranded\` to scaffold and start tracking drift.\n`);
+			process.stdout.write(
+				`${JSON.stringify({ schema: DIFF_SCHEMA, tracked: false, drift: false, files: [] }, null, 2)}\n`,
+			);
+		} else {
+			process.stdout.write(
+				`No ${STATE_FILENAME} here. Run \`unbranded\` to scaffold and start tracking drift.\n`,
+			);
 		}
 		return 0;
 	}
 
 	const catalog = loadCatalog({
-		unitsDirs: unitsDirsFor(state.units.map(u => u.source), cwd, opts.unitsDir),
+		unitsDirs: unitsDirsFor(
+			state.units.map((u) => u.source),
+			cwd,
+			opts.unitsDir,
+		),
 		onMissing: 'warn',
 	});
 	// Warnings go to stderr so --json keeps a clean stdout for its consumer.
-	for (const warning of catalog.warnings)
-		process.stderr.write(`unbranded diff: ${warning}\n`);
+	for (const warning of catalog.warnings) process.stderr.write(`unbranded diff: ${warning}\n`);
 
 	const report = computeDiff({ state, targetDir: cwd, catalog });
 
 	if (opts.json) {
-		process.stdout.write(`${JSON.stringify({
-			schema: DIFF_SCHEMA,
-			tracked: true,
-			drift: report.drift,
-			files: report.files.map(f => ({ path: f.path, status: f.status })),
-		}, null, 2)}\n`);
+		process.stdout.write(
+			`${JSON.stringify(
+				{
+					schema: DIFF_SCHEMA,
+					tracked: true,
+					drift: report.drift,
+					files: report.files.map((f) => ({ path: f.path, status: f.status })),
+				},
+				null,
+				2,
+			)}\n`,
+		);
 		return report.drift ? 1 : 0;
 	}
 
@@ -162,7 +178,7 @@ const STATUS_LABELS: Record<DiffCategory, string> = {
 };
 
 function formatDiff(report: DiffReport, withDiff: boolean): string {
-	const width = Math.max(...Object.values(STATUS_LABELS).map(l => l.length));
+	const width = Math.max(...Object.values(STATUS_LABELS).map((l) => l.length));
 	// Name the baseline so nobody mistakes this for the `--dry-run` init preview.
 	const lines: string[] = [`Drift vs ${STATE_FILENAME} (recorded at scaffold):`, ''];
 
@@ -170,8 +186,7 @@ function formatDiff(report: DiffReport, withDiff: boolean): string {
 		lines.push(`${STATUS_LABELS[file.status].padEnd(width)}  ${file.path}`);
 		if (withDiff && file.status !== 'unchanged' && file.plan) {
 			const patch = renderPlanDiff(file.plan);
-			if (patch)
-				lines.push(patch);
+			if (patch) lines.push(patch);
 		}
 	}
 

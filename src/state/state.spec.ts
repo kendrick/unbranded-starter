@@ -3,7 +3,18 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { applyRemovalToState, buildStateFile, builtinUnits, hashBuffer, readStateFile, refreshTrackedFiles, serializeState, STATE_FILENAME, STATE_SCHEMA, writeStateFile } from './state';
+import {
+	applyRemovalToState,
+	buildStateFile,
+	builtinUnits,
+	hashBuffer,
+	readStateFile,
+	refreshTrackedFiles,
+	serializeState,
+	STATE_FILENAME,
+	STATE_SCHEMA,
+	writeStateFile,
+} from './state';
 
 // Most cases here assert on envelope contents and only ever set up a readable one,
 // so they unwrap the read to the state and let the tri-state cases below carry the
@@ -15,7 +26,11 @@ function readOk(dir: string): StateFile | undefined {
 
 describe('buildStateFile', () => {
 	it('wraps the tracked files in a schema-versioned envelope', () => {
-		const state = buildStateFile({ version: '1.2.3', units: builtinUnits(['core-eslint']), files: { 'a.txt': 'h' } });
+		const state = buildStateFile({
+			version: '1.2.3',
+			units: builtinUnits(['core-eslint']),
+			files: { 'a.txt': 'h' },
+		});
 		expect(state.schema).toBe(STATE_SCHEMA);
 		expect(state.version).toBe('1.2.3');
 	});
@@ -31,7 +46,11 @@ describe('buildStateFile', () => {
 	});
 
 	it('carries a self-describing hint so an agent that finds the file knows what reads it', () => {
-		const state = buildStateFile({ version: '1.0.0', units: builtinUnits(['core-eslint']), files: {} });
+		const state = buildStateFile({
+			version: '1.0.0',
+			units: builtinUnits(['core-eslint']),
+			files: {},
+		});
 		expect(state._tool).toMatch(/unbranded diff/);
 		expect(state._tool).toMatch(/unbranded doctor/);
 	});
@@ -51,7 +70,14 @@ describe('buildStateFile', () => {
 	});
 
 	it('omits empty v2 maps the same way it omits an empty doctor block', () => {
-		const state = buildStateFile({ version: '1.0.0', units: builtinUnits(['core-eslint']), files: {}, options: {}, attribution: {}, modes: {} });
+		const state = buildStateFile({
+			version: '1.0.0',
+			units: builtinUnits(['core-eslint']),
+			files: {},
+			options: {},
+			attribution: {},
+			modes: {},
+		});
 		expect('options' in state).toBe(false);
 		expect('attribution' in state).toBe(false);
 		expect('modes' in state).toBe(false);
@@ -60,16 +86,28 @@ describe('buildStateFile', () => {
 
 describe('serializeState', () => {
 	it('emits sorted keys, tab indent, trailing newline — deterministic', () => {
-		const a = serializeState(buildStateFile({ version: '1.0.0', units: builtinUnits(['core-eslint']), files: { b: '2', a: '1' } }));
+		const a = serializeState(
+			buildStateFile({
+				version: '1.0.0',
+				units: builtinUnits(['core-eslint']),
+				files: { b: '2', a: '1' },
+			}),
+		);
 		// Same inputs supplied in a different key order must serialize identically.
-		const b = serializeState(buildStateFile({ version: '1.0.0', units: builtinUnits(['core-eslint']), files: { a: '1', b: '2' } }));
+		const b = serializeState(
+			buildStateFile({
+				version: '1.0.0',
+				units: builtinUnits(['core-eslint']),
+				files: { a: '1', b: '2' },
+			}),
+		);
 		expect(a).toBe(b);
 		expect(a.endsWith('\n')).toBe(true);
 		// Tab indent so a scaffolded .unbranded.json satisfies the shipped ESLint
 		// config's jsonc/indent, same as package.json (#48).
 		expect(a).toContain('\n\t"');
 		// Top-level keys alphabetical; the _tool hint sorts first (underscore).
-		const order = [...a.matchAll(/^\t"(\w+)":/gm)].map(m => m[1]);
+		const order = [...a.matchAll(/^\t"(\w+)":/gm)].map((m) => m[1]);
 		expect(order).toEqual(['_tool', 'files', 'schema', 'units', 'version']);
 	});
 });
@@ -92,7 +130,11 @@ describe('writeStateFile / readStateFile', () => {
 		rmSync(tmp, { recursive: true, force: true });
 	});
 
-	function write(dest: string, unit = 'core-eslint' as TrackedWrite['unit'], mode: TrackedWrite['mode'] = 'copy'): TrackedWrite {
+	function write(
+		dest: string,
+		unit = 'core-eslint' as TrackedWrite['unit'],
+		mode: TrackedWrite['mode'] = 'copy',
+	): TrackedWrite {
 		return { dest: join(tmp, dest), unit, mode };
 	}
 
@@ -100,7 +142,11 @@ describe('writeStateFile / readStateFile', () => {
 		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
 		writeFileSync(join(tmp, 'b.txt'), 'bravo\n');
 
-		writeStateFile({ targetDir: tmp, units: builtinUnits(['core-eslint']), writes: [write('a.txt'), write('b.txt', 'core-typescript')] });
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('a.txt'), write('b.txt', 'core-typescript')],
+		});
 
 		const state = readOk(tmp);
 		expect(state?.files['a.txt']).toBe(hashBuffer(Buffer.from('alpha\n')));
@@ -133,7 +179,11 @@ describe('writeStateFile / readStateFile', () => {
 	it('skips writes whose destination never landed on disk, in every map', () => {
 		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
 		// b.txt was planned but does not exist (e.g. a skipped write).
-		writeStateFile({ targetDir: tmp, units: builtinUnits(['core-eslint']), writes: [write('a.txt'), write('b.txt')] });
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('a.txt'), write('b.txt')],
+		});
 
 		const state = readOk(tmp);
 		expect(Object.keys(state?.files ?? {})).toEqual(['a.txt']);
@@ -141,14 +191,23 @@ describe('writeStateFile / readStateFile', () => {
 		expect(Object.keys(state?.modes ?? {})).toEqual(['a.txt']);
 	});
 
-	it('records the run\'s resolved options and preserves them across an optionless re-run', () => {
+	it("records the run's resolved options and preserves them across an optionless re-run", () => {
 		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
-		writeStateFile({ targetDir: tmp, units: builtinUnits(['core-eslint']), writes: [write('a.txt')], options: { eslintFlavor: 'react' } });
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('a.txt')],
+			options: { eslintFlavor: 'react' },
+		});
 		expect(readOk(tmp)?.options).toEqual({ eslintFlavor: 'react' });
 
 		// A later run that resolved no options must not drop the recorded flavor:
 		// remove and update need it to reconstruct what this scaffold meant.
-		writeStateFile({ targetDir: tmp, units: builtinUnits(['core-eslint']), writes: [write('a.txt')] });
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('a.txt')],
+		});
 		expect(readOk(tmp)?.options).toEqual({ eslintFlavor: 'react' });
 	});
 
@@ -157,10 +216,18 @@ describe('writeStateFile / readStateFile', () => {
 		// the whole history (remove reference-counts against state.units), so a
 		// last-run-wins envelope would forget what an earlier run installed.
 		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
-		writeStateFile({ targetDir: tmp, units: builtinUnits(['core-eslint']), writes: [write('a.txt')] });
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('a.txt')],
+		});
 
 		writeFileSync(join(tmp, 'b.txt'), 'bravo\n');
-		writeStateFile({ targetDir: tmp, units: builtinUnits(['opt-vscode']), writes: [write('b.txt', 'opt-vscode')] });
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['opt-vscode']),
+			writes: [write('b.txt', 'opt-vscode')],
+		});
 
 		const state = readOk(tmp);
 		expect(state?.units).toEqual(builtinUnits(['core-eslint', 'opt-vscode']));
@@ -174,11 +241,15 @@ describe('writeStateFile / readStateFile', () => {
 		writeFileSync(join(tmp, 'settings.json'), '{"a":1}\n');
 		writeFileSync(join(tmp, '.nvmrc'), '24\n');
 
-		writeStateFile({ targetDir: tmp, units: builtinUnits(['core-eslint']), writes: [
-			write('a.txt'),
-			write('settings.json', 'opt-vscode', 'merge-json'),
-			write('.nvmrc', 'core-node-version', 'computed'),
-		] });
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [
+				write('a.txt'),
+				write('settings.json', 'opt-vscode', 'merge-json'),
+				write('.nvmrc', 'core-node-version', 'computed'),
+			],
+		});
 
 		// The baseline is the future merge base for `unbranded update`: identical
 		// bytes, so base-vs-mine and base-vs-theirs comparisons are exact.
@@ -190,7 +261,11 @@ describe('writeStateFile / readStateFile', () => {
 
 	it('explains the sidecar with a README that tells users to commit it', () => {
 		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
-		writeStateFile({ targetDir: tmp, units: builtinUnits(['core-eslint']), writes: [write('a.txt')] });
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('a.txt')],
+		});
 
 		const readme = readFileSync(join(tmp, '.unbranded', 'README.md'), 'utf-8');
 		expect(readme.toLowerCase()).toContain('commit');
@@ -204,21 +279,33 @@ describe('writeStateFile / readStateFile', () => {
 		writeFileSync(join(tmp, '.unbranded', 'baseline', 'stray.txt'), 'ghost\n');
 
 		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
-		writeStateFile({ targetDir: tmp, units: builtinUnits(['core-eslint']), writes: [write('a.txt')] });
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('a.txt')],
+		});
 		expect(existsSync(join(tmp, '.unbranded', 'baseline', 'stray.txt'))).toBe(false);
 
 		// A second run that rewrites only b.txt keeps a.txt's baseline: a.txt is
 		// still tracked, and its recorded base is the last one unbranded wrote.
 		writeFileSync(join(tmp, 'a.txt'), 'user drift\n');
 		writeFileSync(join(tmp, 'b.txt'), 'bravo\n');
-		writeStateFile({ targetDir: tmp, units: builtinUnits(['core-eslint']), writes: [write('b.txt')] });
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('b.txt')],
+		});
 		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'a.txt'), 'utf-8')).toBe('alpha\n');
 		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'b.txt'), 'utf-8')).toBe('bravo\n');
 	});
 
 	it('omits the doctor block on a fresh scaffold — no empty config nobody asked for', () => {
 		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
-		writeStateFile({ targetDir: tmp, units: builtinUnits(['core-eslint']), writes: [write('a.txt')] });
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('a.txt')],
+		});
 		expect(readFileSync(join(tmp, STATE_FILENAME), 'utf-8')).not.toContain('"doctor"');
 	});
 
@@ -227,28 +314,46 @@ describe('writeStateFile / readStateFile', () => {
 		// run rewrites the envelope from scratch, writeStateFile has to carry the
 		// block forward or the "durable off switch" evaporates on the next run.
 		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
-		writeStateFile({ targetDir: tmp, units: builtinUnits(['core-eslint']), writes: [write('a.txt')] });
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('a.txt')],
+		});
 
 		// Simulate the user accepting a finding by editing .unbranded.json.
 		const path = join(tmp, STATE_FILENAME);
-		const edited = { ...(JSON.parse(readFileSync(path, 'utf-8')) as StateFile), doctor: { ignore: ['missing-editorconfig'] } };
+		const edited = {
+			...(JSON.parse(readFileSync(path, 'utf-8')) as StateFile),
+			doctor: { ignore: ['missing-editorconfig'] },
+		};
 		writeFileSync(path, `${JSON.stringify(edited, null, 2)}\n`);
 
 		// A second scaffold must not clobber it.
-		writeStateFile({ targetDir: tmp, units: builtinUnits(['core-eslint']), writes: [write('a.txt')] });
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('a.txt')],
+		});
 		expect(readOk(tmp)?.doctor?.ignore).toEqual(['missing-editorconfig']);
 	});
 
 	it('reads a schema-1 state file, leaving the v2 maps absent rather than erroring', () => {
 		// Written by a pre-baseline CLI: consumers must treat the missing maps as
 		// "degrade gracefully" (update falls back to overwrite-confirmation).
-		writeFileSync(join(tmp, STATE_FILENAME), `${JSON.stringify({
-			_tool: 'x',
-			schema: 1,
-			version: '0.6.0',
-			units: ['core-eslint'],
-			files: { 'a.txt': 'deadbeef' },
-		}, null, '\t')}\n`);
+		writeFileSync(
+			join(tmp, STATE_FILENAME),
+			`${JSON.stringify(
+				{
+					_tool: 'x',
+					schema: 1,
+					version: '0.6.0',
+					units: ['core-eslint'],
+					files: { 'a.txt': 'deadbeef' },
+				},
+				null,
+				'\t',
+			)}\n`,
+		);
 
 		const state = readOk(tmp);
 		expect(state?.files['a.txt']).toBe('deadbeef');
@@ -261,14 +366,21 @@ describe('writeStateFile / readStateFile', () => {
 		// Nothing but a built-in could be installed before schema 3, so this widening
 		// is exact rather than a guess — and it has to happen at the door, or every
 		// downstream id comparison would have to know which schema wrote the file.
-		writeFileSync(join(tmp, STATE_FILENAME), `${JSON.stringify({
-			_tool: 'x',
-			schema: 2,
-			version: '1.0.2',
-			units: ['core-eslint', 'opt-vscode'],
-			files: { 'a.txt': 'deadbeef' },
-			attribution: { 'a.txt': 'core-eslint' },
-		}, null, '\t')}\n`);
+		writeFileSync(
+			join(tmp, STATE_FILENAME),
+			`${JSON.stringify(
+				{
+					_tool: 'x',
+					schema: 2,
+					version: '1.0.2',
+					units: ['core-eslint', 'opt-vscode'],
+					files: { 'a.txt': 'deadbeef' },
+					attribution: { 'a.txt': 'core-eslint' },
+				},
+				null,
+				'\t',
+			)}\n`,
+		);
 
 		expect(readOk(tmp)?.units).toEqual(builtinUnits(['core-eslint', 'opt-vscode']));
 	});
@@ -281,20 +393,29 @@ describe('writeStateFile / readStateFile', () => {
 			writes: [write('a.txt', 'my-units/banner')],
 		});
 
-		expect(readOk(tmp)?.units).toEqual([{ id: 'my-units/banner', source: { kind: 'dir', path: './my-units' } }]);
+		expect(readOk(tmp)?.units).toEqual([
+			{ id: 'my-units/banner', source: { kind: 'dir', path: './my-units' } },
+		]);
 		expect(readOk(tmp)?.attribution?.['a.txt']).toBe('my-units/banner');
 	});
 
 	it('refuses a state file from a newer unbranded instead of reading it as untracked', () => {
 		// The dangerous answer is "none": diff reads that as an unscaffolded project
 		// and exits 0 clean, so a CI gate would pass on a repo it cannot read.
-		writeFileSync(join(tmp, STATE_FILENAME), `${JSON.stringify({
-			_tool: 'x',
-			schema: STATE_SCHEMA + 1,
-			version: '9.9.9',
-			units: [],
-			files: {},
-		}, null, '\t')}\n`);
+		writeFileSync(
+			join(tmp, STATE_FILENAME),
+			`${JSON.stringify(
+				{
+					_tool: 'x',
+					schema: STATE_SCHEMA + 1,
+					version: '9.9.9',
+					units: [],
+					files: {},
+				},
+				null,
+				'\t',
+			)}\n`,
+		);
 
 		const read = readStateFile(tmp);
 		expect(read.kind).toBe('unsupported');
@@ -302,17 +423,29 @@ describe('writeStateFile / readStateFile', () => {
 	});
 
 	it('refuses to merge onto an envelope it could not fully read', () => {
-		writeFileSync(join(tmp, STATE_FILENAME), `${JSON.stringify({
-			_tool: 'x',
-			schema: STATE_SCHEMA + 1,
-			version: '9.9.9',
-			units: [],
-			files: {},
-		}, null, '\t')}\n`);
+		writeFileSync(
+			join(tmp, STATE_FILENAME),
+			`${JSON.stringify(
+				{
+					_tool: 'x',
+					schema: STATE_SCHEMA + 1,
+					version: '9.9.9',
+					units: [],
+					files: {},
+				},
+				null,
+				'\t',
+			)}\n`,
+		);
 		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
 
-		expect(() => writeStateFile({ targetDir: tmp, units: builtinUnits(['core-eslint']), writes: [write('a.txt')] }))
-			.toThrow(/newer unbranded/);
+		expect(() =>
+			writeStateFile({
+				targetDir: tmp,
+				units: builtinUnits(['core-eslint']),
+				writes: [write('a.txt')],
+			}),
+		).toThrow(/newer unbranded/);
 	});
 
 	it('reports no state for an untracked directory and never throws on malformed state', () => {
@@ -323,7 +456,11 @@ describe('writeStateFile / readStateFile', () => {
 
 	it('stamps the running CLI version so diffs know which template shipped', () => {
 		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
-		writeStateFile({ targetDir: tmp, units: builtinUnits(['core-eslint']), writes: [write('a.txt')] });
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('a.txt')],
+		});
 		const state = readOk(tmp);
 		// The exact value tracks package.json; asserting it is a non-empty semver-ish string keeps the test robust.
 		expect(state?.version).toMatch(/\d+\.\d+\.\d+/);
@@ -355,9 +492,14 @@ describe('applyRemovalToState', () => {
 		});
 	}
 
-	it('shrinks every map and prunes the removed file\'s baseline', () => {
+	it("shrinks every map and prunes the removed file's baseline", () => {
 		seed();
-		applyRemovalToState({ targetDir: tmp, removeUnits: ['core-eslint'], removeFiles: ['a.txt'], removeOptionKeys: ['eslintFlavor'] });
+		applyRemovalToState({
+			targetDir: tmp,
+			removeUnits: ['core-eslint'],
+			removeFiles: ['a.txt'],
+			removeOptionKeys: ['eslintFlavor'],
+		});
 
 		const state = readOk(tmp);
 		expect(state?.units).toEqual(builtinUnits(['core-typescript']));
@@ -372,10 +514,17 @@ describe('applyRemovalToState', () => {
 	it('preserves doctor.ignore and option keys it was not told to drop', () => {
 		seed();
 		const path = join(tmp, STATE_FILENAME);
-		const edited = { ...(JSON.parse(readFileSync(path, 'utf-8')) as StateFile), doctor: { ignore: ['missing-editorconfig'] } };
+		const edited = {
+			...(JSON.parse(readFileSync(path, 'utf-8')) as StateFile),
+			doctor: { ignore: ['missing-editorconfig'] },
+		};
 		writeFileSync(path, `${JSON.stringify(edited, null, '\t')}\n`);
 
-		applyRemovalToState({ targetDir: tmp, removeUnits: ['core-typescript'], removeFiles: ['b.txt'] });
+		applyRemovalToState({
+			targetDir: tmp,
+			removeUnits: ['core-typescript'],
+			removeFiles: ['b.txt'],
+		});
 
 		const state = readOk(tmp);
 		expect(state?.doctor?.ignore).toEqual(['missing-editorconfig']);
@@ -384,7 +533,11 @@ describe('applyRemovalToState', () => {
 
 	it('removing the last unit deletes the state file and the sidecar wholesale', () => {
 		seed();
-		applyRemovalToState({ targetDir: tmp, removeUnits: ['core-eslint', 'core-typescript'], removeFiles: ['a.txt', 'b.txt'] });
+		applyRemovalToState({
+			targetDir: tmp,
+			removeUnits: ['core-eslint', 'core-typescript'],
+			removeFiles: ['a.txt', 'b.txt'],
+		});
 		// Nothing tracked means nothing to explain: a lingering envelope and README
 		// would advertise management that no longer exists.
 		expect(existsSync(join(tmp, STATE_FILENAME))).toBe(false);
@@ -392,7 +545,9 @@ describe('applyRemovalToState', () => {
 	});
 
 	it('is a no-op without a state file', () => {
-		expect(() => applyRemovalToState({ targetDir: tmp, removeUnits: ['core-eslint'], removeFiles: [] })).not.toThrow();
+		expect(() =>
+			applyRemovalToState({ targetDir: tmp, removeUnits: ['core-eslint'], removeFiles: [] }),
+		).not.toThrow();
 		expect(existsSync(join(tmp, STATE_FILENAME))).toBe(false);
 	});
 });
@@ -410,16 +565,25 @@ describe('refreshTrackedFiles', () => {
 
 	it('updates hashes, rewrites baselines to the given bytes, and stamps the version', () => {
 		writeFileSync(join(tmp, 'a.txt'), 'v1\n');
-		writeStateFile({ targetDir: tmp, units: builtinUnits(['core-eslint']), writes: [{ dest: join(tmp, 'a.txt'), unit: 'core-eslint', mode: 'copy' }] });
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [{ dest: join(tmp, 'a.txt'), unit: 'core-eslint', mode: 'copy' }],
+		});
 
 		// After an update the on-disk file may be the user's merge, while the
 		// baseline must become the CURRENT template — they legitimately diverge
 		// (keep-mine resolutions), so the caller supplies each separately.
-		refreshTrackedFiles({ targetDir: tmp, entries: { 'a.txt': { hash: 'newhash', baseline: 'template v2\n' } } });
+		refreshTrackedFiles({
+			targetDir: tmp,
+			entries: { 'a.txt': { hash: 'newhash', baseline: 'template v2\n' } },
+		});
 
 		const state = readOk(tmp);
 		expect(state?.files['a.txt']).toBe('newhash');
-		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'a.txt'), 'utf-8')).toBe('template v2\n');
+		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'a.txt'), 'utf-8')).toBe(
+			'template v2\n',
+		);
 		// Attribution and units survive untouched.
 		expect(state?.attribution?.['a.txt']).toBe('core-eslint');
 		expect(state?.units).toEqual(builtinUnits(['core-eslint']));
@@ -427,7 +591,11 @@ describe('refreshTrackedFiles', () => {
 
 	it('refreshes a hash without touching the baseline when none is supplied', () => {
 		writeFileSync(join(tmp, 'a.txt'), 'v1\n');
-		writeStateFile({ targetDir: tmp, units: builtinUnits(['core-eslint']), writes: [{ dest: join(tmp, 'a.txt'), unit: 'core-eslint', mode: 'copy' }] });
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [{ dest: join(tmp, 'a.txt'), unit: 'core-eslint', mode: 'copy' }],
+		});
 
 		refreshTrackedFiles({ targetDir: tmp, entries: { 'a.txt': { hash: 'newhash' } } });
 
@@ -436,7 +604,9 @@ describe('refreshTrackedFiles', () => {
 	});
 
 	it('is a no-op without a state file', () => {
-		expect(() => refreshTrackedFiles({ targetDir: tmp, entries: { 'a.txt': { hash: 'x' } } })).not.toThrow();
+		expect(() =>
+			refreshTrackedFiles({ targetDir: tmp, entries: { 'a.txt': { hash: 'x' } } }),
+		).not.toThrow();
 		expect(existsSync(join(tmp, STATE_FILENAME))).toBe(false);
 	});
 });

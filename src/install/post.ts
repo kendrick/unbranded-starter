@@ -26,8 +26,7 @@ export async function runPostInstalls(opts: PostInstallOpts): Promise<PostInstal
 	const summary: PostInstallSummary = { ran: [], skipped: [], failed: [] };
 
 	for (const unit of opts.units) {
-		if (!unit.postInstall?.length)
-			continue;
+		if (!unit.postInstall?.length) continue;
 		for (const pi of unit.postInstall) {
 			// Hard preconditions first — no point confirming if we'd refuse anyway.
 			if (pi.requires === 'git' && !existsSync(join(opts.targetDir, '.git'))) {
@@ -39,8 +38,7 @@ export async function runPostInstalls(opts: PostInstallOpts): Promise<PostInstal
 			let ok: boolean;
 			if (opts.auto !== undefined) {
 				ok = opts.auto === 'all';
-			}
-			else {
+			} else {
 				const answer = await confirm({
 					message: pi.prompt,
 					initialValue: pi.default,
@@ -58,8 +56,7 @@ export async function runPostInstalls(opts: PostInstallOpts): Promise<PostInstal
 			}
 
 			const result = await runOne(opts.targetDir, opts.pm, pi);
-			if (result.ok)
-				summary.ran.push(pi.id);
+			if (result.ok) summary.ran.push(pi.id);
 			else summary.failed.push({ id: pi.id, error: result.error });
 		}
 	}
@@ -72,10 +69,14 @@ export async function runPostInstalls(opts: PostInstallOpts): Promise<PostInstal
 // runtime adds `pnpm exec`, `npm exec --`, `yarn exec`, or `bun x`.
 export function buildCommand(pm: Pm, command: readonly string[]): { bin: string; args: string[] } {
 	switch (pm) {
-		case 'pnpm': return { bin: 'pnpm', args: ['exec', ...command] };
-		case 'npm': return { bin: 'npm', args: ['exec', '--', ...command] };
-		case 'yarn': return { bin: 'yarn', args: ['exec', ...command] };
-		case 'bun': return { bin: 'bun', args: ['x', ...command] };
+		case 'pnpm':
+			return { bin: 'pnpm', args: ['exec', ...command] };
+		case 'npm':
+			return { bin: 'npm', args: ['exec', '--', ...command] };
+		case 'yarn':
+			return { bin: 'yarn', args: ['exec', ...command] };
+		case 'bun':
+			return { bin: 'bun', args: ['x', ...command] };
 	}
 }
 
@@ -100,8 +101,7 @@ async function runOne(cwd: string, pm: Pm, pi: PostInstall): Promise<RunResult> 
 		const onSigint = (): void => {
 			child.kill('SIGTERM');
 			setTimeout(() => {
-				if (!child.killed)
-					child.kill('SIGKILL');
+				if (!child.killed) child.kill('SIGKILL');
 			}, 5000).unref();
 		};
 		process.on('SIGINT', onSigint);
