@@ -217,8 +217,8 @@ export const UNITS: Unit[] = [
 			{ src: 'vitest.config.ts', dest: 'vitest.config.ts' },
 		],
 		devDependencies: {
-			vitest: '5.0.2',
-			jsdom: '30.1.1',
+			vitest: '5.0.3',
+			jsdom: '30.1.2',
 		},
 		packageJsonPatch: {
 			scripts: {
