@@ -4,7 +4,13 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { builtinUnits, hashBuffer, readStateFile, STATE_SCHEMA, writeStateFile } from '../state/state';
+import {
+	builtinUnits,
+	hashBuffer,
+	readStateFile,
+	STATE_SCHEMA,
+	writeStateFile,
+} from '../state/state';
 import { planRemoval, runRemove } from './remove';
 
 function unit(id: UnitId, extras: Partial<Unit> = {}): Unit {
@@ -30,15 +36,17 @@ describe('planRemoval', () => {
 		unit('core-eslint', {
 			devDependencies: { 'eslint': '9.0.0', 'shared-tool': '1.0.0' },
 			packageJsonPatch: { scripts: { lint: 'eslint .' } },
-			options: [{
-				key: 'eslintFlavor',
-				label: 'flavor',
-				default: 'base',
-				choices: [
-					{ value: 'base', label: 'Base' },
-					{ value: 'react', label: 'React', devDependencies: { 'react-plugin': '1.0.0' } },
-				],
-			}],
+			options: [
+				{
+					key: 'eslintFlavor',
+					label: 'flavor',
+					default: 'base',
+					choices: [
+						{ value: 'base', label: 'Base' },
+						{ value: 'react', label: 'React', devDependencies: { 'react-plugin': '1.0.0' } },
+					],
+				},
+			],
 		}),
 		unit('core-vitest', { devDependencies: { 'shared-tool': '1.0.0', 'vitest': '2.0.0' } }),
 		unit('opt-vscode'),
@@ -73,12 +81,17 @@ describe('planRemoval', () => {
 		};
 	}
 
-	it('partitions the removed unit\'s files: unmodified deletions, drifted flagged, others untouched', () => {
+	it("partitions the removed unit's files: unmodified deletions, drifted flagged, others untouched", () => {
 		writeFileSync(join(tmp, 'eslint.config.mjs'), 'cfg\n');
 		writeFileSync(join(tmp, 'drifted.txt'), 'user changed this\n');
 		writeFileSync(join(tmp, 'vitest.config.ts'), 'vt\n');
 
-		const plan = planRemoval({ targetDir: tmp, state: stateV2(), removeUnits: ['core-eslint'], units: catalog });
+		const plan = planRemoval({
+			targetDir: tmp,
+			state: stateV2(),
+			removeUnits: ['core-eslint'],
+			units: catalog,
+		});
 
 		expect(plan.deletions).toEqual([
 			{ rel: 'eslint.config.mjs', modified: false },
@@ -90,7 +103,12 @@ describe('planRemoval', () => {
 
 	it('keeps a merge-json file on disk but disowns it, listing it as retained', () => {
 		writeFileSync(join(tmp, '.vscode'), ''); // parent placeholder not needed; file check is by rel
-		const plan = planRemoval({ targetDir: tmp, state: stateV2(), removeUnits: ['opt-vscode'], units: catalog });
+		const plan = planRemoval({
+			targetDir: tmp,
+			state: stateV2(),
+			removeUnits: ['opt-vscode'],
+			units: catalog,
+		});
 		// Merged files carry user content; deleting them would take that along.
 		expect(plan.deletions).toEqual([]);
 		expect(plan.retained).toEqual([{ rel: '.vscode/settings.json', mode: 'merge-json' }]);
@@ -99,12 +117,22 @@ describe('planRemoval', () => {
 	it('skips a deletion candidate that no longer exists on disk', () => {
 		// Only drifted.txt is present; the config was already hand-deleted.
 		writeFileSync(join(tmp, 'drifted.txt'), 'original\n');
-		const plan = planRemoval({ targetDir: tmp, state: stateV2(), removeUnits: ['core-eslint'], units: catalog });
+		const plan = planRemoval({
+			targetDir: tmp,
+			state: stateV2(),
+			removeUnits: ['core-eslint'],
+			units: catalog,
+		});
 		expect(plan.deletions).toEqual([{ rel: 'drifted.txt', modified: false }]);
 	});
 
 	it('reference-counts package.json entries against the remaining units, honoring recorded options', () => {
-		const plan = planRemoval({ targetDir: tmp, state: stateV2(), removeUnits: ['core-eslint'], units: catalog });
+		const plan = planRemoval({
+			targetDir: tmp,
+			state: stateV2(),
+			removeUnits: ['core-eslint'],
+			units: catalog,
+		});
 
 		// eslint is sole-owned; react-plugin exists because the recorded flavor is
 		// react; shared-tool is also claimed by core-vitest and must survive.
@@ -115,7 +143,9 @@ describe('planRemoval', () => {
 	it('falls back to manifest replay for a schema-1 state, honoring the solely-owned rule', () => {
 		const replayCatalog: Unit[] = [
 			unit('core-editorconfig', { files: [{ src: '.editorconfig', dest: '.editorconfig' }] }),
-			unit('core-gitattributes', { files: [{ src: 'templates/gitattributes', dest: '.gitattributes' }] }),
+			unit('core-gitattributes', {
+				files: [{ src: 'templates/gitattributes', dest: '.gitattributes' }],
+			}),
 			// Declares the same dest as core-editorconfig: with it still installed,
 			// the file is not solely owned and must survive.
 			unit('opt-vscode', { files: [{ src: 'x', dest: '.editorconfig' }] }),
@@ -130,17 +160,31 @@ describe('planRemoval', () => {
 			files: { '.editorconfig': h('root = true\n'), '.gitattributes': h('* text=auto\n') },
 		};
 
-		const shared = planRemoval({ targetDir: tmp, state: v1, removeUnits: ['core-editorconfig'], units: replayCatalog });
+		const shared = planRemoval({
+			targetDir: tmp,
+			state: v1,
+			removeUnits: ['core-editorconfig'],
+			units: replayCatalog,
+		});
 		expect(shared.deletions).toEqual([]);
 
-		const sole = planRemoval({ targetDir: tmp, state: v1, removeUnits: ['core-gitattributes'], units: replayCatalog });
+		const sole = planRemoval({
+			targetDir: tmp,
+			state: v1,
+			removeUnits: ['core-gitattributes'],
+			units: replayCatalog,
+		});
 		expect(sole.deletions).toEqual([{ rel: '.gitattributes', modified: false }]);
 	});
 
 	it('surfaces removeNotes and flags engines/packageManager as manual', () => {
 		const noted: Unit[] = [
-			unit('opt-husky', { removeNotes: 'git config --unset core.hooksPath if you are dropping hooks entirely.' }),
-			unit('core-node-version', { packageJsonPatch: { engines: { node: '>=22' }, packageManager: 'pnpm@10' } }),
+			unit('opt-husky', {
+				removeNotes: 'git config --unset core.hooksPath if you are dropping hooks entirely.',
+			}),
+			unit('core-node-version', {
+				packageJsonPatch: { engines: { node: '>=22' }, packageManager: 'pnpm@10' },
+			}),
 		];
 		const state: StateFile = {
 			_tool: 'x',
@@ -149,8 +193,15 @@ describe('planRemoval', () => {
 			units: builtinUnits(['opt-husky', 'core-node-version']),
 			files: {},
 		};
-		const plan = planRemoval({ targetDir: tmp, state, removeUnits: ['opt-husky', 'core-node-version'], units: noted });
-		expect(plan.notes).toEqual(['git config --unset core.hooksPath if you are dropping hooks entirely.']);
+		const plan = planRemoval({
+			targetDir: tmp,
+			state,
+			removeUnits: ['opt-husky', 'core-node-version'],
+			units: noted,
+		});
+		expect(plan.notes).toEqual([
+			'git config --unset core.hooksPath if you are dropping hooks entirely.',
+		]);
 		expect(plan.manualPkg.length).toBeGreaterThan(0);
 		expect(plan.manualPkg.join(' ')).toContain('engines');
 	});
@@ -170,11 +221,18 @@ describe('runRemove', () => {
 	// Fixtures use the REAL catalog: opt-shadcn implies core-tailwind, and their
 	// real dependency footprints drive the package.json assertions.
 	function scaffoldShadcn(): void {
-		writeFileSync(join(tmp, 'package.json'), `${JSON.stringify({
-			name: 'fixture',
-			devDependencies: { tailwindcss: '4.3.0' },
-			dependencies: { 'clsx': '2.1.1', 'tailwind-merge': '3.6.0' },
-		}, null, '\t')}\n`);
+		writeFileSync(
+			join(tmp, 'package.json'),
+			`${JSON.stringify(
+				{
+					name: 'fixture',
+					devDependencies: { tailwindcss: '4.3.0' },
+					dependencies: { 'clsx': '2.1.1', 'tailwind-merge': '3.6.0' },
+				},
+				null,
+				'\t',
+			)}\n`,
+		);
 		writeFileSync(join(tmp, 'components.json'), '{}\n');
 		writeFileSync(join(tmp, 'utils.ts'), 'cn\n');
 		writeStateFile({
@@ -203,7 +261,10 @@ describe('runRemove', () => {
 
 		expect(existsSync(join(tmp, 'components.json'))).toBe(false);
 		expect(existsSync(join(tmp, 'utils.ts'))).toBe(false);
-		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as Record<string, unknown>;
+		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as Record<
+			string,
+			unknown
+		>;
 		expect('dependencies' in pkg).toBe(false);
 		expect('devDependencies' in pkg).toBe(false);
 		// Last tracked units gone: envelope and sidecar go with them.
@@ -214,27 +275,34 @@ describe('runRemove', () => {
 	// Both units tracked, so the two packages have different claimants. That is
 	// what the ref-count has to get right: the adapter goes, tailwindcss stays.
 	function scaffoldPostcss(): void {
-		writeFileSync(join(tmp, 'package.json'), `${JSON.stringify({
-			name: 'fixture',
-			devDependencies: { 'tailwindcss': '4.3.0', '@tailwindcss/postcss': '4.3.0' },
-		}, null, '\t')}\n`);
+		writeFileSync(
+			join(tmp, 'package.json'),
+			`${JSON.stringify(
+				{
+					name: 'fixture',
+					devDependencies: { 'tailwindcss': '4.3.0', '@tailwindcss/postcss': '4.3.0' },
+				},
+				null,
+				'\t',
+			)}\n`,
+		);
 		writeFileSync(join(tmp, 'postcss.config.mjs'), 'export default {};\n');
 		writeStateFile({
 			targetDir: tmp,
 			units: builtinUnits(['core-postcss', 'core-tailwind']),
-			writes: [
-				{ dest: join(tmp, 'postcss.config.mjs'), unit: 'core-postcss', mode: 'copy' },
-			],
+			writes: [{ dest: join(tmp, 'postcss.config.mjs'), unit: 'core-postcss', mode: 'copy' }],
 		});
 	}
 
-	it('drops @tailwindcss/postcss on removal while tailwindcss survives on core-tailwind\'s claim', async () => {
+	it("drops @tailwindcss/postcss on removal while tailwindcss survives on core-tailwind's claim", async () => {
 		scaffoldPostcss();
 
 		expect(await runRemove('core-postcss', { cwd: tmp, yes: true })).toBe(0);
 
 		expect(existsSync(join(tmp, 'postcss.config.mjs'))).toBe(false);
-		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as { devDependencies: Record<string, string> };
+		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as {
+			devDependencies: Record<string, string>;
+		};
 		expect(pkg.devDependencies['@tailwindcss/postcss']).toBeUndefined();
 		expect(pkg.devDependencies.tailwindcss).toBe('4.3.0');
 	});
@@ -254,7 +322,9 @@ describe('runRemove', () => {
 		expect(state?.units).toEqual(builtinUnits(['core-tailwind']));
 		expect(state?.files['utils.ts']).toBeUndefined();
 		// tailwindcss survives the shadcn removal: core-tailwind still claims it.
-		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as { devDependencies: Record<string, string> };
+		const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as {
+			devDependencies: Record<string, string>;
+		};
 		expect(pkg.devDependencies.tailwindcss).toBe('4.3.0');
 	});
 
@@ -277,16 +347,25 @@ describe('runRemove', () => {
 	// opt-ci-github's lint unit comes from a slot, not an implies edge (#158), so
 	// only the slot rule stops remove from leaving ci.yml running a missing `pnpm lint`.
 	function scaffoldCi(lintUnits: string[]): void {
-		writeFileSync(join(tmp, 'package.json'), `${JSON.stringify({ name: 'fixture' }, null, '\t')}\n`);
+		writeFileSync(
+			join(tmp, 'package.json'),
+			`${JSON.stringify({ name: 'fixture' }, null, '\t')}\n`,
+		);
 		writeFileSync(join(tmp, 'ci.yml'), 'jobs: {}\n');
 		writeStateFile({
 			targetDir: tmp,
-			units: builtinUnits(['core-node-version', ...lintUnits, 'core-typescript', 'core-vitest', 'opt-ci-github']),
+			units: builtinUnits([
+				'core-node-version',
+				...lintUnits,
+				'core-typescript',
+				'core-vitest',
+				'opt-ci-github',
+			]),
 			writes: [{ dest: join(tmp, 'ci.yml'), unit: 'opt-ci-github', mode: 'copy' }],
 		});
 	}
 
-	it('refuses to remove opt-ci-github\'s only lint unit, changing nothing', async () => {
+	it("refuses to remove opt-ci-github's only lint unit, changing nothing", async () => {
 		scaffoldCi(['core-oxlint']);
 		const before = readFileSync(join(tmp, '.unbranded.json'), 'utf-8');
 
@@ -294,12 +373,18 @@ describe('runRemove', () => {
 		expect(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')).toBe(before);
 	});
 
-	it('removes one lint unit when another still fills opt-ci-github\'s slot', async () => {
+	it("removes one lint unit when another still fills opt-ci-github's slot", async () => {
 		scaffoldCi(['core-eslint', 'core-oxlint']);
 
 		expect(await runRemove('core-oxlint', { cwd: tmp, yes: true })).toBe(0);
 		const read = readStateFile(tmp);
-		expect(read.kind === 'ok' && read.state.units.map(u => u.id).sort()).toEqual(['core-eslint', 'core-node-version', 'core-typescript', 'core-vitest', 'opt-ci-github']);
+		expect(read.kind === 'ok' && read.state.units.map((u) => u.id).sort()).toEqual([
+			'core-eslint',
+			'core-node-version',
+			'core-typescript',
+			'core-vitest',
+			'opt-ci-github',
+		]);
 	});
 
 	it('errors when there is no state file at all', async () => {

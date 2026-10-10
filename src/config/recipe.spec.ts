@@ -8,20 +8,24 @@ import { resolveSelection } from '../manifest/resolve';
 import { loadConfig, resolveConfig } from './load';
 import { buildRecipe, serializeRecipe } from './recipe';
 
-const KNOWN = new Set(UNITS.map(u => u.id));
+const KNOWN = new Set(UNITS.map((u) => u.id));
 const unitIds = (...values: string[]): UnitId[] => values as UnitId[];
 
 // The closed-under-implies id set a real interactive run would hand buildRecipe.
 function resolvedIds(seed: string[]): string[] {
 	const result = resolveSelection(seed, UNITS);
-	if (result.kind !== 'ok')
-		throw new Error(`fixture selection did not resolve: ${result.kind}`);
+	if (result.kind !== 'ok') throw new Error(`fixture selection did not resolve: ${result.kind}`);
 	return result.ids;
 }
 
 describe('buildRecipe', () => {
 	it('emits a Config-shaped object with a version marker', () => {
-		const recipe = buildRecipe({ ids: resolvedIds(unitIds('core-editorconfig')), pm: 'pnpm', latest: false, version: '1.2.3' });
+		const recipe = buildRecipe({
+			ids: resolvedIds(unitIds('core-editorconfig')),
+			pm: 'pnpm',
+			latest: false,
+			version: '1.2.3',
+		});
 		expect(recipe._generatedBy).toBe('unbranded 1.2.3');
 		expect(recipe.pm).toBe('pnpm');
 		expect(Array.isArray(recipe.units)).toBe(true);
@@ -31,36 +35,76 @@ describe('buildRecipe', () => {
 		// Interactive runs resolve conflicts per file and prompt post-installs one
 		// at a time, so there is no single value to record. The recipe documents the
 		// replay policy instead: overwrite existing files, run every post-install.
-		const recipe = buildRecipe({ ids: resolvedIds(unitIds('core-editorconfig')), pm: null, latest: false, version: '1.0.0' });
+		const recipe = buildRecipe({
+			ids: resolvedIds(unitIds('core-editorconfig')),
+			pm: null,
+			latest: false,
+			version: '1.0.0',
+		});
 		expect(recipe.onConflict).toBe('overwrite');
 		expect(recipe.postInstall).toBe('all');
 		expect(recipe.git).toBe('none');
 	});
 
 	it('maps the latest flag onto the versions field', () => {
-		expect(buildRecipe({ ids: unitIds('core-editorconfig'), pm: null, latest: true, version: '1.0.0' }).versions).toBe('latest');
-		expect(buildRecipe({ ids: unitIds('core-editorconfig'), pm: null, latest: false, version: '1.0.0' }).versions).toBe('pinned');
+		expect(
+			buildRecipe({ ids: unitIds('core-editorconfig'), pm: null, latest: true, version: '1.0.0' })
+				.versions,
+		).toBe('latest');
+		expect(
+			buildRecipe({ ids: unitIds('core-editorconfig'), pm: null, latest: false, version: '1.0.0' })
+				.versions,
+		).toBe('pinned');
 	});
 
 	it('includes projectName only when the run supplied one (new-project mode)', () => {
-		expect(buildRecipe({ ids: unitIds('core-editorconfig'), pm: null, latest: false, version: '1.0.0' }).projectName).toBeUndefined();
-		expect(buildRecipe({ ids: unitIds('core-editorconfig'), pm: null, latest: false, version: '1.0.0', projectName: 'acme' }).projectName).toBe('acme');
+		expect(
+			buildRecipe({ ids: unitIds('core-editorconfig'), pm: null, latest: false, version: '1.0.0' })
+				.projectName,
+		).toBeUndefined();
+		expect(
+			buildRecipe({
+				ids: unitIds('core-editorconfig'),
+				pm: null,
+				latest: false,
+				version: '1.0.0',
+				projectName: 'acme',
+			}).projectName,
+		).toBe('acme');
 	});
 
 	it('records the chosen unit options so a replay rebuilds the same flavor', () => {
-		const recipe = buildRecipe({ ids: unitIds('core-eslint'), pm: null, latest: false, version: '1.0.0', options: { eslintFlavor: 'react' } });
+		const recipe = buildRecipe({
+			ids: unitIds('core-eslint'),
+			pm: null,
+			latest: false,
+			version: '1.0.0',
+			options: { eslintFlavor: 'react' },
+		});
 		expect(recipe.options).toEqual({ eslintFlavor: 'react' });
 	});
 
 	it('omits options entirely when the run selected none', () => {
-		expect(buildRecipe({ ids: unitIds('core-editorconfig'), pm: null, latest: false, version: '1.0.0' })).not.toHaveProperty('options');
-		expect(buildRecipe({ ids: unitIds('core-editorconfig'), pm: null, latest: false, version: '1.0.0', options: {} })).not.toHaveProperty('options');
+		expect(
+			buildRecipe({ ids: unitIds('core-editorconfig'), pm: null, latest: false, version: '1.0.0' }),
+		).not.toHaveProperty('options');
+		expect(
+			buildRecipe({
+				ids: unitIds('core-editorconfig'),
+				pm: null,
+				latest: false,
+				version: '1.0.0',
+				options: {},
+			}),
+		).not.toHaveProperty('options');
 	});
 });
 
 describe('serializeRecipe', () => {
 	it('pretty-prints with a trailing newline, matching the run.ts write convention', () => {
-		const text = serializeRecipe(buildRecipe({ ids: unitIds('core-editorconfig'), pm: null, latest: false, version: '1.0.0' }));
+		const text = serializeRecipe(
+			buildRecipe({ ids: unitIds('core-editorconfig'), pm: null, latest: false, version: '1.0.0' }),
+		);
 		expect(text.endsWith('}\n')).toBe(true);
 		expect(text).toContain('\n  "'); // two-space indented keys, matching run.ts
 	});
@@ -85,7 +129,10 @@ describe('recipe round-trip (emitted recipe reproduces the resolved plan)', () =
 		expect(ids).toContain('core-typescript');
 
 		const path = join(dir, 'recipe.json');
-		writeFileSync(path, serializeRecipe(buildRecipe({ ids, pm: null, latest: false, version: '1.0.0' })));
+		writeFileSync(
+			path,
+			serializeRecipe(buildRecipe({ ids, pm: null, latest: false, version: '1.0.0' })),
+		);
 
 		const loaded = resolveConfig(loadConfig(path, KNOWN), {}, KNOWN);
 		expect(loaded.units).toEqual(ids);

@@ -72,9 +72,16 @@ describe('runInit preselect', () => {
 		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
 		vi.mocked(unitPicker).mockResolvedValue({ ids: ['core-editorconfig'], flavors: {} });
 
-		await runInit({ targetDir: tmp, dryRun: true, preselect: ['core-editorconfig'], inline: { pm: 'pnpm' } });
+		await runInit({
+			targetDir: tmp,
+			dryRun: true,
+			preselect: ['core-editorconfig'],
+			inline: { pm: 'pnpm' },
+		});
 
-		expect(vi.mocked(unitPicker).mock.calls[0]?.[0]?.initialSelected).toEqual(['core-editorconfig']);
+		expect(vi.mocked(unitPicker).mock.calls[0]?.[0]?.initialSelected).toEqual([
+			'core-editorconfig',
+		]);
 	});
 });
 
@@ -100,11 +107,21 @@ describe('runInit result', () => {
 	it('reports not-ok when the install step errors', async () => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-result-'));
 		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
-		vi.mocked(writeAndInstall).mockResolvedValue({ wrote: true, installed: false, cancelled: false, failed: true, error: 'install exploded', computedWrites: [] });
+		vi.mocked(writeAndInstall).mockResolvedValue({
+			wrote: true,
+			installed: false,
+			cancelled: false,
+			failed: true,
+			error: 'install exploded',
+			computedWrites: [],
+		});
 
 		// doctor --fix keys its exit code off this flag, so a swallowed install
 		// error would report a repaired repo that isn't.
-		const result = await runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'pnpm', yes: true } });
+		const result = await runInit({
+			targetDir: tmp,
+			inline: { units: 'core-editorconfig', pm: 'pnpm', yes: true },
+		});
 
 		expect(result).toEqual({ ok: false });
 	});
@@ -122,11 +139,14 @@ describe('runInit exclusions against tracked units (#157)', () => {
 	function trackedProject(...ids: string[]): void {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-tracked-'));
 		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
-		writeFileSync(join(tmp, STATE_FILENAME), JSON.stringify({
-			schema: 3,
-			units: ids.map(id => ({ id, source: { kind: 'builtin' } })),
-			files: {},
-		}));
+		writeFileSync(
+			join(tmp, STATE_FILENAME),
+			JSON.stringify({
+				schema: 3,
+				units: ids.map((id) => ({ id, source: { kind: 'builtin' } })),
+				files: {},
+			}),
+		);
 	}
 
 	// A real exit would kill the runner; throwing lets the test read the code and message.
@@ -145,18 +165,34 @@ describe('runInit exclusions against tracked units (#157)', () => {
 		trackedProject('core-eslint');
 		const { messages } = trapExit();
 
-		await expect(runInit({ targetDir: tmp, dryRun: true, inline: { units: 'core-oxlint', yes: true, pm: 'pnpm' } })).rejects.toThrow('exit 1');
+		await expect(
+			runInit({
+				targetDir: tmp,
+				dryRun: true,
+				inline: { units: 'core-oxlint', yes: true, pm: 'pnpm' },
+			}),
+		).rejects.toThrow('exit 1');
 
-		expect(messages.join('\n')).toContain(`core-oxlint and core-eslint can't both be selected (core-eslint is already installed here).`);
+		expect(messages.join('\n')).toContain(
+			`core-oxlint and core-eslint can't both be selected (core-eslint is already installed here).`,
+		);
 	});
 
 	it('rejects the reverse direction, where the tracked unit declares the exclusion', async () => {
 		trackedProject('core-oxlint');
 		const { messages } = trapExit();
 
-		await expect(runInit({ targetDir: tmp, dryRun: true, inline: { units: 'core-eslint', yes: true, pm: 'pnpm' } })).rejects.toThrow('exit 1');
+		await expect(
+			runInit({
+				targetDir: tmp,
+				dryRun: true,
+				inline: { units: 'core-eslint', yes: true, pm: 'pnpm' },
+			}),
+		).rejects.toThrow('exit 1');
 
-		expect(messages.join('\n')).toContain(`core-eslint and core-oxlint can't both be selected (core-oxlint is already installed here).`);
+		expect(messages.join('\n')).toContain(
+			`core-eslint and core-oxlint can't both be selected (core-oxlint is already installed here).`,
+		);
 	});
 
 	it('fails the --dry-run --json path the same way, on stderr', async () => {
@@ -167,10 +203,15 @@ describe('runInit exclusions against tracked units (#157)', () => {
 			return true;
 		}) as typeof process.stderr.write);
 
-		const code = await runPlanJson({ targetDir: tmp, inline: { units: 'core-oxlint', pm: 'pnpm' } });
+		const code = await runPlanJson({
+			targetDir: tmp,
+			inline: { units: 'core-oxlint', pm: 'pnpm' },
+		});
 
 		expect(code).toBe(1);
-		expect(err.join('')).toContain(`core-oxlint and core-eslint can't both be selected (core-eslint is already installed here).`);
+		expect(err.join('')).toContain(
+			`core-oxlint and core-eslint can't both be selected (core-eslint is already installed here).`,
+		);
 	});
 
 	it('refuses a newer-schema state file before writing anything', async () => {
@@ -178,7 +219,9 @@ describe('runInit exclusions against tracked units (#157)', () => {
 		writeFileSync(join(tmp, STATE_FILENAME), JSON.stringify({ schema: 99, units: [], files: {} }));
 		const { messages } = trapExit();
 
-		await expect(runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', yes: true, pm: 'pnpm' } })).rejects.toThrow('exit 1');
+		await expect(
+			runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', yes: true, pm: 'pnpm' } }),
+		).rejects.toThrow('exit 1');
 
 		expect(messages.join('\n')).toContain('newer unbranded');
 		expect(existsSync(join(tmp, '.editorconfig'))).toBe(false);
@@ -194,7 +237,10 @@ describe('runInit exclusions against tracked units (#157)', () => {
 			return true;
 		}) as typeof process.stderr.write);
 
-		const code = await runPlanJson({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'pnpm' } });
+		const code = await runPlanJson({
+			targetDir: tmp,
+			inline: { units: 'core-editorconfig', pm: 'pnpm' },
+		});
 
 		expect(code).toBe(1);
 		expect(err.join('')).toContain('newer unbranded');
@@ -204,7 +250,11 @@ describe('runInit exclusions against tracked units (#157)', () => {
 		trackedProject('core-eslint');
 		const { messages } = trapExit();
 
-		const result = await runInit({ targetDir: tmp, dryRun: true, inline: { units: 'core-eslint', yes: true, pm: 'pnpm' } });
+		const result = await runInit({
+			targetDir: tmp,
+			dryRun: true,
+			inline: { units: 'core-eslint', yes: true, pm: 'pnpm' },
+		});
 
 		expect(result).toEqual({ ok: true });
 		expect(messages).toEqual([]);
@@ -224,7 +274,9 @@ describe('runPlanJson pins under --latest (#158)', () => {
 		rmSync(tmp, { recursive: true, force: true });
 	});
 
-	async function envelope(opts: Parameters<typeof runPlanJson>[0]): Promise<{ devDependencies: Record<string, string> }> {
+	async function envelope(
+		opts: Parameters<typeof runPlanJson>[0],
+	): Promise<{ devDependencies: Record<string, string> }> {
 		const out: string[] = [];
 		vi.spyOn(process.stdout, 'write').mockImplementation(((m: string) => {
 			out.push(String(m));
@@ -234,25 +286,57 @@ describe('runPlanJson pins under --latest (#158)', () => {
 		return JSON.parse(out.join('')) as { devDependencies: Record<string, string> };
 	}
 
-	it('reports the TS line\'s pin without --latest', async () => {
-		expect((await envelope({ targetDir: tmp, inline: { units: 'core-eslint', pm: 'pnpm' } })).devDependencies.typescript).toMatch(/^6\./);
+	it("reports the TS line's pin without --latest", async () => {
+		expect(
+			(await envelope({ targetDir: tmp, inline: { units: 'core-eslint', pm: 'pnpm' } }))
+				.devDependencies.typescript,
+		).toMatch(/^6\./);
 	});
 
-	it('holds typescript to its line\'s major under the flag and reports `latest` for every other pin (#159)', async () => {
-		const plan = await envelope({ targetDir: tmp, latest: true, inline: { units: 'core-eslint', pm: 'pnpm' } });
+	it("holds typescript to its line's major under the flag and reports `latest` for every other pin (#159)", async () => {
+		const plan = await envelope({
+			targetDir: tmp,
+			latest: true,
+			inline: { units: 'core-eslint', pm: 'pnpm' },
+		});
 		expect(plan.devDependencies.typescript).toBe('^6');
 		const { typescript: _held, ...rest } = plan.devDependencies;
 		expect(Object.keys(rest).length).toBeGreaterThan(0);
-		expect(Object.values(rest).every(v => v === 'latest')).toBe(true);
+		expect(Object.values(rest).every((v) => v === 'latest')).toBe(true);
 	});
 
-	it('holds the line under a recipe\'s versions field too', async () => {
-		writeFileSync(join(tmp, 'recipe.json'), JSON.stringify({ units: ['core-eslint'], pm: null, onConflict: 'overwrite', postInstall: 'none', versions: 'latest' }));
-		expect((await envelope({ targetDir: tmp, configPath: join(tmp, 'recipe.json'), inline: { pm: 'pnpm' } })).devDependencies.typescript).toBe('^6');
+	it("holds the line under a recipe's versions field too", async () => {
+		writeFileSync(
+			join(tmp, 'recipe.json'),
+			JSON.stringify({
+				units: ['core-eslint'],
+				pm: null,
+				onConflict: 'overwrite',
+				postInstall: 'none',
+				versions: 'latest',
+			}),
+		);
+		expect(
+			(
+				await envelope({
+					targetDir: tmp,
+					configPath: join(tmp, 'recipe.json'),
+					inline: { pm: 'pnpm' },
+				})
+			).devDependencies.typescript,
+		).toBe('^6');
 	});
 
 	it('reports `latest` for typescript when no lint unit holds its line', async () => {
-		expect((await envelope({ targetDir: tmp, latest: true, inline: { units: 'core-typescript', pm: 'pnpm' } })).devDependencies.typescript).toBe('latest');
+		expect(
+			(
+				await envelope({
+					targetDir: tmp,
+					latest: true,
+					inline: { units: 'core-typescript', pm: 'pnpm' },
+				})
+			).devDependencies.typescript,
+		).toBe('latest');
 	});
 });
 
@@ -267,18 +351,34 @@ describe('runInit under --latest (#159)', () => {
 	it('hands writeAndInstall the held caret and records manifest units in state', async () => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-latest-'));
 		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
-		vi.mocked(writeAndInstall).mockResolvedValue({ wrote: true, installed: false, cancelled: false, failed: false, computedWrites: [] });
+		vi.mocked(writeAndInstall).mockResolvedValue({
+			wrote: true,
+			installed: false,
+			cancelled: false,
+			failed: false,
+			computedWrites: [],
+		});
 
-		const result = await runInit({ targetDir: tmp, latest: true, inline: { units: 'core-eslint', pm: 'pnpm', yes: true } });
+		const result = await runInit({
+			targetDir: tmp,
+			latest: true,
+			inline: { units: 'core-eslint', pm: 'pnpm', yes: true },
+		});
 
 		expect(result).toEqual({ ok: true });
 		const passed = vi.mocked(writeAndInstall).mock.calls[0]?.[0];
 		expect(passed?.latest).toBe(true);
-		const ts = passed?.units.find(u => u.id === 'core-typescript');
+		const ts = passed?.units.find((u) => u.id === 'core-typescript');
 		expect(ts?.devDependencies?.typescript).toBe('^6');
-		expect(passed?.units.find(u => u.id === 'core-eslint')?.devDependencies?.eslint).toBe('latest');
-		const state = JSON.parse(readFileSync(join(tmp, STATE_FILENAME), 'utf-8')) as { units: { id: string }[] };
-		expect(state.units.map(u => u.id)).toEqual(expect.arrayContaining(['core-eslint', 'core-typescript']));
+		expect(passed?.units.find((u) => u.id === 'core-eslint')?.devDependencies?.eslint).toBe(
+			'latest',
+		);
+		const state = JSON.parse(readFileSync(join(tmp, STATE_FILENAME), 'utf-8')) as {
+			units: { id: string }[];
+		};
+		expect(state.units.map((u) => u.id)).toEqual(
+			expect.arrayContaining(['core-eslint', 'core-typescript']),
+		);
 	});
 });
 
@@ -300,9 +400,19 @@ describe('runInit install-failure branching (#114)', () => {
 	it('rolls back without prompting on a non-interactive run', async () => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-install-failure-noninteractive-'));
 		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
-		vi.mocked(writeAndInstall).mockResolvedValue({ wrote: true, installed: false, cancelled: false, failed: true, installExitCode: 2, computedWrites: [] });
+		vi.mocked(writeAndInstall).mockResolvedValue({
+			wrote: true,
+			installed: false,
+			cancelled: false,
+			failed: true,
+			installExitCode: 2,
+			computedWrites: [],
+		});
 
-		const result = await runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'npm', yes: true } });
+		const result = await runInit({
+			targetDir: tmp,
+			inline: { units: 'core-editorconfig', pm: 'npm', yes: true },
+		});
 
 		// Every non-interactive run resolves straight to rollback (nobody's
 		// watching to answer a prompt), and rollback is the one branch that
@@ -316,7 +426,14 @@ describe('runInit install-failure branching (#114)', () => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-install-failure-keep-'));
 		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
 		vi.mocked(unitPicker).mockResolvedValue({ ids: ['core-editorconfig'], flavors: {} });
-		vi.mocked(writeAndInstall).mockResolvedValue({ wrote: true, installed: false, cancelled: false, failed: true, installExitCode: 2, computedWrites: [] });
+		vi.mocked(writeAndInstall).mockResolvedValue({
+			wrote: true,
+			installed: false,
+			cancelled: false,
+			failed: true,
+			installExitCode: 2,
+			computedWrites: [],
+		});
 
 		const { select, confirm } = await import('@clack/prompts');
 		// Two select() calls happen before a "keep" answer even means anything:
@@ -342,9 +459,18 @@ describe('runInit install-failure branching (#114)', () => {
 		// cancelled:true, failed:false is a different thing entirely—an
 		// install spawn interrupted mid-run, not a #114 failure—and it kept
 		// its pre-#114 behavior on purpose: state written, ok:true.
-		vi.mocked(writeAndInstall).mockResolvedValue({ wrote: true, installed: false, cancelled: true, failed: false, computedWrites: [] });
+		vi.mocked(writeAndInstall).mockResolvedValue({
+			wrote: true,
+			installed: false,
+			cancelled: true,
+			failed: false,
+			computedWrites: [],
+		});
 
-		const result = await runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'npm', yes: true } });
+		const result = await runInit({
+			targetDir: tmp,
+			inline: { units: 'core-editorconfig', pm: 'npm', yes: true },
+		});
 
 		expect(result).toEqual({ ok: true });
 		expect(existsSync(join(tmp, STATE_FILENAME))).toBe(true);
@@ -365,11 +491,20 @@ describe('runInit onConflict threading (#113)', () => {
 	it('passes onConflict "skip" through to writeAndInstall when the resolved config says skip', async () => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-onconflict-skip-'));
 		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
-		vi.mocked(writeAndInstall).mockResolvedValue({ wrote: true, installed: true, cancelled: false, failed: false, computedWrites: [] });
+		vi.mocked(writeAndInstall).mockResolvedValue({
+			wrote: true,
+			installed: true,
+			cancelled: false,
+			failed: false,
+			computedWrites: [],
+		});
 
 		// --yes plus an explicit --units skips the picker and the Apply confirm
 		// entirely, so config.onConflict comes straight from the inline flag.
-		await runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'pnpm', onConflict: 'skip', yes: true } });
+		await runInit({
+			targetDir: tmp,
+			inline: { units: 'core-editorconfig', pm: 'pnpm', onConflict: 'skip', yes: true },
+		});
 
 		expect(vi.mocked(writeAndInstall).mock.calls[0]?.[0]?.onConflict).toBe('skip');
 	});
@@ -378,7 +513,13 @@ describe('runInit onConflict threading (#113)', () => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-onconflict-interactive-'));
 		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
 		vi.mocked(unitPicker).mockResolvedValue({ ids: ['core-editorconfig'], flavors: {} });
-		vi.mocked(writeAndInstall).mockResolvedValue({ wrote: true, installed: true, cancelled: false, failed: false, computedWrites: [] });
+		vi.mocked(writeAndInstall).mockResolvedValue({
+			wrote: true,
+			installed: true,
+			cancelled: false,
+			failed: false,
+			computedWrites: [],
+		});
 		const { confirm } = await import('@clack/prompts');
 		// Only "Apply?" fires here: inline.pm already set makes usedInlineFlags true,
 		// so runInit skips its own "save this as a recipe?" confirm afterward.

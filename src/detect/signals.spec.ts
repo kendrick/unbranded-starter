@@ -14,7 +14,9 @@ describe('hasDep', () => {
 		expect(hasDep({ dependencies: { react: '19' } }, 'vue')).toBe(false);
 		expect(hasDep({}, 'react')).toBe(false);
 		// A hand-mangled package.json where deps is an array or null must not throw.
-		expect(hasDep({ dependencies: ['react'] as unknown as Record<string, string> }, 'react')).toBe(false);
+		expect(hasDep({ dependencies: ['react'] as unknown as Record<string, string> }, 'react')).toBe(
+			false,
+		);
 	});
 });
 
@@ -67,7 +69,9 @@ describe('effectiveDest', () => {
 	});
 
 	it('swaps the basename but keeps the directory when renamed', () => {
-		expect(effectiveDest({ dest: '.github/workflows/ci.yml', rename: 'main.yml' })).toBe('.github/workflows/main.yml');
+		expect(effectiveDest({ dest: '.github/workflows/ci.yml', rename: 'main.yml' })).toBe(
+			'.github/workflows/main.yml',
+		);
 	});
 
 	it('renames a root-level file with no directory', () => {

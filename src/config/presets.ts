@@ -20,15 +20,19 @@ export interface Preset {
 
 export function presetNames(): string[] {
 	return readdirSync(PRESETS_DIR)
-		.filter(f => f.endsWith('.json'))
-		.map(f => f.slice(0, -'.json'.length))
+		.filter((f) => f.endsWith('.json'))
+		.map((f) => f.slice(0, -'.json'.length))
 		.sort();
 }
 
 // Same validation a recipe gets, so a preset that drifts from the manifest (a
 // renamed unit, a dropped option value) fails loudly here — and in the spec
 // that loads every shipped preset against the live manifest.
-export function loadPreset(name: string, knownUnits: ReadonlySet<string>, schema?: OptionSchema): Preset {
+export function loadPreset(
+	name: string,
+	knownUnits: ReadonlySet<string>,
+	schema?: OptionSchema,
+): Preset {
 	const path = join(PRESETS_DIR, `${name}.json`);
 	if (!existsSync(path))
 		throw new Error(`Unknown preset "${name}". Shipped presets: ${presetNames().join(', ')}.`);

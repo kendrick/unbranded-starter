@@ -1,4 +1,12 @@
-import type { AnyUnit, Category, FileOp, PostInstall, Unit, UnitOption, UnitSource } from '../manifest/types';
+import type {
+	AnyUnit,
+	Category,
+	FileOp,
+	PostInstall,
+	Unit,
+	UnitOption,
+	UnitSource,
+} from '../manifest/types';
 import { loadPreset, presetNames } from '../config/presets';
 import { loadCatalog } from '../manifest/catalog';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '../manifest/categories';
@@ -86,10 +94,8 @@ function orderUnits(units: AnyUnit[]): AnyUnit[] {
 
 function toCatalogFile(file: FileOp): CatalogFile {
 	const entry: CatalogFile = { dest: file.dest };
-	if (file.rename)
-		entry.rename = file.rename;
-	if (file.mode)
-		entry.mode = file.mode;
+	if (file.rename) entry.rename = file.rename;
+	if (file.mode) entry.mode = file.mode;
 	return entry;
 }
 
@@ -98,7 +104,7 @@ function toCatalogOption(option: UnitOption): CatalogOption {
 		key: option.key,
 		label: option.label,
 		default: option.default,
-		choices: option.choices.map(c => ({
+		choices: option.choices.map((c) => ({
 			value: c.value,
 			label: c.label,
 			...(c.hint ? { hint: c.hint } : {}),
@@ -134,36 +140,39 @@ function toCatalogUnit(unit: AnyUnit, source?: UnitSource): CatalogUnit {
 // `sources` is optional and separate from `units` (rather than folded into
 // AnyUnit) because a unit's provenance is catalog metadata, not something a
 // unit schema — built-in or authored — is allowed to carry; see catalog.ts.
-export function buildCatalog(units: AnyUnit[] = UNITS, sources?: ReadonlyMap<string, UnitSource>): Catalog {
+export function buildCatalog(
+	units: AnyUnit[] = UNITS,
+	sources?: ReadonlyMap<string, UnitSource>,
+): Catalog {
 	return {
 		schema: CATALOG_SCHEMA,
-		units: orderUnits(units).map(u => toCatalogUnit(u, sources?.get(u.id))),
+		units: orderUnits(units).map((u) => toCatalogUnit(u, sources?.get(u.id))),
 		presets: buildCatalogPresets(units),
 	};
 }
 
 function buildCatalogPresets(units: AnyUnit[]): CatalogPreset[] {
-	const known = new Set(units.map(u => u.id));
+	const known = new Set(units.map((u) => u.id));
 	return presetNames().map((name) => {
 		const preset = loadPreset(name, known);
 		const resolution = resolveSelection(preset.config.units, units);
 		return {
 			name,
 			description: preset.description,
-			units: resolution.kind === 'ok' ? [...resolution.ids].sort() : [...preset.config.units].sort(),
+			units:
+				resolution.kind === 'ok' ? [...resolution.ids].sort() : [...preset.config.units].sort(),
 		};
 	});
 }
 
 export function formatCatalog(units: AnyUnit[] = UNITS): string {
 	const ordered = orderUnits(units);
-	const idWidth = Math.max(...ordered.map(u => u.id.length));
+	const idWidth = Math.max(...ordered.map((u) => u.id.length));
 
 	const lines: string[] = [];
 	for (const category of CATEGORY_ORDER) {
-		const inCategory = ordered.filter(u => u.category === category);
-		if (inCategory.length === 0)
-			continue;
+		const inCategory = ordered.filter((u) => u.category === category);
+		if (inCategory.length === 0) continue;
 
 		lines.push(CATEGORY_LABELS[category]);
 		for (const unit of inCategory) {
@@ -174,12 +183,16 @@ export function formatCatalog(units: AnyUnit[] = UNITS): string {
 			// untouched. Appended last so it never disturbs the idWidth column alignment.
 			const namespace = parseUnitRef(unit.id).namespace;
 			const local = namespace !== undefined ? `  [local: ${namespace}]` : '';
-			lines.push(`  ${unit.id.padEnd(idWidth)}  ${unit.label} — ${unit.description}${implies}${local}`);
+			lines.push(
+				`  ${unit.id.padEnd(idWidth)}  ${unit.label} — ${unit.description}${implies}${local}`,
+			);
 			// A unit's options (core-eslint's flavor) get their own indented line so
 			// the picker's choices are visible from `list` without running the CLI.
 			for (const option of unit.options ?? []) {
-				const values = option.choices.map(c => c.value).join(' | ');
-				lines.push(`  ${' '.repeat(idWidth)}    ${option.key}: ${values}  (default: ${option.default})`);
+				const values = option.choices.map((c) => c.value).join(' | ');
+				lines.push(
+					`  ${' '.repeat(idWidth)}    ${option.key}: ${values}  (default: ${option.default})`,
+				);
 			}
 		}
 		lines.push('');
@@ -203,15 +216,20 @@ export function runList(opts: { json?: boolean; unitsDir?: string } = {}): void 
 	// staying silent about the rest would leave the shorter catalog unexplained.
 	// stderr only — --json consumers parse stdout and would choke on anything else
 	// landing there, same reasoning as runDiff.
-	for (const warning of catalog.warnings)
-		process.stderr.write(`unbranded list: ${warning}\n`);
+	for (const warning of catalog.warnings) process.stderr.write(`unbranded list: ${warning}\n`);
 	for (const skip of catalog.skipped) {
-		const detail = skip.issues.map(i => `${i.path}: expected ${i.expected}, got ${i.got}`).join('; ');
-		process.stderr.write(`unbranded list: skipped ${skip.path}${skip.id ? ` (${skip.id})` : ''} — ${detail}\n`);
+		const detail = skip.issues
+			.map((i) => `${i.path}: expected ${i.expected}, got ${i.got}`)
+			.join('; ');
+		process.stderr.write(
+			`unbranded list: skipped ${skip.path}${skip.id ? ` (${skip.id})` : ''} — ${detail}\n`,
+		);
 	}
 
 	if (opts.json) {
-		process.stdout.write(`${JSON.stringify(buildCatalog(catalog.units, catalog.sources), null, 2)}\n`);
+		process.stdout.write(
+			`${JSON.stringify(buildCatalog(catalog.units, catalog.sources), null, 2)}\n`,
+		);
 		return;
 	}
 	process.stdout.write(formatCatalog(catalog.units));

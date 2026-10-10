@@ -4,7 +4,5 @@
 	"category": "foundation",
 	"label": "Neither src nor content",
 	"description": "One file entry sets neither src nor content, which the schema forbids.",
-	"files": [
-		{ "dest": "out.txt" }
-	]
+	"files": [{ "dest": "out.txt" }]
 }

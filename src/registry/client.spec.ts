@@ -3,16 +3,17 @@ import { DEFAULT_REGISTRY, fetchVersions } from './client';
 
 // A fetch double serving abbreviated packuments: name → latest, plus
 // versions when given.
-function fakeRegistry(packages: Record<string, { latest: string; versions?: string[] }>): typeof fetch {
+function fakeRegistry(
+	packages: Record<string, { latest: string; versions?: string[] }>,
+): typeof fetch {
 	return vi.fn(async (input: RequestInfo | URL) => {
 		const url = String(input);
 		const name = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1));
 		const pkg = packages[name];
-		if (pkg === undefined)
-			return new Response('not found', { status: 404 });
+		if (pkg === undefined) return new Response('not found', { status: 404 });
 		const body: Record<string, unknown> = { 'dist-tags': { latest: pkg.latest } };
 		if (pkg.versions !== undefined)
-			body.versions = Object.fromEntries(pkg.versions.map(v => [v, {}]));
+			body.versions = Object.fromEntries(pkg.versions.map((v) => [v, {}]));
 		return new Response(JSON.stringify(body), { status: 200 });
 	});
 }
@@ -28,13 +29,20 @@ describe('fetchVersions', () => {
 
 	it('returns every published version key alongside the latest tag', async () => {
 		const result = await fetchVersions(['typescript'], {
-			fetchImpl: fakeRegistry({ typescript: { latest: '7.0.3', versions: ['6.0.3', '6.0.5', '7.0.2', '7.0.3'] } }),
+			fetchImpl: fakeRegistry({
+				typescript: { latest: '7.0.3', versions: ['6.0.3', '6.0.5', '7.0.2', '7.0.3'] },
+			}),
 		});
-		expect(result.get('typescript')).toEqual({ latest: '7.0.3', versions: ['6.0.3', '6.0.5', '7.0.2', '7.0.3'] });
+		expect(result.get('typescript')).toEqual({
+			latest: '7.0.3',
+			versions: ['6.0.3', '6.0.5', '7.0.2', '7.0.3'],
+		});
 	});
 
 	it('treats a packument with no versions map as an empty list', async () => {
-		const result = await fetchVersions(['eslint'], { fetchImpl: fakeRegistry({ eslint: { latest: '9.41.0' } }) });
+		const result = await fetchVersions(['eslint'], {
+			fetchImpl: fakeRegistry({ eslint: { latest: '9.41.0' } }),
+		});
 		expect(result.get('eslint')).toEqual({ latest: '9.41.0', versions: [] });
 	});
 
@@ -44,7 +52,9 @@ describe('fetchVersions', () => {
 		const fetchImpl = fakeRegistry({ eslint: { latest: '9.41.0' } });
 		await fetchVersions(['eslint'], { fetchImpl });
 		const init = vi.mocked(fetchImpl).mock.calls[0]?.[1] as RequestInit;
-		expect(new Headers(init.headers).get('accept')).toContain('application/vnd.npm.install-v1+json');
+		expect(new Headers(init.headers).get('accept')).toContain(
+			'application/vnd.npm.install-v1+json',
+		);
 	});
 
 	it('percent-encodes the slash in scoped names', async () => {
@@ -73,7 +83,7 @@ describe('fetchVersions', () => {
 		const fetchImpl = (async () => {
 			inFlight += 1;
 			peak = Math.max(peak, inFlight);
-			await new Promise(resolve => setTimeout(resolve, 5));
+			await new Promise((resolve) => setTimeout(resolve, 5));
 			inFlight -= 1;
 			return new Response(JSON.stringify({ 'dist-tags': { latest: '1.0.0' } }), { status: 200 });
 		}) as unknown as typeof fetch;
@@ -84,9 +94,9 @@ describe('fetchVersions', () => {
 	});
 
 	it('turns a non-OK response into an error naming the package and registry', async () => {
-		await expect(fetchVersions(['ghost-package'], { fetchImpl: fakeRegistry({}) }))
-			.rejects
-			.toThrow(/ghost-package.*registry\.npmjs\.org|registry\.npmjs\.org.*ghost-package/);
+		await expect(fetchVersions(['ghost-package'], { fetchImpl: fakeRegistry({}) })).rejects.toThrow(
+			/ghost-package.*registry\.npmjs\.org|registry\.npmjs\.org.*ghost-package/,
+		);
 	});
 
 	it('turns a hung request into a timeout error instead of hanging', async () => {
@@ -94,11 +104,11 @@ describe('fetchVersions', () => {
 		// firewalled or blackholed registry.
 		const fetchImpl = (async (_url: RequestInfo | URL, init?: RequestInit) =>
 			new Promise((_resolve, reject) => {
-				init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+				init?.signal?.addEventListener('abort', () =>
+					reject(new DOMException('aborted', 'AbortError')),
+				);
 			})) as unknown as typeof fetch;
 
-		await expect(fetchVersions(['eslint'], { fetchImpl, timeoutMs: 20 }))
-			.rejects
-			.toThrow(/eslint/);
+		await expect(fetchVersions(['eslint'], { fetchImpl, timeoutMs: 20 })).rejects.toThrow(/eslint/);
 	});
 });

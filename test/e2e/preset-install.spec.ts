@@ -24,28 +24,45 @@ function presetRuns(name: 'node-lib' | 'next-app' | 'cli'): boolean {
 function writeStubProject(dir: string): void {
 	mkdirSync(join(dir, 'src'), { recursive: true });
 	writeFileSync(join(dir, 'src', 'index.ts'), 'export const answer = 42;\n');
-	writeFileSync(join(dir, 'src', 'index.spec.ts'), [
-		'import { describe, expect, it } from \'vitest\';',
-		'import { answer } from \'./index\';',
-		'',
-		'describe(\'the scaffold\', () => {',
-		'\tit(\'resolves and runs user code\', () => {',
-		'\t\texpect(answer).toBe(42);',
-		'\t});',
-		'});',
-		'',
-	].join('\n'));
+	writeFileSync(
+		join(dir, 'src', 'index.spec.ts'),
+		[
+			"import { describe, expect, it } from 'vitest';",
+			"import { answer } from './index';",
+			'',
+			"describe('the scaffold', () => {",
+			"\tit('resolves and runs user code', () => {",
+			'\t\texpect(answer).toBe(42);',
+			'\t});',
+			'});',
+			'',
+		].join('\n'),
+	);
 }
 
 function runPreset(name: string, tmp: string): void {
 	// Tab-indented on purpose. Augment mode preserves the existing file's indent
 	// (#48's accepted tension), so the seed sets the indent of the patched package.json.
-	writeFileSync(join(tmp, 'package.json'), `${JSON.stringify({ name: `preset-${name}`, version: '0.0.0', private: true }, null, '\t')}\n`);
-	const scaffold = spawnSync('node', [CLI, '--preset', name, '--pm', 'pnpm', '--on-conflict', 'overwrite'], { cwd: tmp, encoding: 'utf-8' });
-	expect(scaffold.status, `scaffold stderr: ${scaffold.stderr}\nstdout: ${scaffold.stdout}`).toBe(0);
+	writeFileSync(
+		join(tmp, 'package.json'),
+		`${JSON.stringify({ name: `preset-${name}`, version: '0.0.0', private: true }, null, '\t')}\n`,
+	);
+	const scaffold = spawnSync(
+		'node',
+		[CLI, '--preset', name, '--pm', 'pnpm', '--on-conflict', 'overwrite'],
+		{ cwd: tmp, encoding: 'utf-8' },
+	);
+	expect(scaffold.status, `scaffold stderr: ${scaffold.stderr}\nstdout: ${scaffold.stdout}`).toBe(
+		0,
+	);
 	// core-typescript pins TS 7 only when core-eslint is absent, so an ESLint unit
 	// creeping back into a preset would also drag TypeScript back to 6.
-	const dev = (JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as { devDependencies?: Record<string, string> }).devDependencies ?? {};
+	const dev =
+		(
+			JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as {
+				devDependencies?: Record<string, string>;
+			}
+		).devDependencies ?? {};
 	expect(dev.typescript).toMatch(/^\^?7\./);
 	expect(dev).not.toHaveProperty('eslint');
 	// Every preset pulls Vitest -> esbuild, whose build pnpm blocks by default, so
@@ -62,44 +79,63 @@ function runPreset(name: string, tmp: string): void {
 // The scaffold's own scripts, via its own package manager. CI=true matches the
 // environment the scaffold's CI job runs them in, as the flavor suites do.
 function script(tmp: string, name: string): { status: number | null; output: string } {
-	const res = spawnSync('pnpm', [name], { cwd: tmp, encoding: 'utf-8', env: { ...process.env, CI: 'true' } });
+	const res = spawnSync('pnpm', [name], {
+		cwd: tmp,
+		encoding: 'utf-8',
+		env: { ...process.env, CI: 'true' },
+	});
 	return { status: res.status, output: `${res.stdout}\n${res.stderr}` };
 }
 
-describe.skipIf(process.env.UB_E2E_LEG === 'main')('shipped presets scaffold working projects (e2e, real install)', () => {
-	let tmp: string;
+describe.skipIf(process.env.UB_E2E_LEG === 'main')(
+	'shipped presets scaffold working projects (e2e, real install)',
+	() => {
+		let tmp: string;
 
-	beforeEach(() => {
-		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-preset-install-'));
-	});
+		beforeEach(() => {
+			tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-preset-install-'));
+		});
 
-	afterEach(() => {
-		rmSync(tmp, { recursive: true, force: true });
-	});
+		afterEach(() => {
+			rmSync(tmp, { recursive: true, force: true });
+		});
 
-	it.runIf(presetRuns('node-lib'))('node-lib passes its own lint, typecheck, and test', () => {
-		runPreset('node-lib', tmp);
-		for (const name of ['lint', 'typecheck', 'test']) {
-			const result = script(tmp, name);
-			expect(result.status, `${name}: ${result.output}`).toBe(0);
-		}
-	}, 300_000);
+		it.runIf(presetRuns('node-lib'))(
+			'node-lib passes its own lint, typecheck, and test',
+			() => {
+				runPreset('node-lib', tmp);
+				for (const name of ['lint', 'typecheck', 'test']) {
+					const result = script(tmp, name);
+					expect(result.status, `${name}: ${result.output}`).toBe(0);
+				}
+			},
+			300_000,
+		);
 
-	it.runIf(presetRuns('next-app'))('next-app passes its own lint, typecheck, and test', () => {
-		runPreset('next-app', tmp);
-		// test:e2e (Playwright) is deliberately not run: browsers aren't installed
-		// (postInstall none), and a fresh scaffold has no e2e specs anyway.
-		for (const name of ['lint', 'typecheck', 'test']) {
-			const result = script(tmp, name);
-			expect(result.status, `${name}: ${result.output}`).toBe(0);
-		}
-	}, 300_000);
+		it.runIf(presetRuns('next-app'))(
+			'next-app passes its own lint, typecheck, and test',
+			() => {
+				runPreset('next-app', tmp);
+				// test:e2e (Playwright) is deliberately not run: browsers aren't installed
+				// (postInstall none), and a fresh scaffold has no e2e specs anyway.
+				for (const name of ['lint', 'typecheck', 'test']) {
+					const result = script(tmp, name);
+					expect(result.status, `${name}: ${result.output}`).toBe(0);
+				}
+			},
+			300_000,
+		);
 
-	it.runIf(presetRuns('cli'))('cli passes its own lint, typecheck, and test', () => {
-		runPreset('cli', tmp);
-		for (const name of ['lint', 'typecheck', 'test']) {
-			const result = script(tmp, name);
-			expect(result.status, `${name}: ${result.output}`).toBe(0);
-		}
-	}, 300_000);
-});
+		it.runIf(presetRuns('cli'))(
+			'cli passes its own lint, typecheck, and test',
+			() => {
+				runPreset('cli', tmp);
+				for (const name of ['lint', 'typecheck', 'test']) {
+					const result = script(tmp, name);
+					expect(result.status, `${name}: ${result.output}`).toBe(0);
+				}
+			},
+			300_000,
+		);
+	},
+);

@@ -5,8 +5,7 @@
 // spawning a subprocess.
 export function nodeVersionError(currentVersion: string, floorMajor: number): string | null {
 	const major = Number.parseInt(currentVersion, 10);
-	if (Number.isNaN(major) || major >= floorMajor)
-		return null;
+	if (Number.isNaN(major) || major >= floorMajor) return null;
 
 	return `unbranded requires Node ${floorMajor} or newer, but you're running v${currentVersion}.`;
 }

@@ -10,9 +10,7 @@
 			"key": "fixtureFlavorBadDefault",
 			"label": "Flavor",
 			"default": "missing-choice",
-			"choices": [
-				{ "value": "base", "label": "Base" }
-			]
+			"choices": [{ "value": "base", "label": "Base" }]
 		}
 	]
 }

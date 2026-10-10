@@ -1,6 +1,11 @@
 import { isCancel, select } from '@clack/prompts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { formatInstallFailure, formatKeepLine, promptInstallFailure, resolveInstallFailure } from './failure';
+import {
+	formatInstallFailure,
+	formatKeepLine,
+	promptInstallFailure,
+	resolveInstallFailure,
+} from './failure';
 
 // `select` is the one TTY prompt this module drives, so it's the only export
 // stubbed. `isCancel` is wrapped rather than replaced so it keeps checking the
@@ -33,15 +38,17 @@ describe('formatInstallFailure', () => {
 
 	it('adds a clause naming a single added script and warning that every install runs it', () => {
 		expect(formatInstallFailure('pnpm', 1, { prepare: 'husky' })).toBe(
-			'unbranded ran `pnpm install` and it failed with exit code 1.'
-			+ ' This run added the `prepare` script to `package.json`, and every `pnpm install` runs it.',
+			'unbranded ran `pnpm install` and it failed with exit code 1.' +
+				' This run added the `prepare` script to `package.json`, and every `pnpm install` runs it.',
 		);
 	});
 
 	it('lists multiple added scripts with an "and", plural noun and pronoun', () => {
-		expect(formatInstallFailure('yarn', 2, { prepare: 'husky', postinstall: 'patch-package' })).toBe(
-			'unbranded ran `yarn install` and it failed with exit code 2.'
-			+ ' This run added the `prepare` and `postinstall` scripts to `package.json`, and every `yarn install` runs them.',
+		expect(
+			formatInstallFailure('yarn', 2, { prepare: 'husky', postinstall: 'patch-package' }),
+		).toBe(
+			'unbranded ran `yarn install` and it failed with exit code 2.' +
+				' This run added the `prepare` and `postinstall` scripts to `package.json`, and every `yarn install` runs them.',
 		);
 	});
 
@@ -82,8 +89,7 @@ describe('promptInstallFailure', () => {
 		try {
 			await expect(promptInstallFailure()).resolves.toBe('cancel');
 			expect(exit).not.toHaveBeenCalled();
-		}
-		finally {
+		} finally {
 			exit.mockRestore();
 		}
 	});

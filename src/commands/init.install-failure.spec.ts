@@ -7,7 +7,15 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+	existsSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { confirm, isCancel, select } from '@clack/prompts';
@@ -68,10 +76,10 @@ function mockInstallSpawn(code: number): void {
 // ones an assertion happened to think to check.
 function snapshot(dir: string): string {
 	return (readdirSync(dir, { recursive: true }) as string[])
-		.map(rel => join(dir, rel))
-		.filter(p => statSync(p).isFile())
+		.map((rel) => join(dir, rel))
+		.filter((p) => statSync(p).isFile())
 		.sort()
-		.map(p => `${relative(dir, p)}\n${readFileSync(p, 'utf-8')}`)
+		.map((p) => `${relative(dir, p)}\n${readFileSync(p, 'utf-8')}`)
 		.join('\n---\n');
 }
 
@@ -97,12 +105,19 @@ describe('runInit real install failure (#114)', () => {
 		// A dependency pin opt-husky's manifest will collide with, plus a script
 		// that's genuinely the user's own—both have to survive the round trip
 		// through mergePackageJson and back for this test to mean anything.
-		writeFileSync(join(tmp, 'package.json'), JSON.stringify({
-			name: 'my-app',
-			version: '1.2.3',
-			scripts: { 'my-script': 'echo mine' },
-			devDependencies: { husky: '8.0.0' },
-		}, null, 2));
+		writeFileSync(
+			join(tmp, 'package.json'),
+			JSON.stringify(
+				{
+					name: 'my-app',
+					version: '1.2.3',
+					scripts: { 'my-script': 'echo mine' },
+					devDependencies: { husky: '8.0.0' },
+				},
+				null,
+				2,
+			),
+		);
 		// opt-husky writes this file; pre-seeding distinct content forces the
 		// onConflict overwrite path, so rollback has real bytes to restore.
 		writeFileSync(join(tmp, 'lint-staged.config.mjs'), '// mine, do not touch\n');
@@ -113,7 +128,10 @@ describe('runInit real install failure (#114)', () => {
 		mockInstallSpawn(2);
 		const before = snapshot(tmp);
 
-		const result = await runInit({ targetDir: tmp, inline: { units: 'opt-husky', pm: 'npm', yes: true } });
+		const result = await runInit({
+			targetDir: tmp,
+			inline: { units: 'opt-husky', pm: 'npm', yes: true },
+		});
 
 		expect(result).toEqual({ ok: false });
 		expect(snapshot(tmp)).toBe(before);
@@ -141,7 +159,10 @@ describe('runInit real install failure (#114)', () => {
 
 		mockInstallSpawn(2);
 
-		const result = await runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'npm', onConflict: 'skip', yes: true } });
+		const result = await runInit({
+			targetDir: tmp,
+			inline: { units: 'core-editorconfig', pm: 'npm', onConflict: 'skip', yes: true },
+		});
 
 		expect(result).toEqual({ ok: false });
 		// A skipped conflict is never journaled (copyFileOp returns before the
@@ -186,7 +207,11 @@ describe('runInit real install failure (#114)', () => {
 		// before the one we care about—the preset select, the picker result,
 		// "Apply?", then the install-failure prompt itself—so the first three
 		// answer false (their real, natural answer) and only the fourth cancels.
-		vi.mocked(isCancel).mockReturnValueOnce(false).mockReturnValueOnce(false).mockReturnValueOnce(false).mockReturnValueOnce(true);
+		vi.mocked(isCancel)
+			.mockReturnValueOnce(false)
+			.mockReturnValueOnce(false)
+			.mockReturnValueOnce(false)
+			.mockReturnValueOnce(true);
 
 		// Unlike a non-throwing stub, this reproduces process.exit's real
 		// never-returns behavior—the one thing that actually stops execution
@@ -197,15 +222,16 @@ describe('runInit real install failure (#114)', () => {
 			throw new Error('process.exit');
 		});
 		try {
-			await expect(runInit({ targetDir: tmp, inline: { pm: 'npm' } })).rejects.toThrow('process.exit');
+			await expect(runInit({ targetDir: tmp, inline: { pm: 'npm' } })).rejects.toThrow(
+				'process.exit',
+			);
 			expect(exit).toHaveBeenCalledWith(130);
 			// Ctrl-C at this prompt keeps the old #114 behavior: the files this
 			// run wrote are left in place, and the state file has to be written
 			// before the exit or `diff`/`remove` would never learn about them.
 			expect(existsSync(join(tmp, '.editorconfig'))).toBe(true);
 			expect(existsSync(join(tmp, STATE_FILENAME))).toBe(true);
-		}
-		finally {
+		} finally {
 			exit.mockRestore();
 		}
 	});
@@ -218,7 +244,10 @@ describe('runInit real install failure (#114)', () => {
 		// Guards the flag wiring itself: if `failed` ever came back true on a
 		// clean install, every run would look like a #114 failure regardless of
 		// what actually happened.
-		const result = await runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'npm', yes: true } });
+		const result = await runInit({
+			targetDir: tmp,
+			inline: { units: 'core-editorconfig', pm: 'npm', yes: true },
+		});
 
 		expect(result).toEqual({ ok: true });
 		expect(existsSync(join(tmp, '.editorconfig'))).toBe(true);

@@ -82,13 +82,14 @@ function isContainedUnder(flavor: PathFlavor, root: string, op: FileOp): boolean
 	// itself absolute means `resolved` sits on a different root entirely (a
 	// different drive or share), which is never contained no matter what a
 	// string comparison against `root` would say.
-	if (flavor.isAbsolute(flavor.relative(normalizedRoot, resolved)))
-		return false;
+	if (flavor.isAbsolute(flavor.relative(normalizedRoot, resolved))) return false;
 
 	// Test 2: a separator-boundary compare, not a bare
 	// `resolved.startsWith(root)` — that alone accepts a sibling directory
 	// whose name merely extends the root's (`<root>EVIL/x` is not inside
 	// `<root>`).
-	const boundary = normalizedRoot.endsWith(flavor.sep) ? normalizedRoot : `${normalizedRoot}${flavor.sep}`;
+	const boundary = normalizedRoot.endsWith(flavor.sep)
+		? normalizedRoot
+		: `${normalizedRoot}${flavor.sep}`;
 	return resolved === normalizedRoot || resolved.startsWith(boundary);
 }

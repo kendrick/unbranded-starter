@@ -20,8 +20,7 @@ export interface Candidate {
 // path that loads.
 export function discover(target: string): Candidate[] | { error: string } {
 	const abs = resolve(target);
-	if (!existsSync(abs))
-		return { error: `${target}: no such file or directory.` };
+	if (!existsSync(abs)) return { error: `${target}: no such file or directory.` };
 
 	if (!statSync(abs).isDirectory()) {
 		if (!abs.endsWith('.json'))
@@ -30,17 +29,16 @@ export function discover(target: string): Candidate[] | { error: string } {
 	}
 
 	const own = join(abs, MANIFEST);
-	if (existsSync(own))
-		return [{ file: own, baseDir: abs }];
+	if (existsSync(own)) return [{ file: own, baseDir: abs }];
 
 	const children = readdirSync(abs, { withFileTypes: true })
-		.filter(e => e.isDirectory())
-		.map(e => join(abs, e.name, MANIFEST))
-		.filter(file => existsSync(file))
+		.filter((e) => e.isDirectory())
+		.map((e) => join(abs, e.name, MANIFEST))
+		.filter((file) => existsSync(file))
 		.sort();
 
 	if (children.length === 0)
 		return { error: `${target}: no ${MANIFEST} here or in any immediate subdirectory.` };
 
-	return children.map(file => ({ file, baseDir: dirname(file) }));
+	return children.map((file) => ({ file, baseDir: dirname(file) }));
 }

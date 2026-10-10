@@ -4,7 +4,7 @@ import { buildOptionSchema } from '../manifest/options';
 import { resolveSelection } from '../manifest/resolve';
 import { loadPreset, presetNames } from './presets';
 
-const KNOWN = new Set(UNITS.map(u => u.id));
+const KNOWN = new Set(UNITS.map((u) => u.id));
 const SCHEMA = buildOptionSchema(UNITS);
 
 describe('shipped presets', () => {
@@ -26,15 +26,14 @@ describe('shipped presets', () => {
 	it('node-lib and cli differ by exactly the git hooks', () => {
 		const nodeLib = loadPreset('node-lib', KNOWN, SCHEMA).config.units;
 		const cli = loadPreset('cli', KNOWN, SCHEMA).config.units;
-		expect(nodeLib.filter(u => !cli.includes(u))).toEqual(['opt-husky']);
-		expect(cli.filter(u => !nodeLib.includes(u))).toEqual([]);
+		expect(nodeLib.filter((u) => !cli.includes(u))).toEqual(['opt-husky']);
+		expect(cli.filter((u) => !nodeLib.includes(u))).toEqual([]);
 	});
 
 	it('next-app is a superset of node-lib running the next flavor', () => {
 		const nodeLib = loadPreset('node-lib', KNOWN, SCHEMA).config;
 		const nextApp = loadPreset('next-app', KNOWN, SCHEMA).config;
-		for (const unit of nodeLib.units)
-			expect(nextApp.units, unit).toContain(unit);
+		for (const unit of nodeLib.units) expect(nextApp.units, unit).toContain(unit);
 		expect(nextApp.options?.oxlintFlavor).toBe('next');
 	});
 

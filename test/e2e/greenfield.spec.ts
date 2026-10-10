@@ -1,5 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -71,7 +79,10 @@ describe('cli in-place / existing-directory scaffolding', () => {
 			projectName: '.',
 		});
 
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		// Files land directly in cwd — no mkdir, no chdir into a nested dir.
@@ -92,7 +103,10 @@ describe('cli in-place / existing-directory scaffolding', () => {
 			projectName: 'cloned',
 		});
 
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		expect(existsSync(join(tmp, 'cloned', 'eslint.config.mjs'))).toBe(true);
@@ -109,7 +123,10 @@ describe('cli in-place / existing-directory scaffolding', () => {
 			projectName: 'realproj',
 		});
 
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status).toBe(1);
 		expect(result.stdout + result.stderr).toMatch(/already exists/);

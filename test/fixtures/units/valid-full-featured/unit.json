@@ -10,9 +10,7 @@
 	"devDependencies": {
 		"eslint": "9.0.0"
 	},
-	"files": [
-		{ "content": "// generated\n", "dest": "generated.js" }
-	],
+	"files": [{ "content": "// generated\n", "dest": "generated.js" }],
 	"options": [
 		{
 			"key": "fixtureFlavor",
@@ -28,9 +26,7 @@
 					"value": "extra",
 					"label": "Extra",
 					"hint": "Adds a file and a dependency",
-					"files": [
-						{ "content": "// extra\n", "dest": "extra.js" }
-					],
+					"files": [{ "content": "// extra\n", "dest": "extra.js" }],
 					"dependencies": {
 						"chalk": "5.3.0"
 					}

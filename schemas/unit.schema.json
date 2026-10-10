@@ -4,14 +4,7 @@
 	"title": "unbranded unit definition",
 	"description": "The authoring contract for a unit, as written in a unit.json on disk or exported by a unit pack. The schema integer bumps on breaking shape changes; 1 is the initial published contract (F-14). File `src` paths resolve relative to the unit definition's own directory, which is what lets one definition move between the built-in catalog, a local units directory, and a published pack without rewriting paths. Distinct from catalog.schema.json, which describes the redacted public projection emitted by `unbranded list --json` and carries neither file sources nor option effects.",
 	"type": "object",
-	"required": [
-		"schema",
-		"id",
-		"category",
-		"label",
-		"description",
-		"files"
-	],
+	"required": ["schema", "id", "category", "label", "description", "files"],
 	"additionalProperties": false,
 	"properties": {
 		"schema": {
@@ -127,20 +120,14 @@
 		},
 		"file": {
 			"type": "object",
-			"required": [
-				"dest"
-			],
+			"required": ["dest"],
 			"additionalProperties": false,
 			"oneOf": [
 				{
-					"required": [
-						"src"
-					]
+					"required": ["src"]
 				},
 				{
-					"required": [
-						"content"
-					]
+					"required": ["content"]
 				}
 			],
 			"properties": {
@@ -163,22 +150,13 @@
 					"type": "string"
 				},
 				"mode": {
-					"enum": [
-						"copy",
-						"merge-json",
-						"append-if-missing"
-					]
+					"enum": ["copy", "merge-json", "append-if-missing"]
 				}
 			}
 		},
 		"option": {
 			"type": "object",
-			"required": [
-				"key",
-				"label",
-				"default",
-				"choices"
-			],
+			"required": ["key", "label", "default", "choices"],
 			"additionalProperties": false,
 			"properties": {
 				"key": {
@@ -206,10 +184,7 @@
 		"optionChoice": {
 			"description": "Effects are overlaid onto the unit when this choice is picked: files append, dependency maps merge with the choice winning.",
 			"type": "object",
-			"required": [
-				"value",
-				"label"
-			],
+			"required": ["value", "label"],
 			"additionalProperties": false,
 			"properties": {
 				"value": {
@@ -239,12 +214,7 @@
 		},
 		"postInstall": {
 			"type": "object",
-			"required": [
-				"id",
-				"command",
-				"prompt",
-				"default"
-			],
+			"required": ["id", "command", "prompt", "default"],
 			"additionalProperties": false,
 			"properties": {
 				"id": {
@@ -267,9 +237,7 @@
 					"type": "boolean"
 				},
 				"requires": {
-					"enum": [
-						"git"
-					]
+					"enum": ["git"]
 				}
 			}
 		},

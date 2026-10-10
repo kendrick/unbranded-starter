@@ -1,5 +1,14 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -34,10 +43,10 @@ function cleanRepo(dir: string): void {
 // before and after is the hard proof that `doctor` wrote nothing.
 function snapshot(dir: string): string {
 	return (readdirSync(dir, { recursive: true }) as string[])
-		.map(rel => join(dir, rel))
-		.filter(p => statSync(p).isFile())
+		.map((rel) => join(dir, rel))
+		.filter((p) => statSync(p).isFile())
 		.sort()
-		.map(p => `${relative(dir, p)}\n${readFileSync(p, 'utf-8')}`)
+		.map((p) => `${relative(dir, p)}\n${readFileSync(p, 'utf-8')}`)
 		.join('\n---\n');
 }
 
@@ -101,10 +110,13 @@ describe('unbranded doctor', () => {
 		writeJson(join(tmp, 'package.json'), { name: 'audit-me' });
 
 		const result = spawnSync('node', [CLI, 'doctor', '--json'], { cwd: tmp, encoding: 'utf-8' });
-		const parsed = JSON.parse(result.stdout) as { ok: boolean; findings: { id: string; fix: string }[] };
+		const parsed = JSON.parse(result.stdout) as {
+			ok: boolean;
+			findings: { id: string; fix: string }[];
+		};
 		expect(parsed.ok).toBe(false);
 		expect(parsed.findings.length).toBeGreaterThan(0);
-		expect(parsed.findings.every(f => f.fix.length > 0)).toBe(true);
+		expect(parsed.findings.every((f) => f.fix.length > 0)).toBe(true);
 	});
 
 	it('a repo satisfying every signal reports clean and exits 0 under --strict', () => {
@@ -176,7 +188,7 @@ describe('unbranded doctor', () => {
 		expect(parsed.schema).toBe(2);
 		expect(parsed.ok).toBe(true); // the sole finding was accepted
 		expect(parsed.findings).toEqual([]);
-		expect(parsed.suppressed.map(f => f.id)).toEqual(['missing-editorconfig']);
+		expect(parsed.suppressed.map((f) => f.id)).toEqual(['missing-editorconfig']);
 		expect(parsed.ignoredUnknown).toEqual([]);
 	});
 

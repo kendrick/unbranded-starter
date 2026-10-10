@@ -23,12 +23,11 @@ export function buildRecommendations(units: AnyUnit[], existing: readonly string
 
 	const ours = new Set<string>();
 	for (const unit of units) {
-		for (const id of unit.recommendedExtensions ?? [])
-			ours.add(id);
+		for (const id of unit.recommendedExtensions ?? []) ours.add(id);
 	}
 
 	// Our additions land sorted after the user's entries, so a from-scratch file
 	// is deterministic rather than following manifest declaration order.
-	const additions = [...ours].filter(id => !seen.has(id)).sort();
+	const additions = [...ours].filter((id) => !seen.has(id)).sort();
 	return [...result, ...additions];
 }

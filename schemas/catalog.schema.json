@@ -4,11 +4,7 @@
 	"title": "unbranded list --json",
 	"description": "The unit catalog envelope. The schema integer bumps on breaking shape changes; 2 added the presets section.",
 	"type": "object",
-	"required": [
-		"schema",
-		"units",
-		"presets"
-	],
+	"required": ["schema", "units", "presets"],
 	"additionalProperties": false,
 	"properties": {
 		"schema": {
@@ -24,11 +20,7 @@
 			"type": "array",
 			"items": {
 				"type": "object",
-				"required": [
-					"name",
-					"description",
-					"units"
-				],
+				"required": ["name", "description", "units"],
 				"additionalProperties": false,
 				"properties": {
 					"name": {
@@ -56,13 +48,7 @@
 		},
 		"unit": {
 			"type": "object",
-			"required": [
-				"id",
-				"category",
-				"label",
-				"description",
-				"files"
-			],
+			"required": ["id", "category", "label", "description", "files"],
 			"additionalProperties": false,
 			"properties": {
 				"id": {
@@ -141,9 +127,7 @@
 		},
 		"file": {
 			"type": "object",
-			"required": [
-				"dest"
-			],
+			"required": ["dest"],
 			"additionalProperties": false,
 			"properties": {
 				"dest": {
@@ -153,22 +137,13 @@
 					"type": "string"
 				},
 				"mode": {
-					"enum": [
-						"copy",
-						"merge-json",
-						"append-if-missing"
-					]
+					"enum": ["copy", "merge-json", "append-if-missing"]
 				}
 			}
 		},
 		"option": {
 			"type": "object",
-			"required": [
-				"key",
-				"label",
-				"default",
-				"choices"
-			],
+			"required": ["key", "label", "default", "choices"],
 			"additionalProperties": false,
 			"properties": {
 				"key": {
@@ -184,10 +159,7 @@
 					"type": "array",
 					"items": {
 						"type": "object",
-						"required": [
-							"value",
-							"label"
-						],
+						"required": ["value", "label"],
 						"additionalProperties": false,
 						"properties": {
 							"value": {
@@ -206,12 +178,7 @@
 		},
 		"postInstall": {
 			"type": "object",
-			"required": [
-				"id",
-				"command",
-				"prompt",
-				"default"
-			],
+			"required": ["id", "command", "prompt", "default"],
 			"additionalProperties": false,
 			"properties": {
 				"id": {
@@ -230,9 +197,7 @@
 					"type": "boolean"
 				},
 				"requires": {
-					"enum": [
-						"git"
-					]
+					"enum": ["git"]
 				}
 			}
 		},
@@ -251,7 +216,10 @@
 					"additionalProperties": false,
 					"properties": {
 						"kind": { "const": "dir" },
-						"path": { "type": "string", "description": "Absolute path to the units directory this unit was loaded from." }
+						"path": {
+							"type": "string",
+							"description": "Absolute path to the units directory this unit was loaded from."
+						}
 					}
 				}
 			]

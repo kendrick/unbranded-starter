@@ -1,6 +1,12 @@
 import type { Unit, UnitId } from '../../manifest/types';
 import { describe, expect, it } from 'vitest';
-import { createPickerState, filteredOptions, pickerRows, pickerSummary, reducePicker } from './state';
+import {
+	createPickerState,
+	filteredOptions,
+	pickerRows,
+	pickerSummary,
+	reducePicker,
+} from './state';
 
 function unit(id: UnitId, extras: Partial<Unit> = {}): Unit {
 	return { id, category: 'lint', label: id, description: '', files: [], ...extras };
@@ -12,12 +18,18 @@ const UNITS: Unit[] = [
 		category: 'lint',
 		label: 'ESLint',
 		implies: ['core-typescript'],
-		options: [{
-			key: 'eslintFlavor',
-			label: 'ESLint flavor',
-			default: 'base',
-			choices: [{ value: 'base', label: 'Base' }, { value: 'react', label: 'React' }, { value: 'next', label: 'Next.js' }],
-		}],
+		options: [
+			{
+				key: 'eslintFlavor',
+				label: 'ESLint flavor',
+				default: 'base',
+				choices: [
+					{ value: 'base', label: 'Base' },
+					{ value: 'react', label: 'React' },
+					{ value: 'next', label: 'Next.js' },
+				],
+			},
+		],
 	}),
 	unit('core-typescript', { category: 'types', label: 'TypeScript' }),
 	unit('core-vitest', { category: 'test', label: 'Vitest' }),
@@ -33,16 +45,22 @@ function typeFilter(s: ReturnType<typeof state>, text: string) {
 
 describe('reducePicker filtering', () => {
 	it('filters case-insensitively on the label', () => {
-		expect(filteredOptions(typeFilter(state(), 'esl')).map(o => o.value)).toEqual(['core-eslint']);
+		expect(filteredOptions(typeFilter(state(), 'esl')).map((o) => o.value)).toEqual([
+			'core-eslint',
+		]);
 	});
 
 	it('filters on the group label', () => {
 		// "found" appears only in the Foundation group header, not any label or id.
-		expect(filteredOptions(typeFilter(state(), 'found')).map(o => o.value)).toEqual(['core-editorconfig']);
+		expect(filteredOptions(typeFilter(state(), 'found')).map((o) => o.value)).toEqual([
+			'core-editorconfig',
+		]);
 	});
 
 	it('filters on the raw id', () => {
-		expect(filteredOptions(typeFilter(state(), 'vitest')).map(o => o.value)).toEqual(['core-vitest']);
+		expect(filteredOptions(typeFilter(state(), 'vitest')).map((o) => o.value)).toEqual([
+			'core-vitest',
+		]);
 	});
 
 	it('keeps a selection made under a filter after the filter clears', () => {
@@ -135,7 +153,7 @@ describe('createPickerState initial selection', () => {
 });
 
 describe('reducePicker flavor cycling', () => {
-	it('cycles the active row\'s flavor, wrapping both directions', () => {
+	it("cycles the active row's flavor, wrapping both directions", () => {
 		let s = reducePicker(state(), { type: 'move', delta: 1 }); // core-eslint
 		expect(s.flavors.eslintFlavor).toBe('base');
 		s = reducePicker(s, { type: 'cycleFlavor', delta: 1 });
@@ -162,7 +180,7 @@ describe('pickerRows', () => {
 	it('interleaves headers, options, and the expanded detail; empty groups vanish under filter', () => {
 		let s = reducePicker(state(), { type: 'move', delta: 1 }); // core-eslint active
 		s = reducePicker(s, { type: 'toggleExpand' });
-		expect(pickerRows(s).map(r => r.kind)).toEqual([
+		expect(pickerRows(s).map((r) => r.kind)).toEqual([
 			'header',
 			'option', // Foundation / EditorConfig
 			'header',
@@ -175,13 +193,15 @@ describe('pickerRows', () => {
 		]);
 
 		const filtered = pickerRows(typeFilter(s, 'esl'));
-		expect(filtered.filter(r => r.kind === 'header').map(r => r.kind === 'header' && r.group)).toEqual(['Linting']);
+		expect(
+			filtered.filter((r) => r.kind === 'header').map((r) => r.kind === 'header' && r.group),
+		).toEqual(['Linting']);
 	});
 
 	it('counts selected units per group in the header', () => {
 		let s = reducePicker(state(), { type: 'move', delta: 1 });
 		s = reducePicker(s, { type: 'toggle' }); // select core-eslint
-		const header = pickerRows(s).find(r => r.kind === 'header' && r.group === 'Linting');
+		const header = pickerRows(s).find((r) => r.kind === 'header' && r.group === 'Linting');
 		expect(header).toMatchObject({ selected: 1, total: 1 });
 	});
 });
@@ -193,29 +213,48 @@ describe('pickerSummary', () => {
 		unit('core-eslint', {
 			label: 'ESLint',
 			implies: ['core-typescript'],
-			options: [{
-				key: 'eslintFlavor',
-				label: 'ESLint flavor',
-				default: 'base',
-				choices: [
-					{ value: 'base', label: 'Base', files: [{ content: 'x', dest: 'eslint.config.mjs' }], devDependencies: { '@antfu/eslint-config': '1' } },
-					{ value: 'react', label: 'React', files: [{ content: 'x', dest: 'eslint.config.mjs' }], devDependencies: { '@antfu/eslint-config': '1', 'eslint-plugin-jsx-a11y': '1' } },
-				],
-			}],
+			options: [
+				{
+					key: 'eslintFlavor',
+					label: 'ESLint flavor',
+					default: 'base',
+					choices: [
+						{
+							value: 'base',
+							label: 'Base',
+							files: [{ content: 'x', dest: 'eslint.config.mjs' }],
+							devDependencies: { '@antfu/eslint-config': '1' },
+						},
+						{
+							value: 'react',
+							label: 'React',
+							files: [{ content: 'x', dest: 'eslint.config.mjs' }],
+							devDependencies: { '@antfu/eslint-config': '1', 'eslint-plugin-jsx-a11y': '1' },
+						},
+					],
+				},
+			],
 		}),
 		unit('core-typescript', {
 			category: 'types',
 			label: 'TypeScript',
-			files: [{ src: 'a', dest: 'tsconfig.base.json' }, { src: 'b', dest: 'tsconfig.json' }],
+			files: [
+				{ src: 'a', dest: 'tsconfig.base.json' },
+				{ src: 'b', dest: 'tsconfig.json' },
+			],
 			devDependencies: { typescript: '5' },
 		}),
 	];
 
 	it('counts nothing until something is selected', () => {
-		expect(pickerSummary(createPickerState(flavored, new Set()))).toEqual({ units: 0, files: 0, deps: 0 });
+		expect(pickerSummary(createPickerState(flavored, new Set()))).toEqual({
+			units: 0,
+			files: 0,
+			deps: 0,
+		});
 	});
 
-	it('counts explicit picks, the implied preview, and the chosen flavor\'s footprint', () => {
+	it("counts explicit picks, the implied preview, and the chosen flavor's footprint", () => {
 		let s = createPickerState(flavored, new Set());
 		s = reducePicker(s, { type: 'toggle' }); // pick core-eslint (base); implies core-typescript
 		// eslint base: 1 file + 1 dep; typescript: 2 files + 1 dep.

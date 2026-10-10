@@ -3,7 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { buildRecommendations } from './vscode-extensions';
 
 function unit(id: string, recommendedExtensions?: string[]): Unit {
-	return { id: id as Unit['id'], category: 'editor', label: '', description: '', files: [], recommendedExtensions };
+	return {
+		id: id as Unit['id'],
+		category: 'editor',
+		label: '',
+		description: '',
+		files: [],
+		recommendedExtensions,
+	};
 }
 
 describe('buildRecommendations', () => {
@@ -11,7 +18,7 @@ describe('buildRecommendations', () => {
 		expect(buildRecommendations([unit('opt-vscode')])).toEqual([]);
 	});
 
-	it('collects a single unit\'s recommendations', () => {
+	it("collects a single unit's recommendations", () => {
 		expect(buildRecommendations([unit('core-eslint', ['dbaeumer.vscode-eslint'])])).toEqual([
 			'dbaeumer.vscode-eslint',
 		]);
@@ -31,12 +38,15 @@ describe('buildRecommendations', () => {
 		]);
 	});
 
-	it('keeps the user\'s existing entries in place and folds ours in, deduped', () => {
+	it("keeps the user's existing entries in place and folds ours in, deduped", () => {
 		// Existing entries stay in their original order (polite, like merge-json);
 		// our additions land sorted after them, and anything already present is
 		// not re-added.
 		const recs = buildRecommendations(
-			[unit('core-eslint', ['dbaeumer.vscode-eslint']), unit('core-tailwind', ['bradlc.vscode-tailwindcss'])],
+			[
+				unit('core-eslint', ['dbaeumer.vscode-eslint']),
+				unit('core-tailwind', ['bradlc.vscode-tailwindcss']),
+			],
 			['some.custom-extension', 'dbaeumer.vscode-eslint'],
 		);
 		expect(recs).toEqual([

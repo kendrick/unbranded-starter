@@ -17,9 +17,9 @@ export interface UnitIssue {
 	code?: 'unsupported-schema';
 }
 
-export type UnitValidationResult
-	= | { ok: true; unit: UnitDefinition }
-		| { ok: false; issues: UnitIssue[] };
+export type UnitValidationResult =
+	| { ok: true; unit: UnitDefinition }
+	| { ok: false; issues: UnitIssue[] };
 
 // Hand-rolled against schemas/unit.schema.json rather than run through ajv: ajv
 // is a devDependency only (the schema file is the published contract for docs
@@ -31,7 +31,19 @@ export type UnitValidationResult
 // Unlike config/load.ts's validate() (which throws on the first bad field),
 // this accumulates every issue in one pass—a unit author fixing a typo'd
 // definition wants the whole list, not one round-trip per mistake.
-const CATEGORIES = ['foundation', 'lint', 'style', 'types', 'test', 'e2e', 'monorepo', 'ui', 'git', 'editor', 'ci'] as const;
+const CATEGORIES = [
+	'foundation',
+	'lint',
+	'style',
+	'types',
+	'test',
+	'e2e',
+	'monorepo',
+	'ui',
+	'git',
+	'editor',
+	'ci',
+] as const;
 const FILE_MODES = ['copy', 'merge-json', 'append-if-missing'] as const;
 
 const TOP_LEVEL_KEYS = new Set([
@@ -54,7 +66,14 @@ const TOP_LEVEL_KEYS = new Set([
 ]);
 const FILE_KEYS = new Set(['src', 'content', 'dest', 'rename', 'mode']);
 const OPTION_KEYS = new Set(['key', 'label', 'default', 'choices']);
-const OPTION_CHOICE_KEYS = new Set(['value', 'label', 'hint', 'files', 'dependencies', 'devDependencies']);
+const OPTION_CHOICE_KEYS = new Set([
+	'value',
+	'label',
+	'hint',
+	'files',
+	'dependencies',
+	'devDependencies',
+]);
 const POST_INSTALL_KEYS = new Set(['id', 'command', 'prompt', 'default', 'requires']);
 const PACKAGE_JSON_PATCH_KEYS = new Set(['scripts', 'engines', 'packageManager']);
 
@@ -98,13 +117,10 @@ export function validateUnitDefinition(
 	// never read off disk (e.g. one assembled in memory) has neither a
 	// directory to resolve `src` against nor a catalog to check relations
 	// against, and both passes would otherwise need a sentinel to skip.
-	if (opts.baseDir !== undefined)
-		validateFileSources(value, opts.baseDir, issues);
-	if (opts.knownIds !== undefined)
-		validateRelations(value, opts.knownIds, issues);
+	if (opts.baseDir !== undefined) validateFileSources(value, opts.baseDir, issues);
+	if (opts.knownIds !== undefined) validateRelations(value, opts.knownIds, issues);
 
-	if (issues.length > 0)
-		return { ok: false, issues };
+	if (issues.length > 0) return { ok: false, issues };
 	return { ok: true, unit: value as unknown as UnitDefinition };
 }
 
@@ -120,9 +136,13 @@ function validateSchemaVersion(obj: Record<string, unknown>, issues: UnitIssue[]
 	// case where the fix is "upgrade unbranded" rather than "fix the file".
 	const range = `unit schema ${UNIT_SCHEMA_MIN} through ${UNIT_SCHEMA}`;
 	if (schema > UNIT_SCHEMA) {
-		issues.push({ path: 'schema', expected: range, got: String(schema), code: 'unsupported-schema' });
-	}
-	else if (schema < UNIT_SCHEMA_MIN) {
+		issues.push({
+			path: 'schema',
+			expected: range,
+			got: String(schema),
+			code: 'unsupported-schema',
+		});
+	} else if (schema < UNIT_SCHEMA_MIN) {
 		issues.push({ path: 'schema', expected: range, got: String(schema) });
 	}
 }
@@ -135,20 +155,17 @@ function validateStructure(obj: Record<string, unknown>, issues: UnitIssue[]): v
 	checkNonEmptyString(obj.label, 'label', issues);
 	checkNonEmptyString(obj.description, 'description', issues);
 
-	if (obj.dependencies !== undefined)
-		checkPinnedDeps(obj.dependencies, 'dependencies', issues);
+	if (obj.dependencies !== undefined) checkPinnedDeps(obj.dependencies, 'dependencies', issues);
 	if (obj.devDependencies !== undefined)
 		checkPinnedDeps(obj.devDependencies, 'devDependencies', issues);
 
 	validateFilesArray(obj.files, 'files', issues);
 
-	if (obj.options !== undefined)
-		validateOptionsArray(obj.options, 'options', issues);
+	if (obj.options !== undefined) validateOptionsArray(obj.options, 'options', issues);
 
 	if (obj.recommendedExtensions !== undefined)
 		checkStringArray(obj.recommendedExtensions, 'recommendedExtensions', checkPlainString, issues);
-	if (obj.implies !== undefined)
-		checkStringArray(obj.implies, 'implies', checkIdPattern, issues);
+	if (obj.implies !== undefined) checkStringArray(obj.implies, 'implies', checkIdPattern, issues);
 	if (obj.excludes !== undefined)
 		checkStringArray(obj.excludes, 'excludes', checkIdPattern, issues);
 	if (obj.requires !== undefined)
@@ -158,8 +175,7 @@ function validateStructure(obj: Record<string, unknown>, issues: UnitIssue[]): v
 		validatePostInstallArray(obj.postInstall, 'postInstall', issues);
 	if (obj.packageJsonPatch !== undefined)
 		validatePackageJsonPatch(obj.packageJsonPatch, 'packageJsonPatch', issues);
-	if (obj.removeNotes !== undefined)
-		checkPlainString(obj.removeNotes, 'removeNotes', issues);
+	if (obj.removeNotes !== undefined) checkPlainString(obj.removeNotes, 'removeNotes', issues);
 }
 
 function validateFilesArray(value: unknown, path: string, issues: UnitIssue[]): void {
@@ -185,14 +201,10 @@ function validateFile(file: unknown, path: string, issues: UnitIssue[]): void {
 	else if (!hasSrc && !hasContent)
 		issues.push({ path, expected: 'exactly one of: src, content', got: 'neither src nor content' });
 
-	if (hasSrc)
-		checkNonEmptyString(file.src, `${path}.src`, issues);
-	if (hasContent)
-		checkPlainString(file.content, `${path}.content`, issues);
-	if (file.rename !== undefined)
-		checkPlainString(file.rename, `${path}.rename`, issues);
-	if (file.mode !== undefined)
-		checkEnum(file.mode, `${path}.mode`, FILE_MODES, issues);
+	if (hasSrc) checkNonEmptyString(file.src, `${path}.src`, issues);
+	if (hasContent) checkPlainString(file.content, `${path}.content`, issues);
+	if (file.rename !== undefined) checkPlainString(file.rename, `${path}.rename`, issues);
+	if (file.mode !== undefined) checkEnum(file.mode, `${path}.mode`, FILE_MODES, issues);
 }
 
 function validateOptionsArray(value: unknown, path: string, issues: UnitIssue[]): void {
@@ -230,12 +242,13 @@ function validateOption(option: unknown, path: string, issues: UnitIssue[]): voi
 	if (typeof option.default === 'string') {
 		const values = choices
 			.filter(isPlainObject)
-			.map(c => c.value)
+			.map((c) => c.value)
 			.filter((v): v is string => typeof v === 'string');
 		if (!values.includes(option.default)) {
 			issues.push({
 				path: `${path}.default`,
-				expected: values.length > 0 ? `one of: ${values.join(', ')}` : 'one of this option\'s choice values',
+				expected:
+					values.length > 0 ? `one of: ${values.join(', ')}` : "one of this option's choice values",
 				got: JSON.stringify(option.default),
 			});
 		}
@@ -250,10 +263,8 @@ function validateOptionChoice(choice: unknown, path: string, issues: UnitIssue[]
 	checkAdditionalProps(choice, path, OPTION_CHOICE_KEYS, issues);
 	checkNonEmptyString(choice.value, `${path}.value`, issues);
 	checkNonEmptyString(choice.label, `${path}.label`, issues);
-	if (choice.hint !== undefined)
-		checkPlainString(choice.hint, `${path}.hint`, issues);
-	if (choice.files !== undefined)
-		validateFilesArray(choice.files, `${path}.files`, issues);
+	if (choice.hint !== undefined) checkPlainString(choice.hint, `${path}.hint`, issues);
+	if (choice.files !== undefined) validateFilesArray(choice.files, `${path}.files`, issues);
 	if (choice.dependencies !== undefined)
 		checkPinnedDeps(choice.dependencies, `${path}.dependencies`, issues);
 	if (choice.devDependencies !== undefined)
@@ -281,16 +292,14 @@ function validatePostInstall(entry: unknown, path: string, issues: UnitIssue[]):
 		issues.push({ path: `${path}.command`, expected: 'a non-empty array', got: typeOf(command) });
 	else if (command.length === 0)
 		issues.push({ path: `${path}.command`, expected: 'a non-empty array', got: 'empty array' });
-	else
-		command.forEach((c, i) => checkPlainString(c, `${path}.command[${i}]`, issues));
+	else command.forEach((c, i) => checkPlainString(c, `${path}.command[${i}]`, issues));
 
 	checkNonEmptyString(entry.prompt, `${path}.prompt`, issues);
 
 	if (typeof entry.default !== 'boolean')
 		issues.push({ path: `${path}.default`, expected: 'a boolean', got: typeOf(entry.default) });
 
-	if (entry.requires !== undefined)
-		checkEnum(entry.requires, `${path}.requires`, ['git'], issues);
+	if (entry.requires !== undefined) checkEnum(entry.requires, `${path}.requires`, ['git'], issues);
 }
 
 function validatePackageJsonPatch(value: unknown, path: string, issues: UnitIssue[]): void {
@@ -299,10 +308,8 @@ function validatePackageJsonPatch(value: unknown, path: string, issues: UnitIssu
 		return;
 	}
 	checkAdditionalProps(value, path, PACKAGE_JSON_PATCH_KEYS, issues);
-	if (value.scripts !== undefined)
-		checkStringMap(value.scripts, `${path}.scripts`, issues);
-	if (value.engines !== undefined)
-		checkStringMap(value.engines, `${path}.engines`, issues);
+	if (value.scripts !== undefined) checkStringMap(value.scripts, `${path}.scripts`, issues);
+	if (value.engines !== undefined) checkStringMap(value.engines, `${path}.engines`, issues);
 	if (value.packageManager !== undefined)
 		checkPlainString(value.packageManager, `${path}.packageManager`, issues);
 }
@@ -312,10 +319,18 @@ function validatePackageJsonPatch(value: unknown, path: string, issues: UnitIssu
 // description calls this out as a must, not just a convention. `..` is
 // checked as a path segment rather than a substring so a legitimate
 // `foo..bar.txt` filename doesn't false-positive.
-function validateFileSources(obj: Record<string, unknown>, baseDir: string, issues: UnitIssue[]): void {
+function validateFileSources(
+	obj: Record<string, unknown>,
+	baseDir: string,
+	issues: UnitIssue[],
+): void {
 	for (const { path, src } of collectFileSrcs(obj)) {
 		if (posix.isAbsolute(src) || src.split('/').includes('..')) {
-			issues.push({ path, expected: 'a relative path inside the unit directory', got: JSON.stringify(src) });
+			issues.push({
+				path,
+				expected: 'a relative path inside the unit directory',
+				got: JSON.stringify(src),
+			});
 			continue;
 		}
 		if (!existsSync(join(baseDir, src)))
@@ -325,7 +340,10 @@ function validateFileSources(obj: Record<string, unknown>, baseDir: string, issu
 
 function collectFileSrcs(obj: Record<string, unknown>): { path: string; src: string }[] {
 	return collectFileEntries(obj)
-		.filter((entry): entry is { path: string; file: Record<string, unknown> & { src: string } } => typeof entry.file.src === 'string')
+		.filter(
+			(entry): entry is { path: string; file: Record<string, unknown> & { src: string } } =>
+				typeof entry.file.src === 'string',
+		)
 		.map(({ path, file }) => ({ path: `${path}.src`, src: file.src }));
 }
 
@@ -340,13 +358,14 @@ function collectFileSrcs(obj: Record<string, unknown>): { path: string; src: str
 // shape the other misses. The specific near-miss: a collector scoped to
 // `mode: 'copy'`, which resolves and compares correctly and simply never
 // visits the operation that escapes.
-function collectFileEntries(obj: Record<string, unknown>): { path: string; file: Record<string, unknown> }[] {
+function collectFileEntries(
+	obj: Record<string, unknown>,
+): { path: string; file: Record<string, unknown> }[] {
 	const found: { path: string; file: Record<string, unknown> }[] = [];
 	collectFileEntriesFromArray(obj.files, 'files', found);
 	if (Array.isArray(obj.options)) {
 		obj.options.forEach((option, i) => {
-			if (!isPlainObject(option) || !Array.isArray(option.choices))
-				return;
+			if (!isPlainObject(option) || !Array.isArray(option.choices)) return;
 			option.choices.forEach((choice, j) => {
 				if (isPlainObject(choice))
 					collectFileEntriesFromArray(choice.files, `options[${i}].choices[${j}].files`, found);
@@ -356,12 +375,14 @@ function collectFileEntries(obj: Record<string, unknown>): { path: string; file:
 	return found;
 }
 
-function collectFileEntriesFromArray(value: unknown, prefix: string, found: { path: string; file: Record<string, unknown> }[]): void {
-	if (!Array.isArray(value))
-		return;
+function collectFileEntriesFromArray(
+	value: unknown,
+	prefix: string,
+	found: { path: string; file: Record<string, unknown> }[],
+): void {
+	if (!Array.isArray(value)) return;
 	value.forEach((file, i) => {
-		if (isPlainObject(file))
-			found.push({ path: `${prefix}[${i}]`, file });
+		if (isPlainObject(file)) found.push({ path: `${prefix}[${i}]`, file });
 	});
 }
 
@@ -375,27 +396,38 @@ function validateContainment(obj: Record<string, unknown>, issues: UnitIssue[]):
 	for (const { path, file } of collectFileEntries(obj)) {
 		// A non-string dest/rename is already reported by checkNonEmptyString /
 		// checkPlainString in validateFile; nothing more to check here.
-		if (typeof file.dest !== 'string')
-			continue;
+		if (typeof file.dest !== 'string') continue;
 		const op: FileOp = {
 			dest: file.dest,
 			...(typeof file.rename === 'string' ? { rename: file.rename } : {}),
 		};
 		const { contained, destination } = checkContainment(CONTAINMENT_ROOT, op);
 		if (!contained)
-			issues.push({ path: `${path}.dest`, expected: 'a destination that resolves inside the project root', got: JSON.stringify(destination) });
+			issues.push({
+				path: `${path}.dest`,
+				expected: 'a destination that resolves inside the project root',
+				got: JSON.stringify(destination),
+			});
 	}
 }
 
-function validateRelations(obj: Record<string, unknown>, knownIds: ReadonlySet<string>, issues: UnitIssue[]): void {
+function validateRelations(
+	obj: Record<string, unknown>,
+	knownIds: ReadonlySet<string>,
+	issues: UnitIssue[],
+): void {
 	checkKnownIds(obj.implies, 'implies', knownIds, issues);
 	checkKnownIds(obj.excludes, 'excludes', knownIds, issues);
 	checkKnownIds(obj.requires, 'requires', knownIds, issues);
 }
 
-function checkKnownIds(value: unknown, path: string, knownIds: ReadonlySet<string>, issues: UnitIssue[]): void {
-	if (!Array.isArray(value))
-		return;
+function checkKnownIds(
+	value: unknown,
+	path: string,
+	knownIds: ReadonlySet<string>,
+	issues: UnitIssue[],
+): void {
+	if (!Array.isArray(value)) return;
 	value.forEach((id, i) => {
 		if (typeof id === 'string' && !knownIds.has(id))
 			issues.push({ path: `${path}[${i}]`, expected: 'a known unit id', got: JSON.stringify(id) });
@@ -411,25 +443,30 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 // Truthful `got` values for the common shapes a bad definition takes, matching
 // the house style set by config/load.ts's hand-rolled checks.
 function typeOf(value: unknown): string {
-	if (value === undefined)
-		return 'missing';
-	if (value === null)
-		return 'null';
-	if (Array.isArray(value))
-		return 'array';
+	if (value === undefined) return 'missing';
+	if (value === null) return 'null';
+	if (Array.isArray(value)) return 'array';
 	return typeof value;
 }
 
-function checkAdditionalProps(obj: Record<string, unknown>, prefix: string, allowed: ReadonlySet<string>, issues: UnitIssue[]): void {
+function checkAdditionalProps(
+	obj: Record<string, unknown>,
+	prefix: string,
+	allowed: ReadonlySet<string>,
+	issues: UnitIssue[],
+): void {
 	for (const key of Object.keys(obj)) {
 		if (!allowed.has(key))
-			issues.push({ path: prefix ? `${prefix}.${key}` : key, expected: 'a recognized property', got: `unknown key "${key}"` });
+			issues.push({
+				path: prefix ? `${prefix}.${key}` : key,
+				expected: 'a recognized property',
+				got: `unknown key "${key}"`,
+			});
 	}
 }
 
 function checkPlainString(value: unknown, path: string, issues: UnitIssue[]): void {
-	if (typeof value !== 'string')
-		issues.push({ path, expected: 'a string', got: typeOf(value) });
+	if (typeof value !== 'string') issues.push({ path, expected: 'a string', got: typeOf(value) });
 }
 
 function checkNonEmptyString(value: unknown, path: string, issues: UnitIssue[]): void {
@@ -437,11 +474,15 @@ function checkNonEmptyString(value: unknown, path: string, issues: UnitIssue[]):
 		issues.push({ path, expected: 'a non-empty string', got: typeOf(value) });
 		return;
 	}
-	if (value.length === 0)
-		issues.push({ path, expected: 'a non-empty string', got: '""' });
+	if (value.length === 0) issues.push({ path, expected: 'a non-empty string', got: '""' });
 }
 
-function checkEnum(value: unknown, path: string, allowed: readonly string[], issues: UnitIssue[]): void {
+function checkEnum(
+	value: unknown,
+	path: string,
+	allowed: readonly string[],
+	issues: UnitIssue[],
+): void {
 	if (typeof value !== 'string') {
 		issues.push({ path, expected: `one of: ${allowed.join(', ')}`, got: typeOf(value) });
 		return;
@@ -456,8 +497,7 @@ function checkIdPattern(value: unknown, path: string, issues: UnitIssue[]): void
 		issues.push({ path, expected, got: typeOf(value) });
 		return;
 	}
-	if (!ID_PATTERN.test(value))
-		issues.push({ path, expected, got: JSON.stringify(value) });
+	if (!ID_PATTERN.test(value)) issues.push({ path, expected, got: JSON.stringify(value) });
 }
 
 function checkPinnedDeps(value: unknown, path: string, issues: UnitIssue[]): void {
@@ -468,9 +508,17 @@ function checkPinnedDeps(value: unknown, path: string, issues: UnitIssue[]): voi
 	for (const [name, version] of Object.entries(value)) {
 		const itemPath = `${path}["${name}"]`;
 		if (typeof version !== 'string')
-			issues.push({ path: itemPath, expected: 'an exact semver pin (e.g. 1.2.3)', got: typeOf(version) });
+			issues.push({
+				path: itemPath,
+				expected: 'an exact semver pin (e.g. 1.2.3)',
+				got: typeOf(version),
+			});
 		else if (!PIN_PATTERN.test(version))
-			issues.push({ path: itemPath, expected: 'an exact semver pin (e.g. 1.2.3)', got: JSON.stringify(version) });
+			issues.push({
+				path: itemPath,
+				expected: 'an exact semver pin (e.g. 1.2.3)',
+				got: JSON.stringify(version),
+			});
 	}
 }
 
@@ -485,7 +533,12 @@ function checkStringMap(value: unknown, path: string, issues: UnitIssue[]): void
 	}
 }
 
-function checkStringArray(value: unknown, path: string, itemCheck: (item: unknown, itemPath: string, issues: UnitIssue[]) => void, issues: UnitIssue[]): void {
+function checkStringArray(
+	value: unknown,
+	path: string,
+	itemCheck: (item: unknown, itemPath: string, issues: UnitIssue[]) => void,
+	issues: UnitIssue[],
+): void {
 	if (!Array.isArray(value)) {
 		issues.push({ path, expected: 'an array', got: typeOf(value) });
 		return;

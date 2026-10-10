@@ -40,15 +40,12 @@ export function inspectTarget(cwd: string): Inspection {
 // Shared by the interactive prompt and the config-mode path so both validate
 // identically.
 export function validateProjectName(value: string | undefined): string | undefined {
-	if (!value)
-		return 'Required';
-	if (value === '.')
-		return undefined;
+	if (!value) return 'Required';
+	if (value === '.') return undefined;
 	if (!/^[a-z0-9][a-z0-9_-]*$/.test(value)) {
 		return 'Lowercase letters, numbers, hyphens, underscores. Must start with a letter or digit.';
 	}
-	if (value.length > 214)
-		return 'Too long (npm caps package names at 214 chars).';
+	if (value.length > 214) return 'Too long (npm caps package names at 214 chars).';
 	return undefined;
 }
 
@@ -60,9 +57,8 @@ const SAFE_EXISTING_ENTRIES = new Set(['.git', 'README.md', 'LICENSE', '.gitigno
 // clone-shaped directories are safe to scaffold into (after a confirm);
 // anything else we refuse, so the never-clobber default still holds.
 export function classifyExistingDir(entries: string[]): 'empty' | 'safe' | 'unsafe' {
-	if (entries.length === 0)
-		return 'empty';
-	return entries.every(e => SAFE_EXISTING_ENTRIES.has(e)) ? 'safe' : 'unsafe';
+	if (entries.length === 0) return 'empty';
+	return entries.every((e) => SAFE_EXISTING_ENTRIES.has(e)) ? 'safe' : 'unsafe';
 }
 
 // `projectName`, when supplied, skips the text prompt — config-mode runs
@@ -96,8 +92,7 @@ export async function detectTarget(opts: DetectTargetOpts = {}): Promise<TargetC
 			throw new Error(`Invalid projectName ${JSON.stringify(projectName)}: ${invalid}`);
 		}
 		name = projectName;
-	}
-	else {
+	} else {
 		const prompted = await text({
 			message: 'Project name (or "." to scaffold into the current directory)',
 			placeholder: 'my-app',
@@ -142,8 +137,7 @@ export async function detectTarget(opts: DetectTargetOpts = {}): Promise<TargetC
 				process.exit(0);
 			}
 		}
-	}
-	else {
+	} else {
 		mkdirSync(newDir);
 	}
 	process.chdir(newDir);
