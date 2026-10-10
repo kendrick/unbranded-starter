@@ -35,14 +35,14 @@
 		"editor.defaultFormatter": "vscode.json-language-features"
 	},
 
-	// Markdown: Prettier (only place it's still used). Prettier handles
-	// prose-wrap and list reflow, and it's scoped to .md/.mdx, so it can't fight
-	// oxfmt on JS/TS.
+	// Markdown and MDX: oxfmt formats both, and oxc.oxc-vscode activates on both
+	// languages. A save then writes the bytes `oxfmt --check` accepts in `pnpm lint`.
+	// Prettier is a second formatter with its own output, so it is left out.
 	"[markdown]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
+		"editor.defaultFormatter": "oxc.oxc-vscode"
 	},
 	"[mdx]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
+		"editor.defaultFormatter": "oxc.oxc-vscode"
 	},
 
 	// Search / file watcher exclusions (matches .gitignore)
