@@ -1,5 +1,31 @@
 # Changelog
 
+## [3.0.0](https://github.com/kendrick/unbranded-starter/compare/v2.0.5...v3.0.0) (2026-10-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* **presets:** `--preset` and `--config presets/<name>.json` now scaffold oxlint and oxfmt on TypeScript 7 instead of ESLint on TypeScript 6. Recorded preset options use `oxlintFlavor`, not `eslintFlavor`.
+
+### Features
+
+* **manifest:** add a core-oxlint unit with base/react/next flavors ([#167](https://github.com/kendrick/unbranded-starter/issues/167)) ([bb09f2a](https://github.com/kendrick/unbranded-starter/commit/bb09f2a371da93aa54c69459d7661825b7883624))
+* **manifest:** generate opt-husky's lint-staged config from the lint unit ([#177](https://github.com/kendrick/unbranded-starter/issues/177)) ([d5542ce](https://github.com/kendrick/unbranded-starter/commit/d5542cef231cc5d10ea1061ee524bac843e7aede))
+* **manifest:** hold a PIN_LINES pin to its major in outdated, bump-pins, and --latest ([#178](https://github.com/kendrick/unbranded-starter/issues/178)) ([578ffa2](https://github.com/kendrick/unbranded-starter/commit/578ffa2127af6b87b0616c1b1e702d19aca4f1e9))
+* **manifest:** pick the TS line and the CI lint unit from the resolved set ([#168](https://github.com/kendrick/unbranded-starter/issues/168)) ([aff40bf](https://github.com/kendrick/unbranded-starter/commit/aff40bff58be665977b4807decae9998e58b2e80))
+* **presets:** scaffold core-oxlint and TS 7 from every preset ([#179](https://github.com/kendrick/unbranded-starter/issues/179)) ([e18664f](https://github.com/kendrick/unbranded-starter/commit/e18664fa2ff6bd349ab3e8c8211ee96f6b46d6be))
+
+
+### Bug Fixes
+
+* **manifest:** bump core-eslint pins ([#169](https://github.com/kendrick/unbranded-starter/issues/169)) ([d6ea667](https://github.com/kendrick/unbranded-starter/commit/d6ea6676e9fe088f197a1740612e77bc5aaab8da))
+* **manifest:** bump core-stylelint pins ([#172](https://github.com/kendrick/unbranded-starter/issues/172)) ([3691b38](https://github.com/kendrick/unbranded-starter/commit/3691b38b4a8ab8715208f0a31f2534d7baa9e69b))
+* **manifest:** bump core-typescript pins ([#170](https://github.com/kendrick/unbranded-starter/issues/170)) ([36dde69](https://github.com/kendrick/unbranded-starter/commit/36dde698b23c2c4bd6d4bf4232ef4f1b62cc7401))
+* **manifest:** bump core-vitest pins ([#171](https://github.com/kendrick/unbranded-starter/issues/171)) ([8d07174](https://github.com/kendrick/unbranded-starter/commit/8d07174b21a0bfd505cfaf6b36025462e51161a3))
+* **manifest:** bump opt-monorepo pins ([#173](https://github.com/kendrick/unbranded-starter/issues/173)) ([d4907de](https://github.com/kendrick/unbranded-starter/commit/d4907decdf82178c589b22f978e640be58073b88))
+* **manifest:** keep scaffolded projects' lint green on typescript-eslint 8.71.1 ([#174](https://github.com/kendrick/unbranded-starter/issues/174)) ([e1b098b](https://github.com/kendrick/unbranded-starter/commit/e1b098bc6b75c4f08ced236b82932fcb9590cf9f))
+* **manifest:** pin TypeScript to 6.0.3 instead of 7 ([#165](https://github.com/kendrick/unbranded-starter/issues/165)) ([7896583](https://github.com/kendrick/unbranded-starter/commit/7896583be2d7ae5ec9bf88fd1199da0b78798e2f))
+
 ## [2.0.5](https://github.com/kendrick/unbranded-starter/compare/v2.0.4...v2.0.5) (2026-09-28)
 
 
