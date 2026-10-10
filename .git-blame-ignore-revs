@@ -1,0 +1,7 @@
+# Reformat-only commits. GitHub skips these in blame views; for local blame,
+# run: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style: reformat the tree with oxfmt (#185). The squash also changed the
+# `lint` script and .vscode/settings.json, so blame on those few lines lands
+# on an earlier commit.
+cf83b015afe697d05942e917947585a9dfb8ec5b
