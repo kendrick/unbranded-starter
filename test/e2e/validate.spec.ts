@@ -35,8 +35,7 @@ describe('unbranded validate', () => {
 		const dir = join(tmp, name);
 		mkdirSync(dir, { recursive: true });
 		writeFileSync(join(dir, 'unit.json'), JSON.stringify(definition, null, 2));
-		for (const [file, body] of Object.entries(templates))
-			writeFileSync(join(dir, file), body);
+		for (const [file, body] of Object.entries(templates)) writeFileSync(join(dir, file), body);
 		return dir;
 	}
 
@@ -56,13 +55,17 @@ describe('unbranded validate', () => {
 	// The whole point of the command: an author gets every problem at once,
 	// each naming where it is, what was wanted, and what was there.
 	it('reports path, expected, and got for each issue, and accumulates them', () => {
-		const dir = unit('broken', {
-			...MINIMAL,
-			id: 'Broken_Unit',
-			category: 'nonsense',
-			devDependencies: { prettier: '^3.4.2' },
-			files: [{ src: 'BANNER.txt', dest: 'x.txt', mode: 'merge' }],
-		}, { 'BANNER.txt': 'hello\n' });
+		const dir = unit(
+			'broken',
+			{
+				...MINIMAL,
+				id: 'Broken_Unit',
+				category: 'nonsense',
+				devDependencies: { prettier: '^3.4.2' },
+				files: [{ src: 'BANNER.txt', dest: 'x.txt', mode: 'merge' }],
+			},
+			{ 'BANNER.txt': 'hello\n' },
+		);
 
 		const result = run(['validate', dir], tmp);
 		expect(result.status).toBe(1);

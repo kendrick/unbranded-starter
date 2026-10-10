@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { buildEslintConfig, detectEslintFlavor, ESLINT_FLAVORS, eslintDevDependencies } from './eslint-config';
+import {
+	buildEslintConfig,
+	detectEslintFlavor,
+	ESLINT_FLAVORS,
+	eslintDevDependencies,
+} from './eslint-config';
 
 // The React ecosystem packages base must never pull. The AC is explicit:
 // `base` installs zero React-ecosystem packages.
-const REACT_PACKAGES = ['@eslint-react/eslint-plugin', 'eslint-plugin-jsx-a11y', 'eslint-plugin-react-refresh', '@next/eslint-plugin-next'];
+const REACT_PACKAGES = [
+	'@eslint-react/eslint-plugin',
+	'eslint-plugin-jsx-a11y',
+	'eslint-plugin-react-refresh',
+	'@next/eslint-plugin-next',
+];
 
 describe('detectEslintFlavor', () => {
 	it('returns "next" when next is a dependency', () => {
@@ -27,8 +37,7 @@ describe('detectEslintFlavor', () => {
 describe('eslintDevDependencies', () => {
 	it('base installs zero React-ecosystem packages', () => {
 		const deps = eslintDevDependencies('base');
-		for (const pkg of REACT_PACKAGES)
-			expect(deps).not.toHaveProperty(pkg);
+		for (const pkg of REACT_PACKAGES) expect(deps).not.toHaveProperty(pkg);
 		// ...but still ships the linter core and the formatter peer the config needs.
 		expect(deps).toHaveProperty('@antfu/eslint-config');
 		expect(deps).toHaveProperty('eslint');
@@ -54,7 +63,7 @@ describe('buildEslintConfig', () => {
 	it('every flavor is a valid-looking antfu config module', () => {
 		for (const flavor of ESLINT_FLAVORS) {
 			const src = buildEslintConfig(flavor);
-			expect(src.startsWith('import antfu from \'@antfu/eslint-config\';')).toBe(true);
+			expect(src.startsWith("import antfu from '@antfu/eslint-config';")).toBe(true);
 			expect(src).toContain('export default antfu(');
 			expect(src).toContain('typescript: true,');
 			expect(src.endsWith('\n')).toBe(true);
@@ -73,8 +82,8 @@ describe('buildEslintConfig', () => {
 	it('react turns on react and the jsx-a11y block but leaves next off', () => {
 		const src = buildEslintConfig('react');
 		expect(src).toContain('react: true,');
-		expect(src).toContain('import jsxA11y from \'eslint-plugin-jsx-a11y\';');
-		expect(src).toContain('\'jsx-a11y/alt-text\': \'error\',');
+		expect(src).toContain("import jsxA11y from 'eslint-plugin-jsx-a11y';");
+		expect(src).toContain("'jsx-a11y/alt-text': 'error',");
 		expect(src).not.toContain('nextjs: true');
 		expect(src).not.toContain('@next/next/');
 	});
@@ -83,14 +92,14 @@ describe('buildEslintConfig', () => {
 		const src = buildEslintConfig('next');
 		expect(src).toContain('react: true,');
 		expect(src).toContain('nextjs: true,');
-		expect(src).toContain('\'@next/next/no-img-element\': \'error\',');
-		expect(src).toContain('import jsxA11y from \'eslint-plugin-jsx-a11y\';');
+		expect(src).toContain("'@next/next/no-img-element': 'error',");
+		expect(src).toContain("import jsxA11y from 'eslint-plugin-jsx-a11y';");
 	});
 });
 
 describe('buildEslintConfig ignores', () => {
 	it('skips the .unbranded sidecar for every flavor', () => {
 		for (const flavor of ESLINT_FLAVORS)
-			expect(buildEslintConfig(flavor)).toContain('\t\t\t\'.unbranded\',');
+			expect(buildEslintConfig(flavor)).toContain("\t\t\t'.unbranded',");
 	});
 });

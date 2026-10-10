@@ -10,15 +10,40 @@ import { PKG_ROOT } from '../../src/util/paths';
 // what a consumer sees before anything is written.
 const CLI = join(PKG_ROOT, 'dist/cli.js');
 
-function dryRun(units: string, cwd: string, extra: string[] = []): { status: number | null; plan: { units: string[]; devDependencies?: Record<string, string> }; stderr: string } {
-	const res = spawnSync('node', [CLI, '--dry-run', '--json', '--units', units, '--pm', 'pnpm', ...extra], { cwd, encoding: 'utf-8' });
-	return { status: res.status, plan: res.status === 0 ? JSON.parse(res.stdout) : { units: [] }, stderr: res.stderr };
+function dryRun(
+	units: string,
+	cwd: string,
+	extra: string[] = [],
+): {
+	status: number | null;
+	plan: { units: string[]; devDependencies?: Record<string, string> };
+	stderr: string;
+} {
+	const res = spawnSync(
+		'node',
+		[CLI, '--dry-run', '--json', '--units', units, '--pm', 'pnpm', ...extra],
+		{ cwd, encoding: 'utf-8' },
+	);
+	return {
+		status: res.status,
+		plan: res.status === 0 ? JSON.parse(res.stdout) : { units: [] },
+		stderr: res.stderr,
+	};
 }
 
 function scaffoldUnit(dir: string, unit: string): void {
-	writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'ts-line', version: '0.0.0' }, null, 2));
-	writeFileSync(join(dir, 'recipe.json'), JSON.stringify({ units: [unit], pm: null, onConflict: 'overwrite', postInstall: 'none' }));
-	const scaffold = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: dir, encoding: 'utf-8' });
+	writeFileSync(
+		join(dir, 'package.json'),
+		JSON.stringify({ name: 'ts-line', version: '0.0.0' }, null, 2),
+	);
+	writeFileSync(
+		join(dir, 'recipe.json'),
+		JSON.stringify({ units: [unit], pm: null, onConflict: 'overwrite', postInstall: 'none' }),
+	);
+	const scaffold = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+		cwd: dir,
+		encoding: 'utf-8',
+	});
 	expect(scaffold.status, scaffold.stderr).toBe(0);
 }
 
@@ -27,7 +52,10 @@ describe('typeScript line and lint slot (#158)', () => {
 	beforeEach(() => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-ts-line-'));
 		// Without a package.json the CLI is in new-project mode and prompts for a name.
-		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'ts-line', version: '0.0.0' }, null, 2));
+		writeFileSync(
+			join(tmp, 'package.json'),
+			JSON.stringify({ name: 'ts-line', version: '0.0.0' }, null, 2),
+		);
 	});
 	afterEach(() => {
 		rmSync(tmp, { recursive: true, force: true });
@@ -93,26 +121,44 @@ describe('typeScript line and lint slot (#158)', () => {
 		expect(ci.plan.units).not.toContain('core-oxlint');
 	});
 
-	it('adding core-eslint to a project already on core-typescript\'s 7.x line rewrites typescript to 6.x', () => {
+	it("adding core-eslint to a project already on core-typescript's 7.x line rewrites typescript to 6.x", () => {
 		// core-eslint implies core-typescript, so the tracked unit rejoins the plan and
 		// its line-selected pin overwrites the 7.x one (PR #168 review).
 		const dir = mkdtempSync(join(tmp, 'ts-then-eslint-'));
 		scaffoldUnit(dir, 'core-typescript');
 		const pkgPath = join(dir, 'package.json');
-		expect(JSON.parse(readFileSync(pkgPath, 'utf-8')).devDependencies.typescript).toMatch(/^\^?7\./);
+		expect(JSON.parse(readFileSync(pkgPath, 'utf-8')).devDependencies.typescript).toMatch(
+			/^\^?7\./,
+		);
 
 		const planned = dryRun('core-eslint', dir);
 		expect(planned.status, planned.stderr).toBe(0);
 		expect(planned.plan.devDependencies?.typescript).toMatch(/^\^?6\./);
 
-		writeFileSync(join(dir, 'recipe.json'), JSON.stringify({ units: ['core-eslint'], pm: null, onConflict: 'overwrite', postInstall: 'none' }));
-		const added = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: dir, encoding: 'utf-8' });
+		writeFileSync(
+			join(dir, 'recipe.json'),
+			JSON.stringify({
+				units: ['core-eslint'],
+				pm: null,
+				onConflict: 'overwrite',
+				postInstall: 'none',
+			}),
+		);
+		const added = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: dir,
+			encoding: 'utf-8',
+		});
 		expect(added.status, added.stderr).toBe(0);
-		expect(JSON.parse(readFileSync(pkgPath, 'utf-8')).devDependencies.typescript).toMatch(/^\^?6\./);
+		expect(JSON.parse(readFileSync(pkgPath, 'utf-8')).devDependencies.typescript).toMatch(
+			/^\^?6\./,
+		);
 	});
 
 	it('update keeps a core-eslint project on the 6.x line, and moves a core-oxlint one to 7.x', () => {
-		for (const [unit, line] of [['core-eslint', /^\^?6\./], ['core-oxlint', /^\^?7\./]] as const) {
+		for (const [unit, line] of [
+			['core-eslint', /^\^?6\./],
+			['core-oxlint', /^\^?7\./],
+		] as const) {
 			const dir = mkdtempSync(join(tmp, `${unit}-`));
 			scaffoldUnit(dir, unit);
 
@@ -122,9 +168,14 @@ describe('typeScript line and lint slot (#158)', () => {
 			pkg.devDependencies.typescript = '5.9.3';
 			writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
 
-			const update = spawnSync('node', [CLI, 'update', '--yes', '--strategy', 'theirs'], { cwd: dir, encoding: 'utf-8' });
+			const update = spawnSync('node', [CLI, 'update', '--yes', '--strategy', 'theirs'], {
+				cwd: dir,
+				encoding: 'utf-8',
+			});
 			expect(update.status, `${update.stdout}${update.stderr}`).toBe(0);
-			expect(JSON.parse(readFileSync(pkgPath, 'utf-8')).devDependencies.typescript, unit).toMatch(line);
+			expect(JSON.parse(readFileSync(pkgPath, 'utf-8')).devDependencies.typescript, unit).toMatch(
+				line,
+			);
 		}
 	});
 });

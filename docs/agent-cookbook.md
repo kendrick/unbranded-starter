@@ -98,7 +98,12 @@ unbranded diff --json
 ```
 
 ```json
-{ "schema": 1, "tracked": true, "drift": false, "files": [{ "path": ".editorconfig", "status": "unchanged" }] }
+{
+	"schema": 1,
+	"tracked": true,
+	"drift": false,
+	"files": [{ "path": ".editorconfig", "status": "unchanged" }]
+}
 ```
 
 Exit 0 with `"drift": false` closes the loop. This is also your standing CI check: `diff` exits 1 the moment a tracked file drifts from what was recorded.

@@ -39,7 +39,7 @@ export interface LoadCatalogOpts {
 }
 
 export function loadCatalog(opts: LoadCatalogOpts = {}): Catalog {
-	const builtinIds = new Set(UNITS.map(u => u.id));
+	const builtinIds = new Set(UNITS.map((u) => u.id));
 
 	// `source` lives in this map and never as a field on a unit object: the e2e
 	// contract test validates every built-in unit against the published
@@ -65,10 +65,8 @@ export function loadCatalog(opts: LoadCatalogOpts = {}): Catalog {
 		let loaded;
 		try {
 			loaded = loadUnitsDir(absDir, builtinIds);
-		}
-		catch (err) {
-			if (opts.onMissing !== 'warn')
-				throw err;
+		} catch (err) {
+			if (opts.onMissing !== 'warn') throw err;
 			// discover() already names the path in its own errors, so don't say it twice.
 			warnings.push(`Could not load units: ${(err as Error).message}`);
 			continue;
@@ -79,7 +77,9 @@ export function loadCatalog(opts: LoadCatalogOpts = {}): Catalog {
 		// second is the only answer that keeps a reference meaning one thing.
 		const claimed = namespaces.get(loaded.namespace);
 		if (claimed !== undefined) {
-			warnings.push(`Skipped ${absDir}: its namespace "${loaded.namespace}" is already taken by ${claimed}.`);
+			warnings.push(
+				`Skipped ${absDir}: its namespace "${loaded.namespace}" is already taken by ${claimed}.`,
+			);
 			continue;
 		}
 		namespaces.set(loaded.namespace, absDir);
@@ -97,7 +97,7 @@ export function loadCatalog(opts: LoadCatalogOpts = {}): Catalog {
 
 	return {
 		units,
-		ids: new Set(units.map(u => u.id)),
+		ids: new Set(units.map((u) => u.id)),
 		builtinIds,
 		sources,
 		templateRoots,
@@ -111,17 +111,19 @@ export function loadCatalog(opts: LoadCatalogOpts = {}): Catalog {
 // override has to replace the recorded set wholesale rather than join it: a user
 // passing --units-dir is saying the directory moved, and loading both the old path
 // and the new one would either fail on the missing one or namespace-collide.
-export function unitsDirsFor(recorded: Iterable<UnitSource>, targetDir: string, override?: string): string[] {
-	if (override !== undefined)
-		return [override];
+export function unitsDirsFor(
+	recorded: Iterable<UnitSource>,
+	targetDir: string,
+	override?: string,
+): string[] {
+	if (override !== undefined) return [override];
 	const dirs: string[] = [];
 	for (const source of recorded) {
-		if (source.kind === 'dir')
-			dirs.push(resolve(targetDir, source.path));
+		if (source.kind === 'dir') dirs.push(resolve(targetDir, source.path));
 	}
 	return dedupe(dirs);
 }
 
 function dedupe(values: string[]): string[] {
-	return [...new Set(values.map(v => resolve(v)))];
+	return [...new Set(values.map((v) => resolve(v)))];
 }

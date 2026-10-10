@@ -1,5 +1,13 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+	existsSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -16,10 +24,10 @@ function writeJson(path: string, obj: unknown): void {
 // nothing on disk.
 function snapshot(dir: string): string {
 	return (readdirSync(dir, { recursive: true }) as string[])
-		.map(rel => join(dir, rel))
-		.filter(p => statSync(p).isFile())
+		.map((rel) => join(dir, rel))
+		.filter((p) => statSync(p).isFile())
 		.sort()
-		.map(p => `${relative(dir, p)}\n${readFileSync(p, 'utf-8')}`)
+		.map((p) => `${relative(dir, p)}\n${readFileSync(p, 'utf-8')}`)
 		.join('\n---\n');
 }
 
@@ -69,7 +77,10 @@ describe('cli --dry-run (config mode)', () => {
 			postInstall: 'none',
 		});
 
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json', '--dry-run'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json', '--dry-run'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status).toBe(0);
 		// core-eslint conflicts on eslint.config.mjs; core-typescript (auto) is a
@@ -92,11 +103,16 @@ describe('cli --dry-run (config mode)', () => {
 			postInstall: 'none',
 		});
 
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json', '--dry-run'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json', '--dry-run'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status).toBe(0);
 		// EditorConfig writes just .editorconfig into a bare project: one create.
-		expect(result.stdout).toMatch(/Would: 1 written, 0 merged, 0 appended, 0 skipped, 0 conflicts\./);
+		expect(result.stdout).toMatch(
+			/Would: 1 written, 0 merged, 0 appended, 0 skipped, 0 conflicts\./,
+		);
 	});
 
 	it('reports a conflict regardless of the recipe onConflict (plan is resolution-independent)', () => {
@@ -104,8 +120,16 @@ describe('cli --dry-run (config mode)', () => {
 		writeFileSync(join(tmp, 'eslint.config.mjs'), '// mine\n');
 
 		for (const onConflict of ['overwrite', 'skip'] as const) {
-			writeJson(join(tmp, 'recipe.json'), { units: ['core-eslint'], pm: null, onConflict, postInstall: 'none' });
-			const result = spawnSync('node', [CLI, '--config', 'recipe.json', '--dry-run'], { cwd: tmp, encoding: 'utf-8' });
+			writeJson(join(tmp, 'recipe.json'), {
+				units: ['core-eslint'],
+				pm: null,
+				onConflict,
+				postInstall: 'none',
+			});
+			const result = spawnSync('node', [CLI, '--config', 'recipe.json', '--dry-run'], {
+				cwd: tmp,
+				encoding: 'utf-8',
+			});
 			expect(result.status, `onConflict=${onConflict}`).toBe(0);
 			expect(result.stdout, `onConflict=${onConflict}`).toMatch(/conflict\s+eslint\.config\.mjs/);
 		}
@@ -123,8 +147,14 @@ describe('cli --dry-run (config mode)', () => {
 			postInstall: 'none',
 		});
 
-		const plain = spawnSync('node', [CLI, '--config', 'recipe.json', '--dry-run'], { cwd: tmp, encoding: 'utf-8' });
-		const withDiff = spawnSync('node', [CLI, '--config', 'recipe.json', '--dry-run', '--diff'], { cwd: tmp, encoding: 'utf-8' });
+		const plain = spawnSync('node', [CLI, '--config', 'recipe.json', '--dry-run'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
+		const withDiff = spawnSync('node', [CLI, '--config', 'recipe.json', '--dry-run', '--diff'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(withDiff.status).toBe(0);
 		// createPatch labels the two sides; the diff-only run must carry them.
@@ -156,22 +186,24 @@ describe('cli --dry-run (interactive mode)', () => {
 		// that arrive during the select→picker handoff are dropped, so each prompt
 		// gets its keystrokes only after it has had time to attach. Down+enter
 		// picks the first preset; the final enter submits the preseeded picker.
-		const result = await new Promise<{ status: number | null; stdout: string; stderr: string }>((resolvePromise) => {
-			const child = spawn('node', [CLI, '--dry-run'], { cwd: tmp });
-			let stdout = '';
-			let stderr = '';
-			child.stdout.on('data', (d: Buffer) => {
-				stdout += d.toString();
-			});
-			child.stderr.on('data', (d: Buffer) => {
-				stderr += d.toString();
-			});
-			setTimeout(() => child.stdin.write('\x1B[B\r'), 500);
-			// end() (not just write) matters: an open stdin pipe keeps the child's
-			// event loop alive after the flow finishes, and the test times out.
-			setTimeout(() => child.stdin.end('\r'), 1500);
-			child.on('close', status => resolvePromise({ status, stdout, stderr }));
-		});
+		const result = await new Promise<{ status: number | null; stdout: string; stderr: string }>(
+			(resolvePromise) => {
+				const child = spawn('node', [CLI, '--dry-run'], { cwd: tmp });
+				let stdout = '';
+				let stderr = '';
+				child.stdout.on('data', (d: Buffer) => {
+					stdout += d.toString();
+				});
+				child.stderr.on('data', (d: Buffer) => {
+					stderr += d.toString();
+				});
+				setTimeout(() => child.stdin.write('\x1B[B\r'), 500);
+				// end() (not just write) matters: an open stdin pipe keeps the child's
+				// event loop alive after the flow finishes, and the test times out.
+				setTimeout(() => child.stdin.end('\r'), 1500);
+				child.on('close', (status) => resolvePromise({ status, stdout, stderr }));
+			},
+		);
 		const after = snapshot(tmp);
 
 		expect(result.status, `stderr: ${result.stderr}\nstdout: ${result.stdout}`).toBe(0);

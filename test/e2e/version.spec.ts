@@ -9,7 +9,9 @@ import { packedFilePaths } from './npm-pack';
 const CLI = join(PKG_ROOT, 'dist/cli.js');
 
 function repoVersion(): string {
-	const pkg = JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf-8')) as { version: string };
+	const pkg = JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf-8')) as {
+		version: string;
+	};
 	return pkg.version;
 }
 
@@ -30,10 +32,14 @@ describe('cli --version stays in sync with package.json', () => {
 		// Resolution has to happen in a real node process: vitest's SSR transform
 		// rewrites `import.meta` into a shim with no `resolve`, and the launcher
 		// runs under plain node anyway.
-		const probe = spawnSync('node', ['--input-type=module', '-e', 'process.stdout.write(import.meta.resolve("unbranded/cli"))'], {
-			cwd: PKG_ROOT,
-			encoding: 'utf-8',
-		});
+		const probe = spawnSync(
+			'node',
+			['--input-type=module', '-e', 'process.stdout.write(import.meta.resolve("unbranded/cli"))'],
+			{
+				cwd: PKG_ROOT,
+				encoding: 'utf-8',
+			},
+		);
 		expect(probe.status, `stderr: ${probe.stderr}`).toBe(0);
 
 		const resolved = fileURLToPath(probe.stdout.trim());

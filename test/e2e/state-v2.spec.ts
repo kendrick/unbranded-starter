@@ -24,12 +24,19 @@ function readState(dir: string): StateV2 {
 // file mode, and none of them carries an npm dependency. pm: null in the recipe
 // keeps the whole spec install-free.
 function run(units: string[], tmp: string): ReturnType<typeof spawnSync<string>> {
-	writeFileSync(join(tmp, 'recipe.json'), JSON.stringify({
-		units,
-		pm: null,
-		onConflict: 'overwrite',
-		postInstall: 'none',
-	}, null, 2));
+	writeFileSync(
+		join(tmp, 'recipe.json'),
+		JSON.stringify(
+			{
+				units,
+				pm: null,
+				onConflict: 'overwrite',
+				postInstall: 'none',
+			},
+			null,
+			2,
+		),
+	);
 	return spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
 }
 
@@ -38,7 +45,10 @@ describe('state schema v2 (attribution, modes, baseline sidecar)', () => {
 
 	beforeEach(() => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-state-v2-'));
-		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'state-v2', version: '0.0.0' }, null, 2));
+		writeFileSync(
+			join(tmp, 'package.json'),
+			JSON.stringify({ name: 'state-v2', version: '0.0.0' }, null, 2),
+		);
 	});
 
 	afterEach(() => {
@@ -66,8 +76,9 @@ describe('state schema v2 (attribution, modes, baseline sidecar)', () => {
 
 		// Baselines: byte-exact copies for copy-mode files only. Structured and
 		// computed files refresh structurally, so a text baseline would mislead.
-		expect(readFileSync(join(tmp, '.unbranded', 'baseline', '.editorconfig'), 'utf-8'))
-			.toBe(readFileSync(join(tmp, '.editorconfig'), 'utf-8'));
+		expect(readFileSync(join(tmp, '.unbranded', 'baseline', '.editorconfig'), 'utf-8')).toBe(
+			readFileSync(join(tmp, '.editorconfig'), 'utf-8'),
+		);
 		expect(existsSync(join(tmp, '.unbranded', 'baseline', '.vscode', 'settings.json'))).toBe(false);
 		expect(existsSync(join(tmp, '.unbranded', 'baseline', '.nvmrc'))).toBe(false);
 
@@ -86,8 +97,8 @@ describe('state schema v2 (attribution, modes, baseline sidecar)', () => {
 
 		const state = readState(tmp);
 		// Both runs' units and files survive; remove/update reason over the union.
-		expect(state.units.map(u => u.id)).toContain('core-editorconfig');
-		expect(state.units.map(u => u.id)).toContain('core-gitattributes');
+		expect(state.units.map((u) => u.id)).toContain('core-editorconfig');
+		expect(state.units.map((u) => u.id)).toContain('core-gitattributes');
 		expect(state.attribution?.['.editorconfig']).toBe('core-editorconfig');
 		expect(state.attribution?.['.gitattributes']).toBe('core-gitattributes');
 		expect(existsSync(join(tmp, '.unbranded', 'baseline', '.editorconfig'))).toBe(true);
@@ -100,7 +111,10 @@ describe('state schema 3 migration boundary', () => {
 
 	beforeEach(() => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-state-v3-'));
-		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'state-v3', version: '0.0.0' }, null, 2));
+		writeFileSync(
+			join(tmp, 'package.json'),
+			JSON.stringify({ name: 'state-v3', version: '0.0.0' }, null, 2),
+		);
 	});
 
 	afterEach(() => {
@@ -114,29 +128,46 @@ describe('state schema 3 migration boundary', () => {
 		// ids while leaving files/attribution/modes as the real scaffold wrote them is
 		// exactly what a project scaffolded by unbranded 1.x looks like on disk today.
 		const scaffolded = readState(tmp);
-		writeFileSync(join(tmp, '.unbranded.json'), JSON.stringify({
-			...scaffolded,
-			schema: 2,
-			units: scaffolded.units.map(u => u.id),
-		}, null, 2));
+		writeFileSync(
+			join(tmp, '.unbranded.json'),
+			JSON.stringify(
+				{
+					...scaffolded,
+					schema: 2,
+					units: scaffolded.units.map((u) => u.id),
+				},
+				null,
+				2,
+			),
+		);
 
 		const diff = spawnSync('node', [CLI, 'diff'], { cwd: tmp, encoding: 'utf-8' });
 		expect(diff.status, `stdout: ${diff.stdout}\nstderr: ${diff.stderr}`).toBe(0);
 		expect(diff.stdout).toContain('No drift.');
 
-		const remove = spawnSync('node', [CLI, 'remove', 'core-editorconfig', '--yes'], { cwd: tmp, encoding: 'utf-8' });
+		const remove = spawnSync('node', [CLI, 'remove', 'core-editorconfig', '--yes'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 		expect(remove.status, `stdout: ${remove.stdout}\nstderr: ${remove.stderr}`).toBe(0);
 		expect(existsSync(join(tmp, '.editorconfig'))).toBe(false);
 	});
 
 	it('a state file from a newer unbranded is refused, not read as clean', () => {
-		writeFileSync(join(tmp, '.unbranded.json'), JSON.stringify({
-			_tool: 'unbranded manages the files below.',
-			schema: 99,
-			version: '99.0.0',
-			units: [],
-			files: {},
-		}, null, 2));
+		writeFileSync(
+			join(tmp, '.unbranded.json'),
+			JSON.stringify(
+				{
+					_tool: 'unbranded manages the files below.',
+					schema: 99,
+					version: '99.0.0',
+					units: [],
+					files: {},
+				},
+				null,
+				2,
+			),
+		);
 
 		// The hazard this gate closes: before it existed, an unreadable state file read
 		// as "no state", and diff treats "no state" as an unscaffolded project and exits
@@ -146,7 +177,10 @@ describe('state schema 3 migration boundary', () => {
 		expect(diff.stdout).not.toContain('No drift');
 		expect(diff.stderr).toContain('newer unbranded');
 
-		const remove = spawnSync('node', [CLI, 'remove', 'core-editorconfig', '--yes'], { cwd: tmp, encoding: 'utf-8' });
+		const remove = spawnSync('node', [CLI, 'remove', 'core-editorconfig', '--yes'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 		expect(remove.status, `stdout: ${remove.stdout}\nstderr: ${remove.stderr}`).not.toBe(0);
 		expect(remove.stderr).toContain('newer unbranded');
 

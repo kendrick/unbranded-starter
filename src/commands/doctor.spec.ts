@@ -6,7 +6,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { applySuppression, auditRepo, KNOWN_FINDING_IDS, partitionFixable, readDoctorIgnore, runDoctorFix } from './doctor';
+import {
+	applySuppression,
+	auditRepo,
+	KNOWN_FINDING_IDS,
+	partitionFixable,
+	readDoctorIgnore,
+	runDoctorFix,
+} from './doctor';
 import { runInit } from './init';
 
 // runDoctorFix's job is collecting the right units and delegating; the apply
@@ -38,7 +45,7 @@ function cleanRepo(dir: string): void {
 
 describe('auditRepo', () => {
 	let tmp: string;
-	const ids = (dir: string): string[] => auditRepo({ cwd: dir }).findings.map(f => f.id);
+	const ids = (dir: string): string[] => auditRepo({ cwd: dir }).findings.map((f) => f.id);
 
 	beforeEach(() => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-doctor-'));
@@ -63,7 +70,7 @@ describe('auditRepo', () => {
 	it('names the core-editorconfig unit when .editorconfig is missing', () => {
 		cleanRepo(tmp);
 		rmSync(join(tmp, '.editorconfig'));
-		const finding = auditRepo({ cwd: tmp }).findings.find(f => f.id === 'missing-editorconfig');
+		const finding = auditRepo({ cwd: tmp }).findings.find((f) => f.id === 'missing-editorconfig');
 		expect(finding?.unit).toBe('core-editorconfig');
 		expect(finding?.fix).toContain('core-editorconfig');
 	});
@@ -71,7 +78,7 @@ describe('auditRepo', () => {
 	it('names the core-gitattributes unit when .gitattributes is missing', () => {
 		cleanRepo(tmp);
 		rmSync(join(tmp, '.gitattributes'));
-		const finding = auditRepo({ cwd: tmp }).findings.find(f => f.id === 'missing-gitattributes');
+		const finding = auditRepo({ cwd: tmp }).findings.find((f) => f.id === 'missing-gitattributes');
 		expect(finding?.unit).toBe('core-gitattributes');
 		expect(finding?.fix).toContain('core-gitattributes');
 	});
@@ -81,8 +88,12 @@ describe('auditRepo', () => {
 		// unit can't be found by destination — doctor has to name it directly.
 		cleanRepo(tmp);
 		rmSync(join(tmp, '.nvmrc'));
-		writeJson(join(tmp, 'package.json'), { name: 'clean', scripts: { test: 'vitest run', lint: 'eslint .' }, devDependencies: { typescript: '5.9.3' } });
-		const finding = auditRepo({ cwd: tmp }).findings.find(f => f.id === 'no-node-version');
+		writeJson(join(tmp, 'package.json'), {
+			name: 'clean',
+			scripts: { test: 'vitest run', lint: 'eslint .' },
+			devDependencies: { typescript: '5.9.3' },
+		});
+		const finding = auditRepo({ cwd: tmp }).findings.find((f) => f.id === 'no-node-version');
 		expect(finding?.unit).toBe('core-node-version');
 		expect(finding?.fix).toContain('core-node-version');
 	});
@@ -90,7 +101,7 @@ describe('auditRepo', () => {
 	it('names the opt-ci-github unit when no CI workflow exists', () => {
 		cleanRepo(tmp);
 		rmSync(join(tmp, '.github'), { recursive: true });
-		const finding = auditRepo({ cwd: tmp }).findings.find(f => f.id === 'no-ci-workflow');
+		const finding = auditRepo({ cwd: tmp }).findings.find((f) => f.id === 'no-ci-workflow');
 		expect(finding?.unit).toBe('opt-ci-github');
 		expect(finding?.fix).toContain('opt-ci-github');
 	});
@@ -99,7 +110,7 @@ describe('auditRepo', () => {
 		cleanRepo(tmp);
 		writeFileSync(join(tmp, 'yarn.lock'), '');
 		writeFileSync(join(tmp, 'package-lock.json'), '{}');
-		const finding = auditRepo({ cwd: tmp }).findings.find(f => f.id === 'multiple-lockfiles');
+		const finding = auditRepo({ cwd: tmp }).findings.find((f) => f.id === 'multiple-lockfiles');
 		expect(finding).toBeDefined();
 		// All three coexisting lockfiles named, plus the precedence winner (pnpm).
 		expect(finding?.message).toContain('pnpm-lock.yaml');
@@ -111,35 +122,49 @@ describe('auditRepo', () => {
 	it('flags TypeScript in deps with no tsconfig.json, pointing at core-typescript', () => {
 		cleanRepo(tmp);
 		rmSync(join(tmp, 'tsconfig.json'));
-		const finding = auditRepo({ cwd: tmp }).findings.find(f => f.id === 'ts-dep-no-tsconfig');
+		const finding = auditRepo({ cwd: tmp }).findings.find((f) => f.id === 'ts-dep-no-tsconfig');
 		expect(finding?.unit).toBe('core-typescript');
 	});
 
 	it('flags a tsconfig.json with no TypeScript dependency, pointing at core-typescript', () => {
-		writeJson(join(tmp, 'package.json'), { name: 'x', scripts: { test: 't', lint: 'l' }, engines: { node: '>=22' } });
+		writeJson(join(tmp, 'package.json'), {
+			name: 'x',
+			scripts: { test: 't', lint: 'l' },
+			engines: { node: '>=22' },
+		});
 		writeFileSync(join(tmp, 'tsconfig.json'), '{}\n');
-		const finding = auditRepo({ cwd: tmp }).findings.find(f => f.id === 'tsconfig-no-ts-dep');
+		const finding = auditRepo({ cwd: tmp }).findings.find((f) => f.id === 'tsconfig-no-ts-dep');
 		expect(finding?.unit).toBe('core-typescript');
 	});
 
 	it('names core-vitest and core-eslint for missing test and lint scripts', () => {
 		writeJson(join(tmp, 'package.json'), { name: 'x' });
 		const found = auditRepo({ cwd: tmp }).findings;
-		expect(found.find(f => f.id === 'no-test-script')?.unit).toBe('core-vitest');
-		expect(found.find(f => f.id === 'no-lint-script')?.unit).toBe('core-eslint');
+		expect(found.find((f) => f.id === 'no-test-script')?.unit).toBe('core-vitest');
+		expect(found.find((f) => f.id === 'no-lint-script')?.unit).toBe('core-eslint');
 	});
 
 	it('names the tracked lint provider, not the first catalog hit, for a missing lint script (#157)', () => {
 		writeJson(join(tmp, 'package.json'), { name: 'x' });
-		writeJson(join(tmp, '.unbranded.json'), { schema: 3, units: [{ id: 'core-oxlint', source: { kind: 'builtin' } }], files: {} });
+		writeJson(join(tmp, '.unbranded.json'), {
+			schema: 3,
+			units: [{ id: 'core-oxlint', source: { kind: 'builtin' } }],
+			files: {},
+		});
 		const found = auditRepo({ cwd: tmp }).findings;
-		expect(found.find(f => f.id === 'no-lint-script')?.unit).toBe('core-oxlint');
+		expect(found.find((f) => f.id === 'no-lint-script')?.unit).toBe('core-oxlint');
 	});
 
 	it('falls back to the first catalog provider when no tracked unit provides the script', () => {
 		writeJson(join(tmp, 'package.json'), { name: 'x' });
-		writeJson(join(tmp, '.unbranded.json'), { schema: 3, units: [{ id: 'core-editorconfig', source: { kind: 'builtin' } }], files: {} });
-		expect(auditRepo({ cwd: tmp }).findings.find(f => f.id === 'no-lint-script')?.unit).toBe('core-eslint');
+		writeJson(join(tmp, '.unbranded.json'), {
+			schema: 3,
+			units: [{ id: 'core-editorconfig', source: { kind: 'builtin' } }],
+			files: {},
+		});
+		expect(auditRepo({ cwd: tmp }).findings.find((f) => f.id === 'no-lint-script')?.unit).toBe(
+			'core-eslint',
+		);
 	});
 
 	it('flags a packageManager field that disagrees with the lockfile', () => {
@@ -177,12 +202,11 @@ describe('auditRepo', () => {
 			const dir = join(tmp, name);
 			mkdirSync(dir, { recursive: true });
 			build(dir);
-			for (const f of auditRepo({ cwd: dir }).findings)
-				emitted.add(f.id);
+			for (const f of auditRepo({ cwd: dir }).findings) emitted.add(f.id);
 		};
 
-		scenario('bare', d => writeJson(join(d, 'package.json'), { name: 'bare' }));
-		scenario('malformed', d => writeFileSync(join(d, 'package.json'), '{ "name": '));
+		scenario('bare', (d) => writeJson(join(d, 'package.json'), { name: 'bare' }));
+		scenario('malformed', (d) => writeFileSync(join(d, 'package.json'), '{ "name": '));
 		scenario('lockfiles', (d) => {
 			cleanRepo(d);
 			writeFileSync(join(d, 'yarn.lock'), '');
@@ -204,7 +228,11 @@ describe('auditRepo', () => {
 			writeFileSync(join(d, '.nvmrc'), '18\n');
 		});
 		scenario('tsconfig-no-dep', (d) => {
-			writeJson(join(d, 'package.json'), { name: 'x', scripts: { test: 't', lint: 'l' }, engines: { node: '>=22' } });
+			writeJson(join(d, 'package.json'), {
+				name: 'x',
+				scripts: { test: 't', lint: 'l' },
+				engines: { node: '>=22' },
+			});
 			writeFileSync(join(d, 'tsconfig.json'), '{}\n');
 		});
 		scenario('ts-dep-no-tsconfig', (d) => {
@@ -229,7 +257,7 @@ describe('partitionFixable', () => {
 			finding('no-test-script', 'core-vitest'),
 		]);
 		expect(r.units).toEqual(['core-editorconfig', 'core-vitest']);
-		expect(r.manual.map(f => f.id)).toEqual(['multiple-lockfiles']);
+		expect(r.manual.map((f) => f.id)).toEqual(['multiple-lockfiles']);
 	});
 
 	it('dedupes when two findings resolve to the same unit', () => {
@@ -273,31 +301,37 @@ describe('runDoctorFix', () => {
 		rmSync(join(tmp, '.editorconfig'));
 		rmSync(join(tmp, '.gitattributes'));
 		expect(await runDoctorFix({ cwd: tmp })).toBe(0);
-		expect(runInit).toHaveBeenCalledWith(expect.objectContaining({
-			targetDir: tmp,
-			preselect: ['core-editorconfig', 'core-gitattributes'],
-		}));
+		expect(runInit).toHaveBeenCalledWith(
+			expect.objectContaining({
+				targetDir: tmp,
+				preselect: ['core-editorconfig', 'core-gitattributes'],
+			}),
+		);
 	});
 
 	it('applies non-interactively under --yes via inline units', async () => {
 		cleanRepo(tmp);
 		rmSync(join(tmp, '.editorconfig'));
 		await runDoctorFix({ cwd: tmp, yes: true });
-		expect(runInit).toHaveBeenCalledWith(expect.objectContaining({
-			targetDir: tmp,
-			inline: expect.objectContaining({ units: 'core-editorconfig', yes: true }) as InlineFlags,
-		}));
+		expect(runInit).toHaveBeenCalledWith(
+			expect.objectContaining({
+				targetDir: tmp,
+				inline: expect.objectContaining({ units: 'core-editorconfig', yes: true }) as InlineFlags,
+			}),
+		);
 	});
 
-	it('leaves doctor.ignore\'d findings out of the fix set', async () => {
+	it("leaves doctor.ignore'd findings out of the fix set", async () => {
 		cleanRepo(tmp);
 		rmSync(join(tmp, '.editorconfig'));
 		rmSync(join(tmp, '.gitattributes'));
 		writeJson(join(tmp, '.unbranded.json'), { doctor: { ignore: ['missing-editorconfig'] } });
 		await runDoctorFix({ cwd: tmp, yes: true });
-		expect(runInit).toHaveBeenCalledWith(expect.objectContaining({
-			inline: expect.objectContaining({ units: 'core-gitattributes' }) as InlineFlags,
-		}));
+		expect(runInit).toHaveBeenCalledWith(
+			expect.objectContaining({
+				inline: expect.objectContaining({ units: 'core-gitattributes' }) as InlineFlags,
+			}),
+		);
 	});
 
 	it('maps an apply failure to exit 1', async () => {
@@ -311,12 +345,14 @@ describe('runDoctorFix', () => {
 		cleanRepo(tmp);
 		rmSync(join(tmp, '.editorconfig'));
 		await runDoctorFix({ cwd: tmp, dryRun: true, diff: true, force: true, pm: 'npm' });
-		expect(runInit).toHaveBeenCalledWith(expect.objectContaining({
-			dryRun: true,
-			diff: true,
-			force: true,
-			inline: expect.objectContaining({ pm: 'npm' }) as InlineFlags,
-		}));
+		expect(runInit).toHaveBeenCalledWith(
+			expect.objectContaining({
+				dryRun: true,
+				diff: true,
+				force: true,
+				inline: expect.objectContaining({ pm: 'npm' }) as InlineFlags,
+			}),
+		);
 	});
 });
 
@@ -324,9 +360,12 @@ describe('applySuppression', () => {
 	const finding = (id: string): Finding => ({ id, message: id, fix: 'x' });
 
 	it('moves ignored findings out of active and into suppressed', () => {
-		const r = applySuppression([finding('missing-editorconfig'), finding('no-test-script')], ['missing-editorconfig']);
-		expect(r.active.map(f => f.id)).toEqual(['no-test-script']);
-		expect(r.suppressed.map(f => f.id)).toEqual(['missing-editorconfig']);
+		const r = applySuppression(
+			[finding('missing-editorconfig'), finding('no-test-script')],
+			['missing-editorconfig'],
+		);
+		expect(r.active.map((f) => f.id)).toEqual(['no-test-script']);
+		expect(r.suppressed.map((f) => f.id)).toEqual(['missing-editorconfig']);
 		expect(r.unknownIgnored).toEqual([]);
 	});
 
@@ -341,7 +380,7 @@ describe('applySuppression', () => {
 	it('flags an unrecognized ignore id as unknown, and suppresses nothing with it', () => {
 		const r = applySuppression([finding('missing-editorconfig')], ['missing-editorconfg']);
 		expect(r.unknownIgnored).toEqual(['missing-editorconfg']);
-		expect(r.active.map(f => f.id)).toEqual(['missing-editorconfig']);
+		expect(r.active.map((f) => f.id)).toEqual(['missing-editorconfig']);
 	});
 
 	it('dedupes repeated unknown ids', () => {
@@ -360,10 +399,14 @@ describe('readDoctorIgnore', () => {
 	});
 
 	it('drops non-string junk instead of crashing the audit', () => {
-		expect(readDoctorIgnore({ doctor: { ignore: ['ok', 3, null] } } as unknown as StateFile)).toEqual(['ok']);
+		expect(
+			readDoctorIgnore({ doctor: { ignore: ['ok', 3, null] } } as unknown as StateFile),
+		).toEqual(['ok']);
 	});
 
 	it('treats a non-array ignore value as empty', () => {
-		expect(readDoctorIgnore({ doctor: { ignore: 'missing-editorconfig' } } as unknown as StateFile)).toEqual([]);
+		expect(
+			readDoctorIgnore({ doctor: { ignore: 'missing-editorconfig' } } as unknown as StateFile),
+		).toEqual([]);
 	});
 });

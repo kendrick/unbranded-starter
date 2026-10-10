@@ -15,10 +15,8 @@ export interface ColorInputs {
 // and win32 forcing — this CLI treats a pipe as plain output even in CI, which is
 // what makes piped output safe to redirect into a file or another program.
 export function computeColorEnabled({ env, argv, isTTY }: ColorInputs): boolean {
-	if (env.NO_COLOR || argv.includes('--no-color'))
-		return false;
-	if (env.FORCE_COLOR || argv.includes('--color'))
-		return true;
+	if (env.NO_COLOR || argv.includes('--no-color')) return false;
+	if (env.FORCE_COLOR || argv.includes('--color')) return true;
 	return isTTY;
 }
 
@@ -28,21 +26,20 @@ export function computeColorEnabled({ env, argv, isTTY }: ColorInputs): boolean 
 // play, the stream itself — so we bridge the resolved policy into the two vars it
 // does read. A `null` value means "unset". Only the keys that need changing are
 // returned, so a plain TTY or an already-set FORCE_COLOR is left untouched.
-export function colorEnvPatch(inputs: ColorInputs): Partial<Record<'NO_COLOR' | 'FORCE_COLOR', string | null>> {
+export function colorEnvPatch(
+	inputs: ColorInputs,
+): Partial<Record<'NO_COLOR' | 'FORCE_COLOR', string | null>> {
 	if (computeColorEnabled(inputs)) {
 		// A real TTY colors on its own; the lone gap is --color forcing color over a
 		// pipe, which styleText can't infer from argv.
-		if (!inputs.isTTY && !inputs.env.FORCE_COLOR)
-			return { FORCE_COLOR: '1' };
+		if (!inputs.isTTY && !inputs.env.FORCE_COLOR) return { FORCE_COLOR: '1' };
 		return {};
 	}
 	// Color is off. node lets FORCE_COLOR override NO_COLOR (and warns), so an
 	// explicit off has to drop it rather than sit NO_COLOR beside it.
 	const patch: Record<string, string | null> = {};
-	if (inputs.env.FORCE_COLOR)
-		patch.FORCE_COLOR = null;
-	if (!inputs.env.NO_COLOR)
-		patch.NO_COLOR = '1';
+	if (inputs.env.FORCE_COLOR) patch.FORCE_COLOR = null;
+	if (!inputs.env.NO_COLOR) patch.NO_COLOR = '1';
 	return patch;
 }
 
@@ -55,10 +52,8 @@ export function colorEnabled(): boolean {
 // just has to run before the first styled write.
 export function applyColorPolicy(): void {
 	for (const [key, value] of Object.entries(colorEnvPatch(currentInputs()))) {
-		if (value === null)
-			delete process.env[key];
-		else
-			process.env[key] = value;
+		if (value === null) delete process.env[key];
+		else process.env[key] = value;
 	}
 }
 

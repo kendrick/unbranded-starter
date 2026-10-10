@@ -10,29 +10,42 @@ import { createPickerState, reducePicker } from './state';
 
 // What a keypress means to the picker. Kept as data (not a direct state mutation) so
 // the whole translation table is pure and unit-testable without a terminal.
-export type PickerIntent
-	= | { kind: 'event'; event: PickerEvent }
-		| { kind: 'submit' }
-		| { kind: 'escape' }
-		| { kind: 'ignore' };
+export type PickerIntent =
+	| { kind: 'event'; event: PickerEvent }
+	| { kind: 'submit' }
+	| { kind: 'escape' }
+	| { kind: 'ignore' };
 
 // The base emits 'key' with the char argument lowercased, so a printable filter char
 // is read from key.sequence instead. Left/right always translate to cycleFlavor — the
 // reducer no-ops on rows without options, so there's no need to check here. Space is a
 // toggle, never a filter char (labels rarely need a literal space to match).
-export function translateKey(_char: string | undefined, key: Pick<Key, 'name' | 'sequence'>): PickerIntent {
+export function translateKey(
+	_char: string | undefined,
+	key: Pick<Key, 'name' | 'sequence'>,
+): PickerIntent {
 	switch (key.name) {
-		case 'up': return { kind: 'event', event: { type: 'move', delta: -1 } };
-		case 'down': return { kind: 'event', event: { type: 'move', delta: 1 } };
-		case 'left': return { kind: 'event', event: { type: 'cycleFlavor', delta: -1 } };
-		case 'right': return { kind: 'event', event: { type: 'cycleFlavor', delta: 1 } };
-		case 'space': return { kind: 'event', event: { type: 'toggle' } };
-		case 'tab': return { kind: 'event', event: { type: 'toggleExpand' } };
-		case 'backspace': return { kind: 'event', event: { type: 'backspace' } };
+		case 'up':
+			return { kind: 'event', event: { type: 'move', delta: -1 } };
+		case 'down':
+			return { kind: 'event', event: { type: 'move', delta: 1 } };
+		case 'left':
+			return { kind: 'event', event: { type: 'cycleFlavor', delta: -1 } };
+		case 'right':
+			return { kind: 'event', event: { type: 'cycleFlavor', delta: 1 } };
+		case 'space':
+			return { kind: 'event', event: { type: 'toggle' } };
+		case 'tab':
+			return { kind: 'event', event: { type: 'toggleExpand' } };
+		case 'backspace':
+			return { kind: 'event', event: { type: 'backspace' } };
 		case 'return':
-		case 'enter': return { kind: 'submit' };
-		case 'escape': return { kind: 'escape' };
-		case undefined: break;
+		case 'enter':
+			return { kind: 'submit' };
+		case 'escape':
+			return { kind: 'escape' };
+		case undefined:
+			break;
 	}
 
 	const seq = key.sequence;
@@ -42,9 +55,9 @@ export function translateKey(_char: string | undefined, key: Pick<Key, 'name' | 
 }
 
 const THEME: PickerTheme = {
-	dim: s => styleText('dim', s),
-	active: s => styleText('cyan', s),
-	selected: s => styleText('green', s),
+	dim: (s) => styleText('dim', s),
+	active: (s) => styleText('cyan', s),
+	selected: (s) => styleText('green', s),
 	pointer: '❯',
 	boxOn: '◼',
 	boxOff: '◻',
@@ -76,17 +89,25 @@ class UnitPickerPrompt extends Prompt<string[]> {
 	private readonly message: string;
 
 	constructor(opts: UnitPickerOptions) {
-		super({
-			render() {
-				return (this as unknown as UnitPickerPrompt).frame();
+		super(
+			{
+				render() {
+					return (this as unknown as UnitPickerPrompt).frame();
+				},
+				input: opts.input,
+				output: opts.output,
+				signal: opts.signal,
 			},
-			input: opts.input,
-			output: opts.output,
-			signal: opts.signal,
-		}, false);
+			false,
+		);
 
 		this.message = opts.message;
-		this.picker = createPickerState(opts.units, opts.installed, opts.initialFlavors ?? {}, opts.initialSelected ?? []);
+		this.picker = createPickerState(
+			opts.units,
+			opts.installed,
+			opts.initialFlavors ?? {},
+			opts.initialSelected ?? [],
+		);
 		this._setValue([...this.picker.selected]);
 		this.on('key', (char, key) => this.onKey(char, key));
 	}
@@ -94,19 +115,15 @@ class UnitPickerPrompt extends Prompt<string[]> {
 	private onKey(char: string | undefined, key: Key): void {
 		const intent = translateKey(char, key);
 		// Enter is left to the base's own submit path; nothing to do here.
-		if (intent.kind === 'submit' || intent.kind === 'ignore')
-			return;
+		if (intent.kind === 'submit' || intent.kind === 'ignore') return;
 
 		if (intent.kind === 'escape') {
 			// Escape clears a live filter first; only an already-empty filter cancels.
 			// The alias delete in unitPicker() is what lets this keypress reach here
 			// instead of the base treating escape as an unconditional cancel.
-			if (this.picker.filter)
-				this.picker = reducePicker(this.picker, { type: 'clearFilter' });
-			else
-				this.state = 'cancel';
-		}
-		else {
+			if (this.picker.filter) this.picker = reducePicker(this.picker, { type: 'clearFilter' });
+			else this.state = 'cancel';
+		} else {
 			this.picker = reducePicker(this.picker, intent.event);
 		}
 
@@ -141,12 +158,9 @@ export async function unitPicker(opts: UnitPickerOptions): Promise<UnitPickerRes
 	const prompt = new UnitPickerPrompt(opts);
 	try {
 		const result = await prompt.prompt();
-		if (isCancel(result))
-			return result;
+		if (isCancel(result)) return result;
 		return { ids: result as string[], flavors: prompt.picker.flavors };
-	}
-	finally {
-		if (priorEscape !== undefined)
-			settings.aliases.set('escape', priorEscape);
+	} finally {
+		if (priorEscape !== undefined) settings.aliases.set('escape', priorEscape);
 	}
 }

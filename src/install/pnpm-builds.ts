@@ -37,8 +37,7 @@ export function collectBuildScriptDeps(
 		const pkgs = map[unit.id];
 		if (pkgs?.length) {
 			owner ??= unit.id;
-			for (const pkg of pkgs)
-				deps.add(pkg);
+			for (const pkg of pkgs) deps.add(pkg);
 		}
 	}
 	return { deps: [...deps].sort(), owner };
@@ -51,8 +50,7 @@ function yamlScalar(name: string): string {
 }
 
 function pnpmMajor(version: string | null | undefined): number | null {
-	if (!version)
-		return null;
+	if (!version) return null;
 	const major = Number.parseInt(version.split('.')[0] ?? '', 10);
 	return Number.isNaN(major) ? null : major;
 }
@@ -70,14 +68,17 @@ function pnpmMajor(version: string | null | undefined): number | null {
 // that has no `packages` field, while pnpm 11 treats the file as plain project
 // settings and needs no stub. Default off, so a modern scaffold gets the clean
 // settings-only form.
-export function buildPnpmWorkspace(deps: readonly string[], opts: { withPackages?: boolean } = {}): string {
-	const list = deps.map(dep => `  - ${yamlScalar(dep)}`).join('\n');
-	const map = deps.map(dep => `  ${yamlScalar(dep)}: true`).join('\n');
+export function buildPnpmWorkspace(
+	deps: readonly string[],
+	opts: { withPackages?: boolean } = {},
+): string {
+	const list = deps.map((dep) => `  - ${yamlScalar(dep)}`).join('\n');
+	const map = deps.map((dep) => `  ${yamlScalar(dep)}: true`).join('\n');
 	const lines = [
 		'# unbranded wrote this so `pnpm install` can build the native packages your',
 		'# tooling needs, such as esbuild. pnpm blocks build scripts unless a package',
 		'# is on the allowlist below; on pnpm 11 an un-approved build stops the install',
-		'# cold. Commit this file so every install, yours and CI\'s, agrees.',
+		"# cold. Commit this file so every install, yours and CI's, agrees.",
 		'#',
 		'# pnpm 10 reads onlyBuiltDependencies, pnpm 11 reads allowBuilds. Both are here',
 		'# on purpose. Add a package to both to approve its build, or drop it to block one.',
@@ -101,19 +102,21 @@ export function buildPnpmWorkspace(deps: readonly string[], opts: { withPackages
 // selection, no opt-monorepo (it ships its own), and no pnpm-workspace.yaml to
 // clobber. Returns the computed write to record, or null when a gate isn't met.
 // Must run BEFORE unbranded's own install spawn so that install sees the file.
-export function seedPnpmWorkspace(opts: { targetDir: string; pm: Pm | null; pmVersion?: string | null; units: AnyUnit[]; journal?: WriteJournal }): { path: string; unit: string } | null {
-	if (opts.pm !== 'pnpm')
-		return null;
-	if (opts.units.some(unit => unit.id === MONOREPO_UNIT_ID))
-		return null;
+export function seedPnpmWorkspace(opts: {
+	targetDir: string;
+	pm: Pm | null;
+	pmVersion?: string | null;
+	units: AnyUnit[];
+	journal?: WriteJournal;
+}): { path: string; unit: string } | null {
+	if (opts.pm !== 'pnpm') return null;
+	if (opts.units.some((unit) => unit.id === MONOREPO_UNIT_ID)) return null;
 	const { deps, owner } = collectBuildScriptDeps(opts.units);
-	if (deps.length === 0 || owner === null)
-		return null;
+	if (deps.length === 0 || owner === null) return null;
 	const dest = join(opts.targetDir, 'pnpm-workspace.yaml');
 	// Never overwrite a workspace file the user already maintains. We can't
 	// safely merge without parsing YAML, so we step aside rather than clobber.
-	if (existsSync(dest))
-		return null;
+	if (existsSync(dest)) return null;
 	// The packages stub is only needed on pnpm 10; a version we can't identify
 	// gets it too, since the stub form is the one that works on every pnpm.
 	const major = pnpmMajor(opts.pmVersion);

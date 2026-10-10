@@ -60,10 +60,8 @@ function mockInstallSpawn(outcome: { code?: number; error?: string }): void {
 				child.emit('exit', 0);
 				return;
 			}
-			if (outcome.error !== undefined)
-				child.emit('error', new Error(outcome.error));
-			else
-				child.emit('exit', outcome.code ?? 0);
+			if (outcome.error !== undefined) child.emit('error', new Error(outcome.error));
+			else child.emit('exit', outcome.code ?? 0);
 		});
 		return child;
 	});
@@ -107,7 +105,10 @@ describe('writeAndInstall version policy', () => {
 		rmSync(tmp, { recursive: true, force: true });
 	});
 
-	function writtenPkg(): { dependencies: Record<string, string>; devDependencies: Record<string, string> } {
+	function writtenPkg(): {
+		dependencies: Record<string, string>;
+		devDependencies: Record<string, string>;
+	} {
 		return JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as {
 			dependencies: Record<string, string>;
 			devDependencies: Record<string, string>;
@@ -142,7 +143,10 @@ describe('writeAndInstall version policy', () => {
 		expect(pkg.packageManager).toBeUndefined();
 		// Reported back for the state file: this computed file lands after the copy
 		// loop, so the caller can't know it exists any other way.
-		expect(result.computedWrites).toContainEqual({ path: join(tmp, '.nvmrc'), unit: 'core-node-version' });
+		expect(result.computedWrites).toContainEqual({
+			path: join(tmp, '.nvmrc'),
+			unit: 'core-node-version',
+		});
 	});
 
 	it('never clobbers an existing .nvmrc — and does not claim to have written it', async () => {
@@ -151,7 +155,7 @@ describe('writeAndInstall version policy', () => {
 		expect(readFileSync(join(tmp, '.nvmrc'), 'utf-8')).toBe('18\n');
 		// We didn't write it, so it must not be tracked, otherwise diff would flag
 		// the user's own .nvmrc as drift against a hash we never laid down.
-		expect(result.computedWrites.map(w => w.path)).not.toContain(join(tmp, '.nvmrc'));
+		expect(result.computedWrites.map((w) => w.path)).not.toContain(join(tmp, '.nvmrc'));
 	});
 
 	it('leaves .nvmrc alone when core-node-version is not selected', async () => {
@@ -161,7 +165,13 @@ describe('writeAndInstall version policy', () => {
 	});
 });
 
-const VSCODE_UNIT: Unit = { id: 'opt-vscode', category: 'editor', label: 'VS Code', description: '', files: [] };
+const VSCODE_UNIT: Unit = {
+	id: 'opt-vscode',
+	category: 'editor',
+	label: 'VS Code',
+	description: '',
+	files: [],
+};
 const ESLINT_REC: Unit = { ...UNIT, recommendedExtensions: ['dbaeumer.vscode-eslint'] };
 const EDITORCONFIG_REC: Unit = {
 	id: 'core-editorconfig',
@@ -191,13 +201,20 @@ describe('writeAndInstall vscode extensions', () => {
 	}
 
 	it('generates .vscode/extensions.json from the selected units when opt-vscode is chosen', async () => {
-		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [VSCODE_UNIT, ESLINT_REC, EDITORCONFIG_REC] });
+		const result = await writeAndInstall({
+			targetDir: tmp,
+			pm: null,
+			units: [VSCODE_UNIT, ESLINT_REC, EDITORCONFIG_REC],
+		});
 		expect(readExtensions().recommendations).toEqual([
 			'dbaeumer.vscode-eslint',
 			'editorconfig.editorconfig',
 		]);
 		// The computed extensions.json is reported for the state file too.
-		expect(result.computedWrites).toContainEqual({ path: join(tmp, '.vscode', 'extensions.json'), unit: 'opt-vscode' });
+		expect(result.computedWrites).toContainEqual({
+			path: join(tmp, '.vscode', 'extensions.json'),
+			unit: 'opt-vscode',
+		});
 	});
 
 	it('unions into an existing extensions.json without clobbering its entries or sibling keys', async () => {
@@ -235,7 +252,10 @@ describe('writeAndInstall dependency conflicts (#113)', () => {
 		rmSync(tmp, { recursive: true, force: true });
 	});
 
-	function writtenPkg(): { dependencies: Record<string, string>; devDependencies: Record<string, string> } {
+	function writtenPkg(): {
+		dependencies: Record<string, string>;
+		devDependencies: Record<string, string>;
+	} {
 		return JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as {
 			dependencies: Record<string, string>;
 			devDependencies: Record<string, string>;
@@ -248,20 +268,42 @@ describe('writeAndInstall dependency conflicts (#113)', () => {
 
 	it('overwrites a conflicting pin under onConflict:"overwrite", reporting the resolution', async () => {
 		seedConflict();
-		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT], onConflict: 'overwrite' });
+		const result = await writeAndInstall({
+			targetDir: tmp,
+			pm: null,
+			units: [UNIT],
+			onConflict: 'overwrite',
+		});
 		expect(writtenPkg().devDependencies.typescript).toBe('5.9.3');
 		expect(result.depResolutions).toEqual([
-			{ section: 'devDependencies', name: 'typescript', existing: '^6.0.3', incoming: '5.9.3', resolution: 'overwrite' },
+			{
+				section: 'devDependencies',
+				name: 'typescript',
+				existing: '^6.0.3',
+				incoming: '5.9.3',
+				resolution: 'overwrite',
+			},
 		]);
 		expect(select).not.toHaveBeenCalled();
 	});
 
 	it('keeps a conflicting pin under onConflict:"skip", without disturbing sibling deps', async () => {
 		seedConflict();
-		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT], onConflict: 'skip' });
+		const result = await writeAndInstall({
+			targetDir: tmp,
+			pm: null,
+			units: [UNIT],
+			onConflict: 'skip',
+		});
 		expect(writtenPkg().devDependencies.typescript).toBe('^6.0.3');
 		expect(result.depResolutions).toEqual([
-			{ section: 'devDependencies', name: 'typescript', existing: '^6.0.3', incoming: '5.9.3', resolution: 'keep' },
+			{
+				section: 'devDependencies',
+				name: 'typescript',
+				existing: '^6.0.3',
+				incoming: '5.9.3',
+				resolution: 'keep',
+			},
 		]);
 		expect(select).not.toHaveBeenCalled();
 		// No-cascade guarantee: settling the typescript collision must never touch
@@ -277,7 +319,13 @@ describe('writeAndInstall dependency conflicts (#113)', () => {
 		expect(select).toHaveBeenCalledTimes(1);
 		expect(writtenPkg().devDependencies.typescript).toBe('^6.0.3');
 		expect(result.depResolutions).toEqual([
-			{ section: 'devDependencies', name: 'typescript', existing: '^6.0.3', incoming: '5.9.3', resolution: 'keep' },
+			{
+				section: 'devDependencies',
+				name: 'typescript',
+				existing: '^6.0.3',
+				incoming: '5.9.3',
+				resolution: 'keep',
+			},
 		]);
 	});
 
@@ -303,27 +351,48 @@ describe('writeAndInstall dependency conflicts (#113)', () => {
 		// assertion here would otherwise leave process.exit throwing for the
 		// rest of the file.
 		try {
-			await expect(writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT] })).rejects.toThrow('process.exit');
+			await expect(writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT] })).rejects.toThrow(
+				'process.exit',
+			);
 
 			expect(exit).toHaveBeenCalledWith(130);
 			expect(readFileSync(join(tmp, 'package.json'), 'utf-8')).toBe(original);
-		}
-		finally {
+		} finally {
 			exit.mockRestore();
 		}
 	});
 
 	it('auto-resolves every existing pin to overwrite under --latest, no prompt', async () => {
-		writeFileSync(join(tmp, 'package.json'), JSON.stringify({
-			name: 'x',
-			dependencies: { clsx: '2.0.0' },
-			devDependencies: { typescript: '^6.0.3' },
-		}));
-		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [LATEST_UNIT], latest: true });
+		writeFileSync(
+			join(tmp, 'package.json'),
+			JSON.stringify({
+				name: 'x',
+				dependencies: { clsx: '2.0.0' },
+				devDependencies: { typescript: '^6.0.3' },
+			}),
+		);
+		const result = await writeAndInstall({
+			targetDir: tmp,
+			pm: null,
+			units: [LATEST_UNIT],
+			latest: true,
+		});
 		expect(select).not.toHaveBeenCalled();
 		expect(result.depResolutions).toEqual([
-			{ section: 'dependencies', name: 'clsx', existing: '2.0.0', incoming: 'latest', resolution: 'overwrite' },
-			{ section: 'devDependencies', name: 'typescript', existing: '^6.0.3', incoming: 'latest', resolution: 'overwrite' },
+			{
+				section: 'dependencies',
+				name: 'clsx',
+				existing: '2.0.0',
+				incoming: 'latest',
+				resolution: 'overwrite',
+			},
+			{
+				section: 'devDependencies',
+				name: 'typescript',
+				existing: '^6.0.3',
+				incoming: 'latest',
+				resolution: 'overwrite',
+			},
 		]);
 	});
 
@@ -343,33 +412,89 @@ describe('formatDepResolutions', () => {
 	});
 
 	it('renders both overwrote and kept lines for a mixed set', () => {
-		const out = formatDepResolutions([
-			{ section: 'devDependencies', name: 'typescript', existing: '^6.0.3', incoming: '5.9.3', resolution: 'overwrite' },
-			{ section: 'dependencies', name: 'clsx', existing: '2.0.0', incoming: '2.1.1', resolution: 'keep' },
-		], false);
+		const out = formatDepResolutions(
+			[
+				{
+					section: 'devDependencies',
+					name: 'typescript',
+					existing: '^6.0.3',
+					incoming: '5.9.3',
+					resolution: 'overwrite',
+				},
+				{
+					section: 'dependencies',
+					name: 'clsx',
+					existing: '2.0.0',
+					incoming: '2.1.1',
+					resolution: 'keep',
+				},
+			],
+			false,
+		);
 		expect(out).toContain('package.json dependency conflicts:');
 		expect(out).toMatch(/overwrote\s+devDependencies\.typescript\s+\^6\.0\.3 -> 5\.9\.3/);
 		expect(out).toMatch(/kept\s+dependencies\.clsx\s+2\.0\.0\s+\(manifest pins 2\.1\.1\)/);
 	});
 
 	it('renders the one-line --latest summary with the resolution count', () => {
-		const out = formatDepResolutions([
-			{ section: 'devDependencies', name: 'typescript', existing: '^6.0.3', incoming: 'latest', resolution: 'overwrite' },
-			{ section: 'dependencies', name: 'clsx', existing: '2.0.0', incoming: 'latest', resolution: 'overwrite' },
-		], true);
-		expect(out).toBe('--latest: rewrote 2 existing dependency spec(s) to \'latest\'.');
+		const out = formatDepResolutions(
+			[
+				{
+					section: 'devDependencies',
+					name: 'typescript',
+					existing: '^6.0.3',
+					incoming: 'latest',
+					resolution: 'overwrite',
+				},
+				{
+					section: 'dependencies',
+					name: 'clsx',
+					existing: '2.0.0',
+					incoming: 'latest',
+					resolution: 'overwrite',
+				},
+			],
+			true,
+		);
+		expect(out).toBe("--latest: rewrote 2 existing dependency spec(s) to 'latest'.");
 	});
 
-	it('names a held line\'s caret under --latest instead of counting it as latest', () => {
-		const mixed = formatDepResolutions([
-			{ section: 'devDependencies', name: 'typescript', existing: '^7.0.0', incoming: '^6', resolution: 'overwrite' },
-			{ section: 'dependencies', name: 'clsx', existing: '2.0.0', incoming: 'latest', resolution: 'overwrite' },
-		], true);
-		expect(mixed).toBe('--latest: rewrote 1 existing dependency spec(s) to \'latest\'; held typescript to ^6.');
+	it("names a held line's caret under --latest instead of counting it as latest", () => {
+		const mixed = formatDepResolutions(
+			[
+				{
+					section: 'devDependencies',
+					name: 'typescript',
+					existing: '^7.0.0',
+					incoming: '^6',
+					resolution: 'overwrite',
+				},
+				{
+					section: 'dependencies',
+					name: 'clsx',
+					existing: '2.0.0',
+					incoming: 'latest',
+					resolution: 'overwrite',
+				},
+			],
+			true,
+		);
+		expect(mixed).toBe(
+			"--latest: rewrote 1 existing dependency spec(s) to 'latest'; held typescript to ^6.",
+		);
 
-		const onlyHeld = formatDepResolutions([
-			{ section: 'devDependencies', name: 'typescript', existing: '^7.0.0', incoming: '^6', resolution: 'overwrite' },
-		], true);
+		const onlyHeld = formatDepResolutions(
+			[
+				{
+					section: 'devDependencies',
+					name: 'typescript',
+					existing: '^7.0.0',
+					incoming: '^6',
+					resolution: 'overwrite',
+				},
+			],
+			true,
+		);
 		expect(onlyHeld).toBe('--latest: held typescript to ^6.');
 	});
 });
@@ -389,7 +514,12 @@ describe('writeAndInstall install outcome (#114)', () => {
 	it('reports the failure and exit code when the pm exits non-zero, instead of an all-clear', async () => {
 		mockInstallSpawn({ code: 2 });
 		const result = await writeAndInstall({ targetDir: tmp, pm: 'npm', units: [UNIT] });
-		expect(result).toMatchObject({ failed: true, installExitCode: 2, installed: false, cancelled: false });
+		expect(result).toMatchObject({
+			failed: true,
+			installExitCode: 2,
+			installed: false,
+			cancelled: false,
+		});
 	});
 
 	it('reports the failure and the spawn error when the pm binary cannot even run', async () => {
@@ -445,21 +575,21 @@ describe('writeAndInstall journal integration (#114)', () => {
 		writeFileSync(join(tmp, 'package.json'), original);
 		const journal = createJournal();
 		await writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT], journal });
-		const entry = journal.entries().find(e => e.path === join(tmp, 'package.json'));
+		const entry = journal.entries().find((e) => e.path === join(tmp, 'package.json'));
 		expect(entry?.before?.toString('utf-8')).toBe(original);
 	});
 
 	it('journals before:null for package.json on a new-project run', async () => {
 		const journal = createJournal();
 		await writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT], journal });
-		const entry = journal.entries().find(e => e.path === join(tmp, 'package.json'));
+		const entry = journal.entries().find((e) => e.path === join(tmp, 'package.json'));
 		expect(entry?.before).toBeNull();
 	});
 
 	it('journals a written .nvmrc', async () => {
 		const journal = createJournal();
 		await writeAndInstall({ targetDir: tmp, pm: null, units: [NODE_UNIT], journal });
-		const entry = journal.entries().find(e => e.path === join(tmp, '.nvmrc'));
+		const entry = journal.entries().find((e) => e.path === join(tmp, '.nvmrc'));
 		expect(entry?.before).toBeNull();
 	});
 });

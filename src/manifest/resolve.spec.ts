@@ -35,21 +35,18 @@ describe('resolveSelection', () => {
 		];
 		const result = resolveSelection(['core-eslint'], units);
 		expect(result).toMatchObject({ kind: 'ok' });
-		if (result.kind !== 'ok')
-			return;
-		expect(new Set(result.ids)).toEqual(new Set(['core-eslint', 'core-typescript', 'core-tailwind']));
+		if (result.kind !== 'ok') return;
+		expect(new Set(result.ids)).toEqual(
+			new Set(['core-eslint', 'core-typescript', 'core-tailwind']),
+		);
 		expect(new Set(result.auto)).toEqual(new Set(['core-typescript', 'core-tailwind']));
 	});
 
 	it('does not mark seed units as auto even if also implied', () => {
-		const units = [
-			unit('core-eslint', { implies: ['core-typescript'] }),
-			unit('core-typescript'),
-		];
+		const units = [unit('core-eslint', { implies: ['core-typescript'] }), unit('core-typescript')];
 		const result = resolveSelection(['core-eslint', 'core-typescript'], units);
 		expect(result).toMatchObject({ kind: 'ok' });
-		if (result.kind !== 'ok')
-			return;
+		if (result.kind !== 'ok') return;
 		expect(result.auto).toEqual([]);
 		// A unit the user picked explicitly is never "required by" anything, even
 		// when another selection also implies it — the plan shouldn't annotate it.
@@ -57,14 +54,10 @@ describe('resolveSelection', () => {
 	});
 
 	it('records the direct requirer of an auto-added unit', () => {
-		const units = [
-			unit('core-eslint', { implies: ['core-typescript'] }),
-			unit('core-typescript'),
-		];
+		const units = [unit('core-eslint', { implies: ['core-typescript'] }), unit('core-typescript')];
 		const result = resolveSelection(['core-eslint'], units);
 		expect(result).toMatchObject({ kind: 'ok' });
-		if (result.kind !== 'ok')
-			return;
+		if (result.kind !== 'ok') return;
 		expect(result.requiredBy).toEqual({ 'core-typescript': 'core-eslint' });
 	});
 
@@ -78,8 +71,7 @@ describe('resolveSelection', () => {
 		];
 		const result = resolveSelection(['core-eslint'], units);
 		expect(result).toMatchObject({ kind: 'ok' });
-		if (result.kind !== 'ok')
-			return;
+		if (result.kind !== 'ok') return;
 		expect(result.requiredBy).toEqual({
 			'core-typescript': 'core-eslint',
 			'core-tailwind': 'core-typescript',
@@ -96,16 +88,12 @@ describe('resolveSelection', () => {
 		];
 		const result = resolveSelection(['core-eslint', 'core-stylelint'], units);
 		expect(result).toMatchObject({ kind: 'ok' });
-		if (result.kind !== 'ok')
-			return;
+		if (result.kind !== 'ok') return;
 		expect(result.requiredBy).toEqual({ 'core-typescript': 'core-eslint' });
 	});
 
 	it('flags missing-required when a hard precondition is absent', () => {
-		const units = [
-			unit('opt-shadcn', { requires: ['core-tailwind'] }),
-			unit('core-tailwind'),
-		];
+		const units = [unit('opt-shadcn', { requires: ['core-tailwind'] }), unit('core-tailwind')];
 		expect(resolveSelection(['opt-shadcn'], units)).toEqual({
 			kind: 'missing-required',
 			unit: 'opt-shadcn',
@@ -114,22 +102,15 @@ describe('resolveSelection', () => {
 	});
 
 	it('passes requires when the dependency is in the seed', () => {
-		const units = [
-			unit('opt-shadcn', { requires: ['core-tailwind'] }),
-			unit('core-tailwind'),
-		];
+		const units = [unit('opt-shadcn', { requires: ['core-tailwind'] }), unit('core-tailwind')];
 		expect(resolveSelection(['opt-shadcn', 'core-tailwind'], units)).toMatchObject({ kind: 'ok' });
 	});
 
 	it('detects a one-sided exclude (treats it as symmetric)', () => {
-		const units = [
-			unit('core-eslint', { excludes: ['core-stylelint'] }),
-			unit('core-stylelint'),
-		];
+		const units = [unit('core-eslint', { excludes: ['core-stylelint'] }), unit('core-stylelint')];
 		const result = resolveSelection(['core-eslint', 'core-stylelint'], units);
 		expect(result).toMatchObject({ kind: 'conflict' });
-		if (result.kind !== 'conflict')
-			return;
+		if (result.kind !== 'conflict') return;
 		expect(new Set(result.pair)).toEqual(new Set(['core-eslint', 'core-stylelint']));
 	});
 
@@ -157,10 +138,12 @@ describe('dependentsOf', () => {
 	];
 
 	it('names every installed unit whose implies or requires reaches the target', () => {
-		expect(dependentsOf('core-tailwind', ['core-tailwind', 'opt-shadcn', 'core-postcss'], units).sort())
-			.toEqual(['core-postcss', 'opt-shadcn']);
-		expect(dependentsOf('core-eslint', ['core-eslint', 'opt-ci-github'], units))
-			.toEqual(['opt-ci-github']);
+		expect(
+			dependentsOf('core-tailwind', ['core-tailwind', 'opt-shadcn', 'core-postcss'], units).sort(),
+		).toEqual(['core-postcss', 'opt-shadcn']);
+		expect(dependentsOf('core-eslint', ['core-eslint', 'opt-ci-github'], units)).toEqual([
+			'opt-ci-github',
+		]);
 	});
 
 	it('walks transitive edges, not just direct ones', () => {
@@ -170,8 +153,9 @@ describe('dependentsOf', () => {
 			unit('core-postcss', { implies: ['core-tailwind'] }),
 			unit('opt-shadcn', { implies: ['core-postcss'] }),
 		];
-		expect(dependentsOf('core-tailwind', ['core-tailwind', 'core-postcss', 'opt-shadcn'], chain).sort())
-			.toEqual(['core-postcss', 'opt-shadcn']);
+		expect(
+			dependentsOf('core-tailwind', ['core-tailwind', 'core-postcss', 'opt-shadcn'], chain).sort(),
+		).toEqual(['core-postcss', 'opt-shadcn']);
 	});
 
 	it('only counts installed units — the rest of the catalog is irrelevant', () => {
@@ -192,26 +176,49 @@ describe('dependentsOf through a slot', () => {
 		unit('core-vitest'),
 		unit('opt-ci-github', { implies: ['core-vitest'] }),
 	];
-	const slots = [{ unit: 'opt-ci-github', anyOf: ['core-eslint', 'core-oxlint'], fallback: 'core-oxlint' }];
+	const slots = [
+		{ unit: 'opt-ci-github', anyOf: ['core-eslint', 'core-oxlint'], fallback: 'core-oxlint' },
+	];
 
-	it('names the slot\'s unit when the target is its only installed member', () => {
-		expect(dependentsOf('core-oxlint', ['core-oxlint', 'core-typescript', 'core-vitest', 'opt-ci-github'], units, slots))
-			.toEqual(['opt-ci-github']);
+	it("names the slot's unit when the target is its only installed member", () => {
+		expect(
+			dependentsOf(
+				'core-oxlint',
+				['core-oxlint', 'core-typescript', 'core-vitest', 'opt-ci-github'],
+				units,
+				slots,
+			),
+		).toEqual(['opt-ci-github']);
 	});
 
 	it('lets either lint unit go while the other stays installed', () => {
-		const installed = ['core-eslint', 'core-oxlint', 'core-typescript', 'core-vitest', 'opt-ci-github'];
+		const installed = [
+			'core-eslint',
+			'core-oxlint',
+			'core-typescript',
+			'core-vitest',
+			'opt-ci-github',
+		];
 		expect(dependentsOf('core-oxlint', installed, units, slots)).toEqual([]);
 		expect(dependentsOf('core-eslint', installed, units, slots)).toEqual([]);
 	});
 
-	it('strands the slot\'s unit when every installed member rests on the target', () => {
-		const installed = ['core-eslint', 'core-oxlint', 'core-typescript', 'core-vitest', 'opt-ci-github'];
-		expect(dependentsOf('core-typescript', installed, units, slots).sort())
-			.toEqual(['core-eslint', 'core-oxlint', 'opt-ci-github']);
+	it("strands the slot's unit when every installed member rests on the target", () => {
+		const installed = [
+			'core-eslint',
+			'core-oxlint',
+			'core-typescript',
+			'core-vitest',
+			'opt-ci-github',
+		];
+		expect(dependentsOf('core-typescript', installed, units, slots).sort()).toEqual([
+			'core-eslint',
+			'core-oxlint',
+			'opt-ci-github',
+		]);
 	});
 
-	it('counts every slot member through a node they share, so a visited set can\'t skip the second', () => {
+	it("counts every slot member through a node they share, so a visited set can't skip the second", () => {
 		// A and B (the lint units) both require X (core-typescript), which requires T
 		// (core-node-version). The second member revisits X on its way to T.
 		const shared = [
@@ -221,13 +228,24 @@ describe('dependentsOf through a slot', () => {
 			unit('core-oxlint', { requires: ['core-typescript'] }),
 			unit('opt-ci-github'),
 		];
-		expect(dependentsOf('core-node-version', ['core-eslint', 'core-oxlint', 'core-typescript', 'core-node-version', 'opt-ci-github'], shared, slots))
-			.toContain('opt-ci-github');
+		expect(
+			dependentsOf(
+				'core-node-version',
+				['core-eslint', 'core-oxlint', 'core-typescript', 'core-node-version', 'opt-ci-github'],
+				shared,
+				slots,
+			),
+		).toContain('opt-ci-github');
 	});
 
 	it('uses the real IMPLIES_ONE_OF by default', () => {
-		expect(dependentsOf('core-oxlint', ['core-node-version', 'core-oxlint', 'core-typescript', 'core-vitest', 'opt-ci-github'], UNITS))
-			.toEqual(['opt-ci-github']);
+		expect(
+			dependentsOf(
+				'core-oxlint',
+				['core-node-version', 'core-oxlint', 'core-typescript', 'core-vitest', 'opt-ci-github'],
+				UNITS,
+			),
+		).toEqual(['opt-ci-github']);
 	});
 });
 
@@ -239,11 +257,17 @@ describe('exclusionAgainstTracked', () => {
 	];
 
 	it('flags a selected unit that excludes a tracked one', () => {
-		expect(exclusionAgainstTracked(['core-oxlint'], ['core-eslint'], units)).toEqual({ selected: 'core-oxlint', tracked: 'core-eslint' });
+		expect(exclusionAgainstTracked(['core-oxlint'], ['core-eslint'], units)).toEqual({
+			selected: 'core-oxlint',
+			tracked: 'core-eslint',
+		});
 	});
 
 	it('flags a selected unit that a tracked one excludes', () => {
-		expect(exclusionAgainstTracked(['core-eslint'], ['core-oxlint'], units)).toEqual({ selected: 'core-eslint', tracked: 'core-oxlint' });
+		expect(exclusionAgainstTracked(['core-eslint'], ['core-oxlint'], units)).toEqual({
+			selected: 'core-eslint',
+			tracked: 'core-oxlint',
+		});
 	});
 
 	it('ignores tracked units that are re-selected', () => {
@@ -252,22 +276,31 @@ describe('exclusionAgainstTracked', () => {
 
 	it('does not flag a tracked unit that is also selected, even when a selected unit excludes it', () => {
 		const hand = [unit('core-oxlint', { excludes: ['core-eslint'] }), unit('core-eslint')];
-		expect(exclusionAgainstTracked(['core-oxlint', 'core-eslint'], ['core-eslint'], hand)).toBeUndefined();
+		expect(
+			exclusionAgainstTracked(['core-oxlint', 'core-eslint'], ['core-eslint'], hand),
+		).toBeUndefined();
 	});
 
 	it('passes unrelated units and unknown tracked ids', () => {
-		expect(exclusionAgainstTracked(['core-vitest'], ['core-eslint', 'local:mine'], units)).toBeUndefined();
+		expect(
+			exclusionAgainstTracked(['core-vitest'], ['core-eslint', 'local:mine'], units),
+		).toBeUndefined();
 	});
 });
 
 describe('the TypeScript line and the lint slot, against the real manifest (#158)', () => {
 	function plan(seed: string[]): { ids: string[]; typescript: string | undefined } {
 		const result = resolveSelection(seed, UNITS);
-		if (result.kind !== 'ok')
-			throw new Error(`expected ok, got ${result.kind}`);
+		if (result.kind !== 'ok') throw new Error(`expected ok, got ${result.kind}`);
 		const selected = new Set(result.ids);
-		const ts = UNITS.find(u => u.id === 'core-typescript');
-		return { ids: result.ids, typescript: ts && selected.has(ts.id) ? applyPinLines(ts, selected).devDependencies?.typescript : undefined };
+		const ts = UNITS.find((u) => u.id === 'core-typescript');
+		return {
+			ids: result.ids,
+			typescript:
+				ts && selected.has(ts.id)
+					? applyPinLines(ts, selected).devDependencies?.typescript
+					: undefined,
+		};
 	}
 
 	it('core-typescript alone takes the 7.x line', () => {
@@ -297,7 +330,7 @@ describe('the TypeScript line and the lint slot, against the real manifest (#158
 		expect(p.typescript).toMatch(/^6\./);
 	});
 
-	it('records the slot fill as auto, required by the slot\'s unit', () => {
+	it("records the slot fill as auto, required by the slot's unit", () => {
 		const result = resolveSelection(['opt-ci-github'], UNITS);
 		expect(result.kind === 'ok' && result.auto).toContain('core-oxlint');
 		expect(result.kind === 'ok' && result.requiredBy['core-oxlint']).toBe('opt-ci-github');
@@ -311,16 +344,20 @@ describe('the TypeScript line and the lint slot, against the real manifest (#158
 
 	it('a tracked core-eslint holds core-typescript on the 6.x line', () => {
 		const result = resolveSelection(['core-typescript'], UNITS, IMPLIES_ONE_OF, ['core-eslint']);
-		if (result.kind !== 'ok')
-			throw new Error(`expected ok, got ${result.kind}`);
-		const ts = UNITS.find(u => u.id === 'core-typescript')!;
-		expect(applyPinLines(ts, new Set([...result.ids, 'core-eslint'])).devDependencies?.typescript).toMatch(/^6\./);
+		if (result.kind !== 'ok') throw new Error(`expected ok, got ${result.kind}`);
+		const ts = UNITS.find((u) => u.id === 'core-typescript')!;
+		expect(
+			applyPinLines(ts, new Set([...result.ids, 'core-eslint'])).devDependencies?.typescript,
+		).toMatch(/^6\./);
 	});
 
 	it('lets a lint unit implied by another unit satisfy the slot', () => {
 		const units = [
-			...UNITS.filter(u => u.id !== 'opt-ci-github'),
-			{ ...UNITS.find(u => u.id === 'opt-ci-github')!, implies: [...(UNITS.find(u => u.id === 'opt-ci-github')!.implies ?? []), 'core-eslint'] },
+			...UNITS.filter((u) => u.id !== 'opt-ci-github'),
+			{
+				...UNITS.find((u) => u.id === 'opt-ci-github')!,
+				implies: [...(UNITS.find((u) => u.id === 'opt-ci-github')!.implies ?? []), 'core-eslint'],
+			},
 		];
 		const result = resolveSelection(['opt-ci-github'], units, IMPLIES_ONE_OF);
 		expect(result.kind === 'ok' && result.ids).not.toContain('core-oxlint');

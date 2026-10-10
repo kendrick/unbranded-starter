@@ -1,5 +1,15 @@
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join, relative } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -11,10 +21,9 @@ const CLI = join(PKG_ROOT, 'dist/cli.js');
 // Read the pin from the manifest rather than hardcoding it, so a routine
 // pin-bump PR doesn't redden this file (test/e2e/dep-conflict.spec.ts sets
 // the same precedent).
-const OPT_HUSKY = UNITS.find(u => u.id === 'opt-husky');
+const OPT_HUSKY = UNITS.find((u) => u.id === 'opt-husky');
 const HUSKY_PIN = OPT_HUSKY?.devDependencies?.husky;
-if (!HUSKY_PIN)
-	throw new Error('opt-husky manifest shape changed—update this test\'s pin lookup.');
+if (!HUSKY_PIN) throw new Error("opt-husky manifest shape changed—update this test's pin lookup.");
 
 // A spec deliberately behind the manifest's pin, so onConflict:'overwrite' has
 // a real collision to settle before the install (and rollback) happens.
@@ -28,10 +37,10 @@ function writeJson(path: string, obj: unknown): void {
 // rest of this suite duplicates it.
 function snapshot(dir: string): string {
 	return (readdirSync(dir, { recursive: true }) as string[])
-		.map(rel => join(dir, rel))
-		.filter(p => statSync(p).isFile())
+		.map((rel) => join(dir, rel))
+		.filter((p) => statSync(p).isFile())
 		.sort()
-		.map(p => `${relative(dir, p)}\n${readFileSync(p, 'utf-8')}`)
+		.map((p) => `${relative(dir, p)}\n${readFileSync(p, 'utf-8')}`)
 		.join('\n---\n');
 }
 
@@ -43,30 +52,36 @@ function writeFakeNpm(binDir: string, installExitCode: number): void {
 	mkdirSync(binDir, { recursive: true });
 
 	const sh = join(binDir, 'npm');
-	writeFileSync(sh, [
-		'#!/bin/sh',
-		'if [ "$1" = "--version" ]; then',
-		'  echo "10.9.0"',
-		'  exit 0',
-		'fi',
-		`exit ${installExitCode}`,
-		'',
-	].join('\n'));
+	writeFileSync(
+		sh,
+		[
+			'#!/bin/sh',
+			'if [ "$1" = "--version" ]; then',
+			'  echo "10.9.0"',
+			'  exit 0',
+			'fi',
+			`exit ${installExitCode}`,
+			'',
+		].join('\n'),
+	);
 	chmodSync(sh, 0o755);
 
 	// CI runs windows-latest, where spawnOptions shells out to let cmd.exe
 	// resolve the .cmd shim (src/install/spawn.ts)—without this file the
 	// Windows leg would fall through to any real npm still on PATH.
 	const cmd = join(binDir, 'npm.cmd');
-	writeFileSync(cmd, [
-		'@echo off',
-		'if "%1"=="--version" (',
-		'  echo 10.9.0',
-		'  exit /b 0',
-		')',
-		`exit /b ${installExitCode}`,
-		'',
-	].join('\r\n'));
+	writeFileSync(
+		cmd,
+		[
+			'@echo off',
+			'if "%1"=="--version" (',
+			'  echo 10.9.0',
+			'  exit /b 0',
+			')',
+			`exit /b ${installExitCode}`,
+			'',
+		].join('\r\n'),
+	);
 }
 
 // Prepend a fake-bin dir onto PATH so node and git stay resolvable—this is

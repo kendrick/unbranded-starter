@@ -25,24 +25,24 @@
 		"editor.defaultFormatter": "stylelint.vscode-stylelint"
 	},
 
-	// JSON / JSONC: VS Code's built-in formatter (respects insertSpaces/tabSize).
-	// Why not oxfmt? .oxfmtrc.json ignores .claude/**, and the built-in formatter
-	// still covers the settings files that live there.
+	// JSON, JSONC, Markdown, and MDX: oxc.oxc-vscode runs oxfmt, so a save
+	// writes what `oxfmt --check` in `pnpm lint` accepts. These repeat the
+	// default above because a user's own `[json]` or `[markdown]` setting
+	// outranks a workspace default. VS Code's built-in JSON formatter
+	// expands objects and arrays that oxfmt keeps inline, so a save with it
+	// can fail lint. `.oxfmtrc.json` ignores `.claude/**`, so saves there may
+	// not format, and lint skips those files too.
 	"[json]": {
-		"editor.defaultFormatter": "vscode.json-language-features"
+		"editor.defaultFormatter": "oxc.oxc-vscode"
 	},
 	"[jsonc]": {
-		"editor.defaultFormatter": "vscode.json-language-features"
+		"editor.defaultFormatter": "oxc.oxc-vscode"
 	},
-
-	// Markdown: Prettier (only place it's still used). Prettier handles
-	// prose-wrap and list reflow, and it's scoped to .md/.mdx, so it can't fight
-	// oxfmt on JS/TS.
 	"[markdown]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
+		"editor.defaultFormatter": "oxc.oxc-vscode"
 	},
 	"[mdx]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
+		"editor.defaultFormatter": "oxc.oxc-vscode"
 	},
 
 	// Search / file watcher exclusions (matches .gitignore)

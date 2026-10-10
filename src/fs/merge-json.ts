@@ -79,7 +79,7 @@ const ALPHABETIZE_NESTED = new Set([
 // both iterate it and agree on order.
 const DEP_SECTIONS = ['dependencies', 'devDependencies'] as const;
 
-export type DepSection = typeof DEP_SECTIONS[number];
+export type DepSection = (typeof DEP_SECTIONS)[number];
 
 export interface DepCollision {
 	section: DepSection;
@@ -110,8 +110,7 @@ export function collectDepCollisions(
 		const incoming: Record<string, string> = {};
 		for (const patch of patches) {
 			const patchSection = patch[section];
-			if (patchSection)
-				Object.assign(incoming, patchSection);
+			if (patchSection) Object.assign(incoming, patchSection);
 		}
 
 		for (const name of Object.keys(incoming).sort()) {
@@ -138,10 +137,20 @@ export function mergePackageJson(
 
 	for (const patch of patches) {
 		if (patch.dependencies) {
-			merged.dependencies = mergeDepLike(merged.dependencies, patch.dependencies, 'dependencies', keepExisting);
+			merged.dependencies = mergeDepLike(
+				merged.dependencies,
+				patch.dependencies,
+				'dependencies',
+				keepExisting,
+			);
 		}
 		if (patch.devDependencies) {
-			merged.devDependencies = mergeDepLike(merged.devDependencies, patch.devDependencies, 'devDependencies', keepExisting);
+			merged.devDependencies = mergeDepLike(
+				merged.devDependencies,
+				patch.devDependencies,
+				'devDependencies',
+				keepExisting,
+			);
 		}
 		if (patch.scripts) {
 			// Additive only. The user may already have a `lint` or `test` script
@@ -183,23 +192,18 @@ export function removePackageJsonEntries(
 
 	for (const section of ['dependencies', 'devDependencies'] as const) {
 		const names = removal[section];
-		if (!names || !isStringRecord(pkg[section]))
-			continue;
+		if (!names || !isStringRecord(pkg[section])) continue;
 		const map = { ...pkg[section] };
-		for (const name of names)
-			delete map[name];
+		for (const name of names) delete map[name];
 		setOrDrop(pkg, section, map);
 	}
 
 	if (removal.scripts && isStringRecord(pkg.scripts)) {
 		const map = { ...pkg.scripts };
 		for (const [name, expected] of Object.entries(removal.scripts)) {
-			if (!(name in map))
-				continue;
-			if (map[name] === expected)
-				delete map[name];
-			else
-				keptScripts.push(name);
+			if (!(name in map)) continue;
+			if (map[name] === expected) delete map[name];
+			else keptScripts.push(name);
 		}
 		setOrDrop(pkg, 'scripts', map);
 	}
@@ -210,10 +214,8 @@ export function removePackageJsonEntries(
 // A section we emptied disappears entirely — a dangling `"devDependencies": {}`
 // is exactly the kind of residue remove exists to not leave behind.
 function setOrDrop(pkg: Record<string, unknown>, key: string, map: Record<string, string>): void {
-	if (Object.keys(map).length === 0)
-		delete pkg[key];
-	else
-		pkg[key] = map;
+	if (Object.keys(map).length === 0) delete pkg[key];
+	else pkg[key] = map;
 }
 
 // Manifest-wins is the default here, not because deps are less the user's
@@ -236,8 +238,7 @@ function mergeDepLike(
 		// ours to touch either—in the real caller it aliases the unit
 		// catalog's own dependency object, so we build the result entry by
 		// entry instead of filtering or mutating `addition` directly.
-		if (keepExisting?.has(depKey({ section, name })) && name in base)
-			continue;
+		if (keepExisting?.has(depKey({ section, name })) && name in base) continue;
 		result[name] = spec;
 	}
 	return result;
@@ -252,36 +253,29 @@ function mergeAdditive(
 	addition: Record<string, string>,
 ): Record<string, string> {
 	const base = isStringRecord(existing) ? existing : {};
-	const newOnly = Object.fromEntries(
-		Object.entries(addition).filter(([key]) => !(key in base)),
-	);
+	const newOnly = Object.fromEntries(Object.entries(addition).filter(([key]) => !(key in base)));
 	return { ...base, ...newOnly };
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {
-	if (value === null || typeof value !== 'object' || Array.isArray(value))
-		return false;
-	return Object.values(value).every(v => typeof v === 'string');
+	if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+	return Object.values(value).every((v) => typeof v === 'string');
 }
 
 function sortPackageJson(pkg: Record<string, unknown>): Record<string, unknown> {
 	const sorted: Record<string, unknown> = {};
 	for (const key of TOP_LEVEL_ORDER) {
-		if (key in pkg)
-			sorted[key] = sortNested(key, pkg[key]);
+		if (key in pkg) sorted[key] = sortNested(key, pkg[key]);
 	}
 	for (const key of Object.keys(pkg)) {
-		if (!(key in sorted))
-			sorted[key] = pkg[key];
+		if (!(key in sorted)) sorted[key] = pkg[key];
 	}
 	return sorted;
 }
 
 function sortNested(parentKey: string, value: unknown): unknown {
-	if (!ALPHABETIZE_NESTED.has(parentKey))
-		return value;
-	if (value === null || typeof value !== 'object' || Array.isArray(value))
-		return value;
+	if (!ALPHABETIZE_NESTED.has(parentKey)) return value;
+	if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
 	const obj = value as Record<string, unknown>;
 	const result: Record<string, unknown> = {};
 	for (const key of Object.keys(obj).sort()) result[key] = obj[key];

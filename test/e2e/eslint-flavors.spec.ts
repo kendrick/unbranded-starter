@@ -33,14 +33,24 @@ interface Scaffold {
 }
 
 function scaffoldFlavor(dir: string, flavor: 'base' | 'react' | 'next'): Scaffold {
-	writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: `flavor-${flavor}`, version: '0.0.0', private: true }, null, 2));
-	writeFileSync(join(dir, 'recipe.json'), JSON.stringify({
-		units: ['core-eslint'],
-		pm: 'pnpm',
-		onConflict: 'overwrite',
-		postInstall: 'none',
-		options: { eslintFlavor: flavor },
-	}, null, 2));
+	writeFileSync(
+		join(dir, 'package.json'),
+		JSON.stringify({ name: `flavor-${flavor}`, version: '0.0.0', private: true }, null, 2),
+	);
+	writeFileSync(
+		join(dir, 'recipe.json'),
+		JSON.stringify(
+			{
+				units: ['core-eslint'],
+				pm: 'pnpm',
+				onConflict: 'overwrite',
+				postInstall: 'none',
+				options: { eslintFlavor: flavor },
+			},
+			null,
+			2,
+		),
+	);
 
 	const run = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: dir, encoding: 'utf-8' });
 	expect(run.status, `scaffold stderr: ${run.stderr}`).toBe(0);
@@ -65,60 +75,77 @@ function lintConfig(dir: string): { status: number | null; output: string } {
 	return { status: res.status, output: `${res.stdout}\n${res.stderr}` };
 }
 
-describe.skipIf(process.env.UB_E2E_LEG === 'main')('core-eslint flavors (e2e, real install)', () => {
-	let tmp: string;
+describe.skipIf(process.env.UB_E2E_LEG === 'main')(
+	'core-eslint flavors (e2e, real install)',
+	() => {
+		let tmp: string;
 
-	beforeEach(() => {
-		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-flavor-'));
-	});
+		beforeEach(() => {
+			tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-flavor-'));
+		});
 
-	afterEach(() => {
-		rmSync(tmp, { recursive: true, force: true });
-	});
+		afterEach(() => {
+			rmSync(tmp, { recursive: true, force: true });
+		});
 
-	it.runIf(flavorRuns('base'))('base installs zero React packages and its generated config lints clean', () => {
-		const s = scaffoldFlavor(tmp, 'base');
-		const dev = s.pkg.devDependencies ?? {};
+		it.runIf(flavorRuns('base'))(
+			'base installs zero React packages and its generated config lints clean',
+			() => {
+				const s = scaffoldFlavor(tmp, 'base');
+				const dev = s.pkg.devDependencies ?? {};
 
-		expect(dev).toHaveProperty('@antfu/eslint-config');
-		expect(dev).toHaveProperty('eslint-plugin-format');
-		for (const pkg of ['@eslint-react/eslint-plugin', 'eslint-plugin-jsx-a11y', 'eslint-plugin-react-refresh', '@next/eslint-plugin-next'])
-			expect(dev, `base should not install ${pkg}`).not.toHaveProperty(pkg);
+				expect(dev).toHaveProperty('@antfu/eslint-config');
+				expect(dev).toHaveProperty('eslint-plugin-format');
+				for (const pkg of [
+					'@eslint-react/eslint-plugin',
+					'eslint-plugin-jsx-a11y',
+					'eslint-plugin-react-refresh',
+					'@next/eslint-plugin-next',
+				])
+					expect(dev, `base should not install ${pkg}`).not.toHaveProperty(pkg);
 
-		expect(s.config).not.toContain('react: true');
-		expect(s.config).not.toContain('nextjs: true');
+				expect(s.config).not.toContain('react: true');
+				expect(s.config).not.toContain('nextjs: true');
 
-		const lint = lintConfig(tmp);
-		expect(lint.status, lint.output).toBe(0);
-	});
+				const lint = lintConfig(tmp);
+				expect(lint.status, lint.output).toBe(0);
+			},
+		);
 
-	it.runIf(flavorRuns('react'))('react adds the react plugins and jsx-a11y, and its config lints clean', () => {
-		const s = scaffoldFlavor(tmp, 'react');
-		const dev = s.pkg.devDependencies ?? {};
+		it.runIf(flavorRuns('react'))(
+			'react adds the react plugins and jsx-a11y, and its config lints clean',
+			() => {
+				const s = scaffoldFlavor(tmp, 'react');
+				const dev = s.pkg.devDependencies ?? {};
 
-		expect(dev).toHaveProperty('@eslint-react/eslint-plugin');
-		expect(dev).toHaveProperty('eslint-plugin-jsx-a11y');
-		expect(dev).not.toHaveProperty('@next/eslint-plugin-next');
+				expect(dev).toHaveProperty('@eslint-react/eslint-plugin');
+				expect(dev).toHaveProperty('eslint-plugin-jsx-a11y');
+				expect(dev).not.toHaveProperty('@next/eslint-plugin-next');
 
-		expect(s.config).toContain('react: true,');
-		expect(s.config).toContain('\'jsx-a11y/alt-text\': \'error\',');
-		expect(s.config).not.toContain('nextjs: true');
+				expect(s.config).toContain('react: true,');
+				expect(s.config).toContain("'jsx-a11y/alt-text': 'error',");
+				expect(s.config).not.toContain('nextjs: true');
 
-		const lint = lintConfig(tmp);
-		expect(lint.status, lint.output).toBe(0);
-	});
+				const lint = lintConfig(tmp);
+				expect(lint.status, lint.output).toBe(0);
+			},
+		);
 
-	it.runIf(flavorRuns('next'))('next adds the next plugin and rules, and its config lints clean', () => {
-		const s = scaffoldFlavor(tmp, 'next');
-		const dev = s.pkg.devDependencies ?? {};
+		it.runIf(flavorRuns('next'))(
+			'next adds the next plugin and rules, and its config lints clean',
+			() => {
+				const s = scaffoldFlavor(tmp, 'next');
+				const dev = s.pkg.devDependencies ?? {};
 
-		expect(dev).toHaveProperty('@next/eslint-plugin-next');
-		expect(dev).toHaveProperty('@eslint-react/eslint-plugin');
+				expect(dev).toHaveProperty('@next/eslint-plugin-next');
+				expect(dev).toHaveProperty('@eslint-react/eslint-plugin');
 
-		expect(s.config).toContain('nextjs: true,');
-		expect(s.config).toContain('\'@next/next/no-img-element\': \'error\',');
+				expect(s.config).toContain('nextjs: true,');
+				expect(s.config).toContain("'@next/next/no-img-element': 'error',");
 
-		const lint = lintConfig(tmp);
-		expect(lint.status, lint.output).toBe(0);
-	});
-});
+				const lint = lintConfig(tmp);
+				expect(lint.status, lint.output).toBe(0);
+			},
+		);
+	},
+);

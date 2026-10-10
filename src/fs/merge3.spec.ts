@@ -30,10 +30,11 @@ describe('merge3', () => {
 			theirs: 'alpha\nbravo THEIRS\ncharlie\ndelta\n',
 		});
 		expect(r.result).toBe('conflict');
-		if (r.result !== 'conflict')
-			return;
+		if (r.result !== 'conflict') return;
 		expect(r.conflicts).toBe(1);
-		expect(r.merged).toBe('alpha\n<<<<<<< yours\nbravo MINE\n=======\nbravo THEIRS\n>>>>>>> template\ncharlie\ndelta\n');
+		expect(r.merged).toBe(
+			'alpha\n<<<<<<< yours\nbravo MINE\n=======\nbravo THEIRS\n>>>>>>> template\ncharlie\ndelta\n',
+		);
 	});
 
 	it('preserves CRLF endings and a missing trailing newline through a merge', () => {

@@ -21,21 +21,37 @@ function writeJson(path: string, obj: unknown): void {
 // spawnSync pipes stdio, so the child's stdout.isTTY is undefined (a real pipe).
 // The env is normalized: ambient NO_COLOR/FORCE_COLOR are stripped so a color
 // setting on the CI runner can't skew a case, then the test's overlay is applied.
-function run(args: string[], tmp: string, env: Record<string, string> = {}): ReturnType<typeof spawnSync> {
+function run(
+	args: string[],
+	tmp: string,
+	env: Record<string, string> = {},
+): ReturnType<typeof spawnSync> {
 	const base = { ...process.env };
 	delete base.NO_COLOR;
 	delete base.FORCE_COLOR;
-	return spawnSync('node', [CLI, ...args], { cwd: tmp, encoding: 'utf-8', env: { ...base, ...env } });
+	return spawnSync('node', [CLI, ...args], {
+		cwd: tmp,
+		encoding: 'utf-8',
+		env: { ...base, ...env },
+	});
 }
 
 // Scaffold a single plain-copy unit (no deps, no install) so a .unbranded.json
 // lands, then edit the file so `diff` has real drift to render a patch for.
 function scaffoldDrift(tmp: string): void {
 	writeJson(join(tmp, 'package.json'), { name: 'drift-project', version: '0.0.0' });
-	writeJson(join(tmp, 'recipe.json'), { units: ['core-editorconfig'], pm: null, onConflict: 'overwrite', postInstall: 'none' });
+	writeJson(join(tmp, 'recipe.json'), {
+		units: ['core-editorconfig'],
+		pm: null,
+		onConflict: 'overwrite',
+		postInstall: 'none',
+	});
 	const applied = run(['--config', 'recipe.json'], tmp);
 	expect(applied.status, `scaffold stderr: ${applied.stderr}`).toBe(0);
-	writeFileSync(join(tmp, '.editorconfig'), `${readFileSync(join(tmp, '.editorconfig'), 'utf-8')}\n# my override\n`);
+	writeFileSync(
+		join(tmp, '.editorconfig'),
+		`${readFileSync(join(tmp, '.editorconfig'), 'utf-8')}\n# my override\n`,
+	);
 }
 
 describe('piped output carries no ANSI, even under CI', () => {
@@ -81,7 +97,12 @@ describe('piped output carries no ANSI, even under CI', () => {
 	it('--dry-run --diff over a clack-driven flow', () => {
 		writeJson(join(tmp, 'package.json'), { name: 'p', version: '0.0.0' });
 		writeFileSync(join(tmp, 'eslint.config.mjs'), '// mine, do not touch\n');
-		writeJson(join(tmp, 'recipe.json'), { units: ['core-eslint'], pm: null, onConflict: 'overwrite', postInstall: 'none' });
+		writeJson(join(tmp, 'recipe.json'), {
+			units: ['core-eslint'],
+			pm: null,
+			onConflict: 'overwrite',
+			postInstall: 'none',
+		});
 		const r = run(['--config', 'recipe.json', '--dry-run', '--diff'], tmp, { CI: 'true' });
 		expect(r.status).toBe(0);
 		// createPatch labels the proposed side, so this proves the diff block rendered.

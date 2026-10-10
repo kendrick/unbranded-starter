@@ -9,8 +9,7 @@ export interface ParsedUnitRef {
 // namespace separator — parsing is total and needs no lookup to disambiguate.
 export function parseUnitRef(ref: string): ParsedUnitRef {
 	const i = ref.indexOf('/');
-	if (i === -1)
-		return { bare: ref };
+	if (i === -1) return { bare: ref };
 	return { namespace: ref.slice(0, i), bare: ref.slice(i + 1) };
 }
 
@@ -23,7 +22,9 @@ export function qualify(namespace: string, bare: string): string {
 // else would make the qualified form unparseable by parseUnitRef itself.
 export function assertValidNamespace(basename: string): void {
 	if (!ID_PATTERN.test(basename))
-		throw new Error(`namespace must be a lowercase id matching ^[a-z0-9][a-z0-9-]*$, got "${basename}"`);
+		throw new Error(
+			`namespace must be a lowercase id matching ^[a-z0-9][a-z0-9-]*$, got "${basename}"`,
+		);
 }
 
 export interface UnitRefContext {
@@ -41,8 +42,7 @@ export function resolveUnitRef(raw: string, ctx: UnitRefContext): string | undef
 	if (parsed.namespace !== undefined) {
 		if (parsed.namespace === '' || parsed.bare === '' || parsed.bare.includes('/'))
 			return undefined;
-		if (parsed.namespace === ctx.namespace && ctx.localBareIds?.has(parsed.bare))
-			return raw;
+		if (parsed.namespace === ctx.namespace && ctx.localBareIds?.has(parsed.bare)) return raw;
 		return undefined;
 	}
 
@@ -51,9 +51,7 @@ export function resolveUnitRef(raw: string, ctx: UnitRefContext): string | undef
 	// package registry. A local id that collides with a built-in's shadows it
 	// only inside this directory — `my-units/core-eslint` stays a distinct unit
 	// from `core-eslint` everywhere else.
-	if (ctx.namespace !== undefined && ctx.localBareIds?.has(raw))
-		return qualify(ctx.namespace, raw);
-	if (ctx.builtinIds.has(raw))
-		return raw;
+	if (ctx.namespace !== undefined && ctx.localBareIds?.has(raw)) return qualify(ctx.namespace, raw);
+	if (ctx.builtinIds.has(raw)) return raw;
 	return undefined;
 }

@@ -84,13 +84,21 @@ describe('inspectPm', () => {
 	it('packageManager field beats user-agent', () => {
 		writeFileSync(join(dir, 'package.json'), JSON.stringify({ packageManager: 'pnpm@10.0.0' }));
 		const env = { npm_config_user_agent: 'npm/10.0.0 node/v20.0.0' };
-		expect(inspectPm(dir, env)).toMatchObject({ kind: 'detected', pm: 'pnpm', source: 'packageManager' });
+		expect(inspectPm(dir, env)).toMatchObject({
+			kind: 'detected',
+			pm: 'pnpm',
+			source: 'packageManager',
+		});
 	});
 
 	it('falls back to user-agent when no lockfile and no packageManager field', () => {
 		writeFileSync(join(dir, 'package.json'), '{}');
 		const env = { npm_config_user_agent: 'pnpm/10.0.0 npm/? node/v20.0.0' };
-		expect(inspectPm(dir, env)).toMatchObject({ kind: 'detected', pm: 'pnpm', source: 'userAgent' });
+		expect(inspectPm(dir, env)).toMatchObject({
+			kind: 'detected',
+			pm: 'pnpm',
+			source: 'userAgent',
+		});
 	});
 
 	it('returns needs-prompt when package.json has no signal and no user-agent match', () => {
@@ -151,7 +159,11 @@ describe('inspectPm — new mode', () => {
 
 	it('honors the user-agent up front, with no prompt', () => {
 		const env = { npm_config_user_agent: 'pnpm/9.0.0 npm/? node/v20.0.0' };
-		expect(inspectPm(dir, env, 'new')).toEqual({ kind: 'detected', pm: 'pnpm', source: 'userAgent' });
+		expect(inspectPm(dir, env, 'new')).toEqual({
+			kind: 'detected',
+			pm: 'pnpm',
+			source: 'userAgent',
+		});
 	});
 
 	it('ignores a decoy lockfile in a parent directory', () => {
@@ -171,7 +183,11 @@ describe('inspectPm — new mode', () => {
 		mkdirSync(sub);
 		writeFileSync(join(dir, 'package.json'), '{}');
 		writeFileSync(join(dir, 'pnpm-lock.yaml'), '');
-		expect(inspectPm(sub, {}, 'augment')).toMatchObject({ kind: 'detected', pm: 'pnpm', source: 'lockfile' });
+		expect(inspectPm(sub, {}, 'augment')).toMatchObject({
+			kind: 'detected',
+			pm: 'pnpm',
+			source: 'lockfile',
+		});
 	});
 });
 

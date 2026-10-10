@@ -6,6 +6,9 @@ import type { SpawnOptions } from 'node:child_process';
 // shim via PATHEXT. POSIX spawns the bare binary directly. The subcommands we
 // pass (`install`, `exec husky init`, ...) carry no shell metacharacters, so
 // shell mode needs no extra quoting here.
-export function spawnOptions(cwd: string, platform: NodeJS.Platform = process.platform): SpawnOptions {
+export function spawnOptions(
+	cwd: string,
+	platform: NodeJS.Platform = process.platform,
+): SpawnOptions {
 	return { cwd, stdio: 'inherit', shell: platform === 'win32' };
 }

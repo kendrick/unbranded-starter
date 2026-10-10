@@ -38,9 +38,7 @@ Six fields are required. Everything else is optional.
 	"category": "foundation",
 	"label": "Repo banner",
 	"description": "Drops a BANNER.txt at the repo root.",
-	"files": [
-		{ "src": "BANNER.txt", "dest": "BANNER.txt" }
-	]
+	"files": [{ "src": "BANNER.txt", "dest": "BANNER.txt" }]
 }
 ```
 

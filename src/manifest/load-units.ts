@@ -32,15 +32,14 @@ export interface LoadedUnitsDir {
 // built-in's key wouldn't error there — it would silently overwrite the
 // built-in's entry, and the built-in's prompt or recipe field would vanish
 // with no warning. Caught here instead, before the two ever share a map.
-const BUILTIN_OPTION_KEYS = new Set(UNITS.flatMap(u => (u.options ?? []).map(o => o.key)));
+const BUILTIN_OPTION_KEYS = new Set(UNITS.flatMap((u) => (u.options ?? []).map((o) => o.key)));
 
 export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): LoadedUnitsDir {
 	const namespace = basename(resolve(absDir));
 	assertValidNamespace(namespace);
 
 	const found = discover(absDir);
-	if ('error' in found)
-		throw new Error(found.error);
+	if ('error' in found) throw new Error(found.error);
 
 	const skipped: SkippedUnit[] = [];
 	const warnings: string[] = [];
@@ -49,7 +48,12 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 	// downstream needs the directory's id set — mirrors validateTarget's two-pass
 	// ordering, since a sibling's `implies` can only be checked once the whole
 	// set's ids are known.
-	interface Parsed { file: string; baseDir: string; value: unknown; bareId?: string }
+	interface Parsed {
+		file: string;
+		baseDir: string;
+		value: unknown;
+		bareId?: string;
+	}
 	const parsed: Parsed[] = [];
 	const firstClaim = new Map<string, string>();
 
@@ -57,9 +61,17 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 		let value: unknown;
 		try {
 			value = JSON.parse(readFileSync(c.file, 'utf-8'));
-		}
-		catch (err) {
-			skipped.push({ path: c.file, issues: [{ path: '(document)', expected: 'valid JSON', got: err instanceof Error ? err.message : String(err) }] });
+		} catch (err) {
+			skipped.push({
+				path: c.file,
+				issues: [
+					{
+						path: '(document)',
+						expected: 'valid JSON',
+						got: err instanceof Error ? err.message : String(err),
+					},
+				],
+			});
 			continue;
 		}
 
@@ -70,7 +82,13 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 				skipped.push({
 					path: c.file,
 					id: bareId,
-					issues: [{ path: 'id', expected: 'a bare id unique within this units directory', got: `"${bareId}", already defined by ${first}` }],
+					issues: [
+						{
+							path: 'id',
+							expected: 'a bare id unique within this units directory',
+							got: `"${bareId}", already defined by ${first}`,
+						},
+					],
 				});
 				continue;
 			}
@@ -87,7 +105,11 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 
 	// Pass 2: validate each surviving candidate now that the directory's id set
 	// is settled.
-	interface Validated { file: string; baseDir: string; unit: UnitDefinition }
+	interface Validated {
+		file: string;
+		baseDir: string;
+		unit: UnitDefinition;
+	}
 	const validated: Validated[] = [];
 	for (const p of parsed) {
 		const result = validateUnitDefinition(p.value, { baseDir: p.baseDir, knownIds });
@@ -106,13 +128,19 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 	const claimedOptionKeys = new Set<string>();
 	const survivors: Validated[] = [];
 	for (const v of validated) {
-		const keys = (v.unit.options ?? []).map(o => o.key);
-		const collision = keys.find(k => BUILTIN_OPTION_KEYS.has(k) || claimedOptionKeys.has(k));
+		const keys = (v.unit.options ?? []).map((o) => o.key);
+		const collision = keys.find((k) => BUILTIN_OPTION_KEYS.has(k) || claimedOptionKeys.has(k));
 		if (collision !== undefined) {
 			skipped.push({
 				path: v.file,
 				id: v.unit.id,
-				issues: [{ path: 'options', expected: 'option keys not claimed by a built-in or a sibling unit', got: `key "${collision}" already claimed` }],
+				issues: [
+					{
+						path: 'options',
+						expected: 'option keys not claimed by a built-in or a sibling unit',
+						got: `key "${collision}" already claimed`,
+					},
+				],
 			});
 			continue;
 		}
@@ -120,7 +148,7 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 		survivors.push(v);
 	}
 
-	const localBareIds = new Set(survivors.map(v => v.unit.id));
+	const localBareIds = new Set(survivors.map((v) => v.unit.id));
 	const units: AnyUnit[] = [];
 	const baseDirs = new Map<string, string>();
 
@@ -145,7 +173,13 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 			skipped.push({
 				path: v.file,
 				id: bare,
-				issues: [{ path: '(relations)', expected: 'every implies/requires/excludes entry to resolve', got: 'a relation named a unit dropped from this directory' }],
+				issues: [
+					{
+						path: '(relations)',
+						expected: 'every implies/requires/excludes entry to resolve',
+						got: 'a relation named a unit dropped from this directory',
+					},
+				],
 			});
 			continue;
 		}
@@ -156,10 +190,18 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 		// name would otherwise find out only when the qualified id shows up
 		// somewhere they didn't expect it.
 		if (builtinIds.has(bare))
-			warnings.push(`${namespace}/${bare} shares its id with the built-in unit "${bare}" — they are distinct units; the local one is reachable only as "${namespace}/${bare}".`);
+			warnings.push(
+				`${namespace}/${bare} shares its id with the built-in unit "${bare}" — they are distinct units; the local one is reachable only as "${namespace}/${bare}".`,
+			);
 
 		const qualifiedId = qualify(namespace, bare);
-		const { schema: _schema, implies: _implies, requires: _requires, excludes: _excludes, ...rest } = v.unit;
+		const {
+			schema: _schema,
+			implies: _implies,
+			requires: _requires,
+			excludes: _excludes,
+			...rest
+		} = v.unit;
 		units.push({
 			...rest,
 			id: qualifiedId,
@@ -174,21 +216,18 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 }
 
 function resolveAll(refs: string[] | undefined, ctx: UnitRefContext): string[] | undefined {
-	if (refs === undefined)
-		return [];
+	if (refs === undefined) return [];
 	const out: string[] = [];
 	for (const ref of refs) {
 		const resolved = resolveUnitRef(ref, ctx);
-		if (resolved === undefined)
-			return undefined;
+		if (resolved === undefined) return undefined;
 		out.push(resolved);
 	}
 	return out;
 }
 
 function idOf(value: unknown): string | undefined {
-	if (typeof value !== 'object' || value === null)
-		return undefined;
+	if (typeof value !== 'object' || value === null) return undefined;
 	const id = (value as { id?: unknown }).id;
 	return typeof id === 'string' ? id : undefined;
 }

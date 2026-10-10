@@ -8,9 +8,9 @@ import { createPickerState, reducePicker } from './state';
 // Tag-fake theme: visible ASCII markers instead of ANSI so snapshots are stable and
 // prove exactly which spans got which style. d{} dim, a{} active, s{} selected.
 const theme: PickerTheme = {
-	dim: s => `d{${s}}`,
-	active: s => `a{${s}}`,
-	selected: s => `s{${s}}`,
+	dim: (s) => `d{${s}}`,
+	active: (s) => `a{${s}}`,
+	selected: (s) => `s{${s}}`,
 	pointer: '>',
 	boxOn: '[x]',
 	boxOff: '[ ]',
@@ -23,31 +23,52 @@ function unit(id: UnitId, extras: Partial<Unit> = {}): Unit {
 }
 
 const UNITS: Unit[] = [
-	unit('core-editorconfig', { category: 'foundation', label: 'EditorConfig', description: 'Whitespace rules.', files: [{ src: 'a', dest: '.editorconfig' }] }),
+	unit('core-editorconfig', {
+		category: 'foundation',
+		label: 'EditorConfig',
+		description: 'Whitespace rules.',
+		files: [{ src: 'a', dest: '.editorconfig' }],
+	}),
 	unit('core-eslint', {
 		category: 'lint',
 		label: 'ESLint',
 		description: 'Lint JS and TS.',
 		implies: ['core-typescript'],
-		options: [{
-			key: 'eslintFlavor',
-			label: 'ESLint flavor',
-			default: 'base',
-			choices: [{ value: 'base', label: 'Base' }, { value: 'react', label: 'React' }, { value: 'next', label: 'Next.js' }],
-		}],
+		options: [
+			{
+				key: 'eslintFlavor',
+				label: 'ESLint flavor',
+				default: 'base',
+				choices: [
+					{ value: 'base', label: 'Base' },
+					{ value: 'react', label: 'React' },
+					{ value: 'next', label: 'Next.js' },
+				],
+			},
+		],
 	}),
 	unit('core-typescript', {
 		category: 'types',
 		label: 'TypeScript',
 		description: 'Strict TS.',
-		files: [{ src: 'a', dest: 'tsconfig.base.json' }, { src: 'b', dest: 'tsconfig.json' }],
+		files: [
+			{ src: 'a', dest: 'tsconfig.base.json' },
+			{ src: 'b', dest: 'tsconfig.json' },
+		],
 		devDependencies: { 'typescript': '5.9.3', '@types/node': '22' },
 	}),
 	unit('core-vitest', { category: 'test', label: 'Vitest', description: 'Unit tests.' }),
 ];
 
 function view(over: Partial<PickerView> = {}): PickerView {
-	return { message: 'What do you want?', width: 60, maxRows: 12, promptState: 'active', theme, ...over };
+	return {
+		message: 'What do you want?',
+		width: 60,
+		maxRows: 12,
+		promptState: 'active',
+		theme,
+		...over,
+	};
 }
 
 function state(installed: UnitId[] = []): PickerState {
@@ -189,6 +210,8 @@ describe('renderUnitPicker', () => {
 	it('renders a compact one-liner on submit', () => {
 		let s = reducePicker(state(), { type: 'move', delta: 2 });
 		s = reducePicker(s, { type: 'toggle' });
-		expect(renderUnitPicker(s, view({ promptState: 'submit' }))).toMatchInlineSnapshot(`"? What do you want? d{TypeScript}"`);
+		expect(renderUnitPicker(s, view({ promptState: 'submit' }))).toMatchInlineSnapshot(
+			`"? What do you want? d{TypeScript}"`,
+		);
 	});
 });

@@ -17,19 +17,17 @@ export interface PackageJson {
 	[key: string]: unknown;
 }
 
-export type PackageJsonRead
-	= | { kind: 'ok'; pkg: PackageJson }
-		| { kind: 'missing' }
-		| { kind: 'malformed'; error: string };
+export type PackageJsonRead =
+	| { kind: 'ok'; pkg: PackageJson }
+	| { kind: 'missing' }
+	| { kind: 'malformed'; error: string };
 
 export function readPackageJson(dir: string): PackageJsonRead {
 	const path = join(dir, 'package.json');
-	if (!existsSync(path))
-		return { kind: 'missing' };
+	if (!existsSync(path)) return { kind: 'missing' };
 	try {
 		return { kind: 'ok', pkg: JSON.parse(readFileSync(path, 'utf-8')) as PackageJson };
-	}
-	catch (err) {
+	} catch (err) {
 		return { kind: 'malformed', error: (err as Error).message };
 	}
 }

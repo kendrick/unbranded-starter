@@ -18,8 +18,16 @@ function writeJson(path: string, obj: unknown): void {
 // the Apply confirm, so no stdin is needed.
 function scaffold(tmp: string, units: string[]): void {
 	writeJson(join(tmp, 'package.json'), { name: 'tailwind-postcss', version: '0.0.0' });
-	writeJson(join(tmp, 'recipe.json'), { units, pm: null, onConflict: 'overwrite', postInstall: 'none' });
-	const result = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+	writeJson(join(tmp, 'recipe.json'), {
+		units,
+		pm: null,
+		onConflict: 'overwrite',
+		postInstall: 'none',
+	});
+	const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+		cwd: tmp,
+		encoding: 'utf-8',
+	});
 	expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 }
 

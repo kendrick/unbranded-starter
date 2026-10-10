@@ -6,9 +6,9 @@ import { diff3Merge } from 'node-diff3';
 // line splitting, marker rendering, and the vocabulary the rest of the CLI
 // speaks — so the dependency stays swappable behind one small surface.
 
-export type Merge3Result
-	= | { result: 'clean'; merged: string }
-		| { result: 'conflict'; merged: string; conflicts: number };
+export type Merge3Result =
+	| { result: 'clean'; merged: string }
+	| { result: 'conflict'; merged: string; conflicts: number };
 
 // What `update` does per file, derived from the three contents alone:
 //   up-to-date   — the template didn't move (or the user already matches it)
@@ -17,13 +17,15 @@ export type Merge3Result
 //   conflict     — overlapping edits; `merged` carries git-style markers
 export type UpdateStatus = 'up-to-date' | 'clean-update' | 'merged' | 'conflict';
 
-export function computeUpdate(opts: { base: string; mine: string; theirs: string }): { status: UpdateStatus; merged: string } {
+export function computeUpdate(opts: { base: string; mine: string; theirs: string }): {
+	status: UpdateStatus;
+	merged: string;
+} {
 	// Template unchanged, or the user hand-applied the update already: either
 	// way the on-disk file is the right answer and nothing needs writing.
 	if (opts.theirs === opts.base || opts.mine === opts.theirs)
 		return { status: 'up-to-date', merged: opts.mine };
-	if (opts.mine === opts.base)
-		return { status: 'clean-update', merged: opts.theirs };
+	if (opts.mine === opts.base) return { status: 'clean-update', merged: opts.theirs };
 	const r = merge3(opts);
 	return r.result === 'clean'
 		? { status: 'merged', merged: r.merged }
@@ -51,8 +53,7 @@ export function merge3(opts: { base: string; mine: string; theirs: string }): Me
 	for (const region of regions) {
 		if (region.ok) {
 			out.push(region.ok.join(''));
-		}
-		else if (region.conflict) {
+		} else if (region.conflict) {
 			conflicts += 1;
 			out.push(
 				MARKER_YOURS,
@@ -77,7 +78,6 @@ function splitKeepEol(text: string): string[] {
 // A conflict block that ends the file without a newline would glue itself to
 // the next marker line; give the marker its own line in that one case.
 function ensureTrailingEol(block: string): string {
-	if (block.length === 0 || block.endsWith('\n'))
-		return block;
+	if (block.length === 0 || block.endsWith('\n')) return block;
 	return `${block}\n`;
 }

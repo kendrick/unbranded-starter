@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildOxfmtConfig, buildOxlintConfig, OXC_DEV_DEPENDENCIES, OXLINT_FLAVORS, oxlintPlugins } from './oxlint-config';
+import {
+	buildOxfmtConfig,
+	buildOxlintConfig,
+	OXC_DEV_DEPENDENCIES,
+	OXLINT_FLAVORS,
+	oxlintPlugins,
+} from './oxlint-config';
 
 interface Parsed {
 	plugins: string[];
@@ -17,11 +23,28 @@ function parse(json: string): Parsed {
 describe('oxlint flavors', () => {
 	it('enables react and jsx-a11y only from react up, and nextjs only on next', () => {
 		expect(oxlintPlugins('base')).toEqual(['eslint', 'typescript', 'unicorn', 'oxc', 'import']);
-		expect(oxlintPlugins('react')).toEqual(['eslint', 'typescript', 'unicorn', 'oxc', 'import', 'react', 'jsx-a11y']);
-		expect(oxlintPlugins('next')).toEqual(['eslint', 'typescript', 'unicorn', 'oxc', 'import', 'react', 'jsx-a11y', 'nextjs']);
+		expect(oxlintPlugins('react')).toEqual([
+			'eslint',
+			'typescript',
+			'unicorn',
+			'oxc',
+			'import',
+			'react',
+			'jsx-a11y',
+		]);
+		expect(oxlintPlugins('next')).toEqual([
+			'eslint',
+			'typescript',
+			'unicorn',
+			'oxc',
+			'import',
+			'react',
+			'jsx-a11y',
+			'nextjs',
+		]);
 	});
 
-	it('writes each flavor\'s plugins into the config it generates', () => {
+	it("writes each flavor's plugins into the config it generates", () => {
 		for (const flavor of OXLINT_FLAVORS) {
 			const config = parse(buildOxlintConfig(flavor));
 			expect(config.plugins).toEqual(oxlintPlugins(flavor));
@@ -43,7 +66,9 @@ describe('oxlint flavors', () => {
 
 	it('keeps oxfmt off package.json and markdown', () => {
 		const config = parse(buildOxfmtConfig());
-		expect(config.ignorePatterns).toEqual(expect.arrayContaining(['package.json', '**/*.md', 'node_modules/**']));
+		expect(config.ignorePatterns).toEqual(
+			expect.arrayContaining(['package.json', '**/*.md', 'node_modules/**']),
+		);
 		expect(config.useTabs).toBe(true);
 	});
 

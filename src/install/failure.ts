@@ -3,13 +3,18 @@ import { isCancel, select } from '@clack/prompts';
 
 // Pure and clack-free, so tests can call it directly. Plain ASCII on purpose:
 // nothing here is colorized, so `--no-color` has nothing to strip.
-export function formatInstallFailure(pm: Pm, exitCode: number | undefined, addedScripts?: Record<string, string>): string {
+export function formatInstallFailure(
+	pm: Pm,
+	exitCode: number | undefined,
+	addedScripts?: Record<string, string>,
+): string {
 	// A spawn that never started (bad PATH, missing binary) has no exit code at
 	// all—the sentence still has to read as a complete thought in that case,
 	// not trail off into "exit undefined".
-	const outcome = exitCode === undefined
-		? 'it failed before producing an exit code'
-		: `it failed with exit code ${exitCode}`;
+	const outcome =
+		exitCode === undefined
+			? 'it failed before producing an exit code'
+			: `it failed with exit code ${exitCode}`;
 	// What became of the written files is the next line's job, not this one's:
 	// the branch that follows either keeps them or rolls them back, and a
 	// headline that claimed either would be wrong half the time.
@@ -24,8 +29,11 @@ export function formatInstallFailure(pm: Pm, exitCode: number | undefined, added
 	// is about to remove them again.
 	const scripts = Object.keys(addedScripts ?? {});
 	if (scripts.length > 0) {
-		const names = scripts.map(s => `\`${s}\``);
-		const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+		const names = scripts.map((s) => `\`${s}\``);
+		const list =
+			names.length === 1
+				? names[0]
+				: `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 		const noun = scripts.length === 1 ? 'script' : 'scripts';
 		const pronoun = scripts.length === 1 ? 'it' : 'them';
 		message += ` This run added the ${list} ${noun} to \`package.json\`, and every \`${pm} install\` runs ${pronoun}.`;
@@ -48,20 +56,28 @@ export async function promptInstallFailure(): Promise<'keep' | 'rollback' | 'can
 	const choice = await select<'keep' | 'rollback'>({
 		message: 'Install failed. Keep what this run wrote, or roll back?',
 		options: [
-			{ value: 'keep', label: 'Keep the files', hint: 'leaves the files and the state file in place so you can fix the install and re-run it' },
-			{ value: 'rollback', label: 'Roll back', hint: 'restores every file this run changed to its pre-run contents and deletes the ones it created; leaves node_modules and the lockfile alone' },
+			{
+				value: 'keep',
+				label: 'Keep the files',
+				hint: 'leaves the files and the state file in place so you can fix the install and re-run it',
+			},
+			{
+				value: 'rollback',
+				label: 'Roll back',
+				hint: 'restores every file this run changed to its pre-run contents and deletes the ones it created; leaves node_modules and the lockfile alone',
+			},
 		],
 	});
-	if (isCancel(choice))
-		return 'cancel';
+	if (isCancel(choice)) return 'cancel';
 	return choice;
 }
 
 // Modeled on resolveDepConflict (run.ts) and the seam a future
 // `--on-install-failure` flag plugs into: a set policy short-circuits the
 // prompt, the same contract `--on-conflict` has for files.
-export async function resolveInstallFailure(policy: 'keep' | 'rollback' | undefined): Promise<'keep' | 'rollback' | 'cancel'> {
-	if (policy === undefined)
-		return promptInstallFailure();
+export async function resolveInstallFailure(
+	policy: 'keep' | 'rollback' | undefined,
+): Promise<'keep' | 'rollback' | 'cancel'> {
+	if (policy === undefined) return promptInstallFailure();
 	return policy;
 }

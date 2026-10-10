@@ -23,29 +23,27 @@ export interface ValidateReport {
 	units: ValidateEntry[];
 }
 
-export type ValidateOutcome
-	= | { kind: 'report'; report: ValidateReport }
-		| { kind: 'error'; message: string };
+export type ValidateOutcome =
+	| { kind: 'report'; report: ValidateReport }
+	| { kind: 'error'; message: string };
 
 // Built-in ids are always in scope, so a local or packed unit may point `implies`
 // at core-eslint. Claiming that id for itself is legal too — the loader namespaces
 // it to <dir>/core-eslint, which is a different unit from the built-in.
-const BUILTIN_IDS: ReadonlySet<string> = new Set(UNITS.map(u => u.id));
+const BUILTIN_IDS: ReadonlySet<string> = new Set(UNITS.map((u) => u.id));
 
 export function validateTarget(target: string): ValidateOutcome {
 	const found = discover(target);
-	if ('error' in found)
-		return { kind: 'error', message: found.error };
+	if ('error' in found) return { kind: 'error', message: found.error };
 
 	// Parse everything before validating anything: relation checks need the whole
 	// set's ids, so a unit implying its sibling passes in a units directory and
 	// fails when that sibling isn't there.
-	const parsed = found.map(c => ({ ...c, doc: readDefinition(c.file) }));
+	const parsed = found.map((c) => ({ ...c, doc: readDefinition(c.file) }));
 	const setIds = new Set<string>();
 	for (const p of parsed) {
 		const id = idOf(p.doc);
-		if (id !== undefined)
-			setIds.add(id);
+		if (id !== undefined) setIds.add(id);
 	}
 	const knownIds = new Set([...BUILTIN_IDS, ...setIds]);
 
@@ -53,7 +51,11 @@ export function validateTarget(target: string): ValidateOutcome {
 	const units: ValidateEntry[] = parsed.map(({ file, baseDir, doc }) => {
 		const path = displayPath(file);
 		if ('parseError' in doc) {
-			return { path, ok: false, issues: [{ path: '(document)', expected: 'valid JSON', got: doc.parseError }] };
+			return {
+				path,
+				ok: false,
+				issues: [{ path: '(document)', expected: 'valid JSON', got: doc.parseError }],
+			};
 		}
 
 		const result = validateUnitDefinition(doc.value, { baseDir, knownIds });
@@ -67,9 +69,12 @@ export function validateTarget(target: string): ValidateOutcome {
 			// neither can shadow the other in a recipe.
 			const first = seen.get(id);
 			if (first !== undefined)
-				issues.push({ path: 'id', expected: 'an id unique within this directory', got: `"${id}", already defined by ${first}` });
-			else
-				seen.set(id, path);
+				issues.push({
+					path: 'id',
+					expected: 'an id unique within this directory',
+					got: `"${id}", already defined by ${first}`,
+				});
+			else seen.set(id, path);
 		}
 
 		return { path, ...(id === undefined ? {} : { id }), ok: issues.length === 0, issues };
@@ -77,7 +82,7 @@ export function validateTarget(target: string): ValidateOutcome {
 
 	return {
 		kind: 'report',
-		report: { schema: VALIDATE_SCHEMA, ok: units.every(u => u.ok), units },
+		report: { schema: VALIDATE_SCHEMA, ok: units.every((u) => u.ok), units },
 	};
 }
 
@@ -90,22 +95,22 @@ export function runValidate(target: string, opts: RunValidateOpts = {}): number 
 
 	if (outcome.kind === 'error') {
 		if (opts.json)
-			process.stdout.write(`${JSON.stringify({ schema: VALIDATE_SCHEMA, ok: false, units: [] }, null, 2)}\n`);
+			process.stdout.write(
+				`${JSON.stringify({ schema: VALIDATE_SCHEMA, ok: false, units: [] }, null, 2)}\n`,
+			);
 		process.stderr.write(`${outcome.message}\n`);
 		return EXIT_ERROR;
 	}
 
-	if (opts.json)
-		process.stdout.write(`${JSON.stringify(outcome.report, null, 2)}\n`);
-	else
-		process.stdout.write(formatValidate(outcome.report));
+	if (opts.json) process.stdout.write(`${JSON.stringify(outcome.report, null, 2)}\n`);
+	else process.stdout.write(formatValidate(outcome.report));
 
 	return outcome.report.ok ? EXIT_OK : EXIT_ERROR;
 }
 
 export function formatValidate(report: ValidateReport): string {
 	const lines: string[] = [];
-	const bad = report.units.filter(u => !u.ok);
+	const bad = report.units.filter((u) => !u.ok);
 
 	if (bad.length === 0) {
 		const n = report.units.length;
@@ -121,13 +126,17 @@ export function formatValidate(report: ValidateReport): string {
 			// author can fix by editing the file, so say so instead of leaving them
 			// to read a version mismatch as a typo.
 			if (issue.code === 'unsupported-schema')
-				lines.push(`  ${' '.repeat(issue.path.length)}  a newer unbranded published this unit. Upgrade to use it.`);
+				lines.push(
+					`  ${' '.repeat(issue.path.length)}  a newer unbranded published this unit. Upgrade to use it.`,
+				);
 		}
 		lines.push('');
 	}
 
 	const total = bad.reduce((n, u) => n + u.issues.length, 0);
-	lines.push(`${total} issue${total === 1 ? '' : 's'} in ${bad.length} of ${report.units.length} unit definition${report.units.length === 1 ? '' : 's'}.`);
+	lines.push(
+		`${total} issue${total === 1 ? '' : 's'} in ${bad.length} of ${report.units.length} unit definition${report.units.length === 1 ? '' : 's'}.`,
+	);
 	lines.push(`Unit schema ${UNIT_SCHEMA} is documented in docs/authoring-units.md.`);
 
 	return `${lines.join('\n')}\n`;
@@ -147,18 +156,15 @@ function displayPath(file: string): string {
 function readDefinition(file: string): Doc {
 	try {
 		return { value: JSON.parse(readFileSync(file, 'utf-8')) };
-	}
-	catch (err) {
+	} catch (err) {
 		return { parseError: err instanceof Error ? err.message : String(err) };
 	}
 }
 
 function idOf(doc: Doc): string | undefined {
-	if ('parseError' in doc)
-		return undefined;
+	if ('parseError' in doc) return undefined;
 	const value = doc.value;
-	if (typeof value !== 'object' || value === null)
-		return undefined;
+	if (typeof value !== 'object' || value === null) return undefined;
 	const id = (value as { id?: unknown }).id;
 	return typeof id === 'string' ? id : undefined;
 }

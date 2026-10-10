@@ -21,7 +21,10 @@ function scaffold(tmp: string): void {
 		onConflict: 'overwrite',
 		postInstall: 'none',
 	});
-	const applied = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+	const applied = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+		cwd: tmp,
+		encoding: 'utf-8',
+	});
 	expect(applied.status, `scaffold stderr: ${applied.stderr}`).toBe(0);
 }
 
@@ -40,7 +43,12 @@ describe('unbranded diff', () => {
 		scaffold(tmp);
 
 		const raw = readFileSync(join(tmp, '.unbranded.json'), 'utf-8');
-		const state = JSON.parse(raw) as { schema: number; version: string; units: { id: string; source: { kind: string } }[]; files: Record<string, string> };
+		const state = JSON.parse(raw) as {
+			schema: number;
+			version: string;
+			units: { id: string; source: { kind: string } }[];
+			files: Record<string, string>;
+		};
 
 		expect(state.schema).toBe(3);
 		expect(state.units).toContainEqual({ id: 'core-editorconfig', source: { kind: 'builtin' } });
@@ -50,7 +58,15 @@ describe('unbranded diff', () => {
 		// Top-level keys serialize in sorted order (tab-indented, #48); _tool sorts
 		// first. attribution and modes arrived in schema 2 (options is omitted here —
 		// a core-editorconfig run resolves none).
-		expect([...raw.matchAll(/^\t"(\w+)":/gm)].map(m => m[1])).toEqual(['_tool', 'attribution', 'files', 'modes', 'schema', 'units', 'version']);
+		expect([...raw.matchAll(/^\t"(\w+)":/gm)].map((m) => m[1])).toEqual([
+			'_tool',
+			'attribution',
+			'files',
+			'modes',
+			'schema',
+			'units',
+			'version',
+		]);
 	});
 
 	it('reports no drift and exits 0 right after a clean scaffold', () => {
@@ -64,7 +80,10 @@ describe('unbranded diff', () => {
 
 	it('classifies a user edit and exits non-zero so CI catches drift', () => {
 		scaffold(tmp);
-		writeFileSync(join(tmp, '.editorconfig'), `${readFileSync(join(tmp, '.editorconfig'), 'utf-8')}\n# my override\n`);
+		writeFileSync(
+			join(tmp, '.editorconfig'),
+			`${readFileSync(join(tmp, '.editorconfig'), 'utf-8')}\n# my override\n`,
+		);
 
 		const result = spawnSync('node', [CLI, 'diff'], { cwd: tmp, encoding: 'utf-8' });
 		expect(result.status).toBe(1);
@@ -74,7 +93,10 @@ describe('unbranded diff', () => {
 
 	it('--diff prints the unified patch for a drifted file', () => {
 		scaffold(tmp);
-		writeFileSync(join(tmp, '.editorconfig'), `${readFileSync(join(tmp, '.editorconfig'), 'utf-8')}\n# my override\n`);
+		writeFileSync(
+			join(tmp, '.editorconfig'),
+			`${readFileSync(join(tmp, '.editorconfig'), 'utf-8')}\n# my override\n`,
+		);
 
 		const plain = spawnSync('node', [CLI, 'diff'], { cwd: tmp, encoding: 'utf-8' });
 		const withDiff = spawnSync('node', [CLI, 'diff', '--diff'], { cwd: tmp, encoding: 'utf-8' });
@@ -85,13 +107,19 @@ describe('unbranded diff', () => {
 
 	it('--json emits a stable machine-readable report and the drift flag', () => {
 		scaffold(tmp);
-		writeFileSync(join(tmp, '.editorconfig'), `${readFileSync(join(tmp, '.editorconfig'), 'utf-8')}\n# edit\n`);
+		writeFileSync(
+			join(tmp, '.editorconfig'),
+			`${readFileSync(join(tmp, '.editorconfig'), 'utf-8')}\n# edit\n`,
+		);
 
 		const result = spawnSync('node', [CLI, 'diff', '--json'], { cwd: tmp, encoding: 'utf-8' });
 		expect(result.status).toBe(1);
-		const parsed = JSON.parse(result.stdout) as { drift: boolean; files: { path: string; status: string }[] };
+		const parsed = JSON.parse(result.stdout) as {
+			drift: boolean;
+			files: { path: string; status: string }[];
+		};
 		expect(parsed.drift).toBe(true);
-		expect(parsed.files.find(f => f.path === '.editorconfig')?.status).toBe('user-modified');
+		expect(parsed.files.find((f) => f.path === '.editorconfig')?.status).toBe('user-modified');
 	});
 
 	it('gives a friendly nudge (exit 0) when the project was never tracked', () => {
@@ -135,14 +163,19 @@ describe('unbranded diff — computed writes are tracked (F-00)', () => {
 			onConflict: 'overwrite',
 			postInstall: 'none',
 		});
-		const applied = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+		const applied = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 		expect(applied.status, `scaffold stderr: ${applied.stderr}`).toBe(0);
 	}
 
 	it('records the computed .nvmrc and .vscode/extensions.json in .unbranded.json', () => {
 		scaffoldComputed();
 
-		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as { files: Record<string, string> };
+		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as {
+			files: Record<string, string>;
+		};
 		// Both computed files land alongside the statically-copied settings.json.
 		expect(Object.keys(state.files)).toEqual(
 			expect.arrayContaining(['.nvmrc', '.vscode/extensions.json', '.vscode/settings.json']),

@@ -15,10 +15,8 @@ describe('buildCatalog', () => {
 
 	it('omits internal file src paths but keeps the destination', () => {
 		const catalog = buildCatalog();
-		const editorconfig = catalog.units.find(u => u.id === 'core-editorconfig');
-		expect(editorconfig?.files).toEqual([
-			{ dest: '.editorconfig' },
-		]);
+		const editorconfig = catalog.units.find((u) => u.id === 'core-editorconfig');
+		expect(editorconfig?.files).toEqual([{ dest: '.editorconfig' }]);
 		// src anchors a path under PKG_ROOT — meaningless to any consumer and a
 		// leak of our internal layout. It must not appear on any file entry.
 		for (const unit of catalog.units) {
@@ -30,27 +28,27 @@ describe('buildCatalog', () => {
 
 	it('orders units by category display order, stable within a category', () => {
 		const catalog = buildCatalog();
-		const ids = catalog.units.map(u => u.id);
+		const ids = catalog.units.map((u) => u.id);
 		expect(ids[0]).toBe('core-editorconfig');
 		expect(ids.at(-1)).toBe('opt-monorepo');
 		// The three style units keep their declared order under one category.
-		const styleIds = catalog.units.filter(u => u.category === 'style').map(u => u.id);
+		const styleIds = catalog.units.filter((u) => u.category === 'style').map((u) => u.id);
 		expect(styleIds).toEqual(['core-stylelint', 'core-tailwind', 'core-postcss']);
 	});
 
 	it('preserves the implies relationship for tooling', () => {
 		const catalog = buildCatalog();
-		const eslint = catalog.units.find(u => u.id === 'core-eslint');
+		const eslint = catalog.units.find((u) => u.id === 'core-eslint');
 		expect(eslint?.implies).toEqual(['core-typescript']);
 	});
 
 	it('surfaces unit options (flavors) without leaking their internal files/deps', () => {
 		const catalog = buildCatalog();
-		const eslint = catalog.units.find(u => u.id === 'core-eslint');
-		const flavor = eslint?.options?.find(o => o.key === 'eslintFlavor');
+		const eslint = catalog.units.find((u) => u.id === 'core-eslint');
+		const flavor = eslint?.options?.find((o) => o.key === 'eslintFlavor');
 		expect(flavor?.default).toBe('base');
-		expect(flavor?.choices.map(c => c.value)).toEqual(['base', 'react', 'next']);
-		expect(flavor?.choices.every(c => typeof c.label === 'string')).toBe(true);
+		expect(flavor?.choices.map((c) => c.value)).toEqual(['base', 'react', 'next']);
+		expect(flavor?.choices.every((c) => typeof c.label === 'string')).toBe(true);
 		// The choice's baked-in config content and devDeps are an internal detail —
 		// the catalog surfaces the choice, not its payload.
 		for (const choice of flavor?.choices ?? []) {
@@ -63,10 +61,9 @@ describe('buildCatalog', () => {
 		expect(JSON.stringify(buildCatalog())).toBe(JSON.stringify(buildCatalog()));
 	});
 
-	it('omits source entirely when no sources map is given — doctor\'s buildCatalog() call keeps its old shape', () => {
+	it("omits source entirely when no sources map is given — doctor's buildCatalog() call keeps its old shape", () => {
 		const catalog = buildCatalog();
-		for (const unit of catalog.units)
-			expect(unit).not.toHaveProperty('source');
+		for (const unit of catalog.units) expect(unit).not.toHaveProperty('source');
 	});
 
 	it('stamps each unit with its source when a sources map is threaded in', () => {
@@ -74,13 +71,27 @@ describe('buildCatalog', () => {
 			['core-editorconfig', { kind: 'builtin' as const }],
 			['my-units/banner', { kind: 'dir' as const, path: '/abs/my-units' }],
 		]);
-		const units = [...UNITS, { id: 'my-units/banner', category: 'foundation' as const, label: 'Banner', description: 'A local unit.', files: [] }];
+		const units = [
+			...UNITS,
+			{
+				id: 'my-units/banner',
+				category: 'foundation' as const,
+				label: 'Banner',
+				description: 'A local unit.',
+				files: [],
+			},
+		];
 		const catalog = buildCatalog(units, sources);
-		expect(catalog.units.find(u => u.id === 'core-editorconfig')?.source).toEqual({ kind: 'builtin' });
-		expect(catalog.units.find(u => u.id === 'my-units/banner')?.source).toEqual({ kind: 'dir', path: '/abs/my-units' });
+		expect(catalog.units.find((u) => u.id === 'core-editorconfig')?.source).toEqual({
+			kind: 'builtin',
+		});
+		expect(catalog.units.find((u) => u.id === 'my-units/banner')?.source).toEqual({
+			kind: 'dir',
+			path: '/abs/my-units',
+		});
 		// A unit the map has no entry for (shouldn't happen in practice, but the lookup
 		// is a plain Map#get) stays source-less rather than crashing.
-		expect(catalog.units.find(u => u.id === 'core-eslint')).not.toHaveProperty('source');
+		expect(catalog.units.find((u) => u.id === 'core-eslint')).not.toHaveProperty('source');
 	});
 });
 
@@ -93,19 +104,30 @@ describe('formatCatalog', () => {
 		expect(out).toMatch(/implies → core-typescript/);
 	});
 
-	it('lists a unit\'s option flavors and marks the default', () => {
+	it("lists a unit's option flavors and marks the default", () => {
 		const out = formatCatalog();
 		expect(out).toMatch(/eslintFlavor: base \| react \| next/);
 		expect(out).toMatch(/default: base/);
 	});
 
 	it('tags a local unit with its namespace, read straight off the id prefix, and leaves built-ins bare', () => {
-		const units = [...UNITS, { id: 'my-units/banner', category: 'foundation' as const, label: 'Banner', description: 'A local unit.', files: [] }];
+		const units = [
+			...UNITS,
+			{
+				id: 'my-units/banner',
+				category: 'foundation' as const,
+				label: 'Banner',
+				description: 'A local unit.',
+				files: [],
+			},
+		];
 		const out = formatCatalog(units);
 		const lines = out.split('\n');
-		expect(lines.find(l => l.includes('my-units/banner'))).toMatch(/Banner — A local unit\.\s+\[local: my-units\]$/);
+		expect(lines.find((l) => l.includes('my-units/banner'))).toMatch(
+			/Banner — A local unit\.\s+\[local: my-units\]$/,
+		);
 		// A built-in's line is untouched — no bracket marker anywhere on it.
-		expect(lines.find(l => l.includes('core-editorconfig'))).not.toContain('[local:');
+		expect(lines.find((l) => l.includes('core-editorconfig'))).not.toContain('[local:');
 	});
 
 	it('keeps built-ins-only output byte-for-byte unchanged by the local-unit marker code path', () => {
@@ -117,12 +139,12 @@ describe('catalog presets', () => {
 	it('bumps the envelope to schema 2 and lists each preset with its resolved expansion', () => {
 		const catalog = buildCatalog();
 		expect(catalog.schema).toBe(2);
-		const names = catalog.presets.map(p => p.name);
+		const names = catalog.presets.map((p) => p.name);
 		expect(names).toEqual(['cli', 'next-app', 'node-lib']);
 
 		// The expansion is the RESOLVED closure, so implied units show up:
 		// next-app names opt-shadcn, and tailwind rides its implies edge.
-		const nextApp = catalog.presets.find(p => p.name === 'next-app');
+		const nextApp = catalog.presets.find((p) => p.name === 'next-app');
 		expect(nextApp?.units).toContain('opt-shadcn');
 		expect(nextApp?.units).toContain('core-tailwind');
 		expect(nextApp?.description.length).toBeGreaterThan(0);
@@ -141,15 +163,18 @@ describe('catalog presets', () => {
 function writeUnit(dir: string, dirName: string, extra: Record<string, unknown> = {}): void {
 	const unitDir = join(dir, dirName);
 	mkdirSync(unitDir, { recursive: true });
-	writeFileSync(join(unitDir, 'unit.json'), JSON.stringify({
-		schema: 1,
-		id: dirName,
-		category: 'foundation',
-		label: dirName,
-		description: `Fixture unit ${dirName}.`,
-		files: [],
-		...extra,
-	}));
+	writeFileSync(
+		join(unitDir, 'unit.json'),
+		JSON.stringify({
+			schema: 1,
+			id: dirName,
+			category: 'foundation',
+			label: dirName,
+			description: `Fixture unit ${dirName}.`,
+			files: [],
+			...extra,
+		}),
+	);
 }
 
 describe('runList', () => {
@@ -193,7 +218,7 @@ describe('runList', () => {
 			JSON.parse(stdout.join(''));
 		}).not.toThrow();
 		const catalog = JSON.parse(stdout.join('')) as { units: { id: string }[] };
-		expect(catalog.units.some(u => u.id === 'my-units/good')).toBe(true);
+		expect(catalog.units.some((u) => u.id === 'my-units/good')).toBe(true);
 	});
 
 	it('names a warning (shadowing a built-in id) on stderr for the human output too', () => {
@@ -217,10 +242,12 @@ describe('runList', () => {
 
 		stdout = [];
 		runList({ json: true, unitsDir: dir });
-		const catalog = JSON.parse(stdout.join('')) as { units: { id: string; source?: { kind: string; path?: string } }[] };
-		const banner = catalog.units.find(u => u.id === 'my-units/banner');
+		const catalog = JSON.parse(stdout.join('')) as {
+			units: { id: string; source?: { kind: string; path?: string } }[];
+		};
+		const banner = catalog.units.find((u) => u.id === 'my-units/banner');
 		expect(banner?.source).toEqual({ kind: 'dir', path: dir });
-		const editorconfig = catalog.units.find(u => u.id === 'core-editorconfig');
+		const editorconfig = catalog.units.find((u) => u.id === 'core-editorconfig');
 		expect(editorconfig?.source).toEqual({ kind: 'builtin' });
 	});
 });

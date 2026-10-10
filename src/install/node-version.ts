@@ -32,8 +32,7 @@ export function computeNodeVersion(input: NodeVersionInput): NodeVersionPins {
 		nvmrc: `${major}\n`,
 		engines: { node: `>=${major}` },
 	};
-	if (input.pm && input.pmVersion)
-		pins.packageManager = `${input.pm}@${input.pmVersion}`;
+	if (input.pm && input.pmVersion) pins.packageManager = `${input.pm}@${input.pmVersion}`;
 	return pins;
 }
 
@@ -41,18 +40,20 @@ export function computeNodeVersion(input: NodeVersionInput): NodeVersionPins {
 // (binary missing, non-zero exit, empty output) so the caller falls back to
 // omitting packageManager rather than pinning a guess.
 export async function queryPmVersion(pm: Pm | null, cwd: string): Promise<string | null> {
-	if (!pm)
-		return Promise.resolve(null);
+	if (!pm) return Promise.resolve(null);
 	return new Promise((resolve) => {
 		// spawnOptions carries the win32 shell:true that lets .cmd shims run, but
 		// its stdio:'inherit' would send the version to the terminal instead of a
 		// buffer — override to pipe so we can capture it.
-		const child = spawn(pm, ['--version'], { ...spawnOptions(cwd), stdio: ['ignore', 'pipe', 'ignore'] });
+		const child = spawn(pm, ['--version'], {
+			...spawnOptions(cwd),
+			stdio: ['ignore', 'pipe', 'ignore'],
+		});
 		let out = '';
 		child.stdout?.on('data', (chunk: Buffer) => {
 			out += chunk.toString('utf-8');
 		});
 		child.on('error', () => resolve(null));
-		child.on('exit', code => resolve(code === 0 && out.trim() ? out.trim() : null));
+		child.on('exit', (code) => resolve(code === 0 && out.trim() ? out.trim() : null));
 	});
 }

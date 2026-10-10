@@ -68,7 +68,7 @@ describe('rollbackJournal', () => {
 	it('restores modified files byte-exact, including binary content and CRLF/trailing whitespace', () => {
 		const binaryPath = join(tmp, 'b.bin');
 		const crlfPath = join(tmp, 'c.txt');
-		const binaryBefore = Buffer.from([0xFF, 0xFE, 0x00, 0x01, 0x0D, 0x0A]);
+		const binaryBefore = Buffer.from([0xff, 0xfe, 0x00, 0x01, 0x0d, 0x0a]);
 		const crlfBefore = 'line one\r\nline two   \r\n';
 		writeFileSync(binaryPath, binaryBefore);
 		writeFileSync(crlfPath, crlfBefore);
@@ -126,7 +126,9 @@ describe('rollbackJournal', () => {
 
 		expect(existsSync(join(tmp, 'a'))).toBe(false);
 		expect(existsSync(join(tmp, 'a', 'b'))).toBe(false);
-		expect(report.prunedDirs).toEqual(expect.arrayContaining([join(tmp, 'a'), join(tmp, 'a', 'b')]));
+		expect(report.prunedDirs).toEqual(
+			expect.arrayContaining([join(tmp, 'a'), join(tmp, 'a', 'b')]),
+		);
 
 		expect(existsSync(join(tmp, 'existing-dir'))).toBe(true);
 		expect(report.prunedDirs).not.toContain(join(tmp, 'existing-dir'));
@@ -180,7 +182,9 @@ describe('formatRollbackReport', () => {
 		const report = { restored: ['a', 'b'], deleted: ['c'], prunedDirs: [], failures: [] };
 		const output = formatRollbackReport(report, '/target');
 
-		expect(output).toBe('Rolled back: 2 file(s) restored, 1 created file(s) deleted.\n`node_modules` and the lockfile are untouched: the package manager owns those, and rollback does not reach them.');
+		expect(output).toBe(
+			'Rolled back: 2 file(s) restored, 1 created file(s) deleted.\n`node_modules` and the lockfile are untouched: the package manager owns those, and rollback does not reach them.',
+		);
 	});
 
 	it('lists a failure line relative to targetDir', () => {
@@ -199,7 +203,9 @@ describe('formatRollbackReport', () => {
 		};
 		const output = formatRollbackReport(report, targetDir);
 
-		expect(output).toContain(`  could not restore ${rel}: EISDIR: illegal operation on a directory`);
+		expect(output).toContain(
+			`  could not restore ${rel}: EISDIR: illegal operation on a directory`,
+		);
 		expect(output.split('\n')).toEqual([
 			'Rolled back: 0 file(s) restored, 0 created file(s) deleted.',
 			`  could not restore ${rel}: EISDIR: illegal operation on a directory`,

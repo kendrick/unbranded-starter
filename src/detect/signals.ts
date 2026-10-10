@@ -11,7 +11,9 @@ import { join } from 'node:path';
 // or null where a map belongs, so every probe funnels through this rather than
 // trusting the field's declared type.
 function record(value: unknown): Record<string, unknown> | undefined {
-	return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+	return value !== null && typeof value === 'object' && !Array.isArray(value)
+		? (value as Record<string, unknown>)
+		: undefined;
 }
 
 export function hasDep(pkg: PackageJson, name: string): boolean {
@@ -31,7 +33,11 @@ export function engines(pkg: PackageJson): Record<string, unknown> | undefined {
 // packageManager field. core-node-version writes all three, so presence of any is
 // a good-enough signal that the pin is handled.
 export function hasNodeVersionPin(cwd: string, pkg: PackageJson): boolean {
-	return Boolean(engines(pkg)?.node) || existsSync(join(cwd, '.nvmrc')) || typeof pkg.packageManager === 'string';
+	return (
+		Boolean(engines(pkg)?.node) ||
+		existsSync(join(cwd, '.nvmrc')) ||
+		typeof pkg.packageManager === 'string'
+	);
 }
 
 // The path a FileOp actually lands at: `rename` swaps the basename while keeping
@@ -39,8 +45,7 @@ export function hasNodeVersionPin(cwd: string, pkg: PackageJson): boolean {
 // Widened from the catalog's file type to a bare `{ dest; rename? }` so the raw
 // manifest FileOp works here too.
 export function effectiveDest(file: { dest: string; rename?: string }): string {
-	if (!file.rename)
-		return file.dest;
+	if (!file.rename) return file.dest;
 	const slash = file.dest.lastIndexOf('/');
 	return slash === -1 ? file.rename : `${file.dest.slice(0, slash)}/${file.rename}`;
 }

@@ -6,7 +6,9 @@ const FILES = [{ path: 'dist/cli.js' }, { path: 'README.md' }];
 // npm <=11: `npm pack --json` returns an array of pack records.
 const ARRAY_FORM = JSON.stringify([{ id: 'unbranded@1.0.0', files: FILES, entryCount: 2 }]);
 // npm 12: the same payload became a bare object keyed by package name.
-const OBJECT_FORM = JSON.stringify({ unbranded: { id: 'unbranded@1.0.0', files: FILES, entryCount: 2 } });
+const OBJECT_FORM = JSON.stringify({
+	unbranded: { id: 'unbranded@1.0.0', files: FILES, entryCount: 2 },
+});
 // Some npm builds run the `prepare` hook during pack and print ahead of the JSON.
 const HOOK_NOISE = '> unbranded@1.0.0 prepare\n> simple-git-hooks\n[INFO] hooks configured\n';
 

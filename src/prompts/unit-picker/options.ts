@@ -47,19 +47,21 @@ function orderUnits(units: AnyUnit[]): AnyUnit[] {
 }
 
 export function buildUnitPickerOptions(units: AnyUnit[], installed: Set<string>): PickerOption[] {
-	const labelById = new Map(units.map(u => [u.id, u.label]));
+	const labelById = new Map(units.map((u) => [u.id, u.label]));
 
 	return orderUnits(units).map((unit) => {
 		const detail: PickerDetail = {
-			files: unit.files.map(f => ({ dest: effectiveDest(f), mode: f.mode })),
+			files: unit.files.map((f) => ({ dest: effectiveDest(f), mode: f.mode })),
 			dependencies: unit.dependencies ?? {},
 			devDependencies: unit.devDependencies ?? {},
 			// Fall back to the raw id if a label is missing, so a dangling implies edge
 			// still shows something rather than "undefined".
-			implies: (unit.implies ?? []).map(id => labelById.get(id) ?? id),
-			postInstall: (unit.postInstall ?? []).map(p => p.prompt),
+			implies: (unit.implies ?? []).map((id) => labelById.get(id) ?? id),
+			postInstall: (unit.postInstall ?? []).map((p) => p.prompt),
 			...(unit.options?.length
-				? { optionNote: `Files and dependencies vary by ${unit.options.map(o => o.label).join(', ')}.` }
+				? {
+						optionNote: `Files and dependencies vary by ${unit.options.map((o) => o.label).join(', ')}.`,
+					}
 				: {}),
 		};
 

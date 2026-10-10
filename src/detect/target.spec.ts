@@ -63,7 +63,7 @@ describe('validateProjectName', () => {
 		expect(validateProjectName('bad name')).toMatch(/Lowercase/);
 	});
 
-	it('rejects a name past npm\'s 214-char cap', () => {
+	it("rejects a name past npm's 214-char cap", () => {
 		expect(validateProjectName('a'.repeat(215))).toMatch(/Too long/);
 	});
 });
@@ -158,8 +158,7 @@ describe('detectTarget (new-project shell)', () => {
 			// Augmented the --target dir, not the cwd we're sitting in.
 			expect(result).toEqual({ dir: other, mode: 'augment' });
 			expect(process.cwd()).toBe(cwd);
-		}
-		finally {
+		} finally {
 			rmSync(other, { recursive: true, force: true });
 		}
 	});

@@ -14,7 +14,13 @@ import { loadCatalog, unitsDirsFor } from '../manifest/catalog';
 import { applyLintStaged } from '../manifest/lint-staged';
 import { applyUnitOptions } from '../manifest/options';
 import { applyPinLines } from '../manifest/pin-lines';
-import { hashBuffer, readStateFile, refreshTrackedFiles, SIDECAR_DIR, unsupportedStateMessage } from '../state/state';
+import {
+	hashBuffer,
+	readStateFile,
+	refreshTrackedFiles,
+	SIDECAR_DIR,
+	unsupportedStateMessage,
+} from '../state/state';
 import { cancelAndExit } from '../util/cancel';
 import { colorEnabled } from '../util/color';
 import { PKG_ROOT } from '../util/paths';
@@ -22,15 +28,15 @@ import { PKG_ROOT } from '../util/paths';
 // Per-file verdicts. The first four are #34's contract; the rest are the honest
 // degradations: needs-choice when no merge base exists (schema-1 scaffolds, a
 // deleted sidecar, or a JSON value collision), and three report-only states.
-export type UpdateFileStatus
-	= | 'up-to-date'
-		| 'clean-update'
-		| 'merged'
-		| 'conflict'
-		| 'needs-choice'
-		| 'template-gone'
-		| 'user-deleted'
-		| 'computed';
+export type UpdateFileStatus =
+	| 'up-to-date'
+	| 'clean-update'
+	| 'merged'
+	| 'conflict'
+	| 'needs-choice'
+	| 'template-gone'
+	| 'user-deleted'
+	| 'computed';
 
 export interface UpdateFilePlan {
 	rel: string;
@@ -59,9 +65,15 @@ export interface UpdatePlanResult {
 // the current templates; writes nothing. Copy-mode files go through the
 // three-way engine; merge-json and append files reuse planFileOp, which is what
 // keeps update's structured behavior in lockstep with the scaffold's.
-export function planUpdate(opts: { targetDir: string; state: StateFile; units: AnyUnit[]; pkgRoot: string; templateRoots?: ReadonlyMap<string, string> }): UpdatePlanResult {
+export function planUpdate(opts: {
+	targetDir: string;
+	state: StateFile;
+	units: AnyUnit[];
+	pkgRoot: string;
+	templateRoots?: ReadonlyMap<string, string>;
+}): UpdatePlanResult {
 	const { state, targetDir } = opts;
-	const byId = new Map<string, AnyUnit>(opts.units.map(u => [u.id, u]));
+	const byId = new Map<string, AnyUnit>(opts.units.map((u) => [u.id, u]));
 
 	// Current template render for every file the installed units ship, with the
 	// recorded options baked in so a react-flavor scaffold replays as react. Each
@@ -69,12 +81,14 @@ export function planUpdate(opts: { targetDir: string; state: StateFile; units: A
 	// definition, not in the package.
 	const replay = new Map<string, { op: FileOp; content: string; root: string }>();
 	const resolved: AnyUnit[] = [];
-	const installedIds = new Set(state.units.map(u => u.id));
+	const installedIds = new Set(state.units.map((u) => u.id));
 	for (const { id } of state.units) {
 		const catalogUnit = byId.get(id);
-		if (!catalogUnit)
-			continue;
-		const unit = applyLintStaged(applyPinLines(applyUnitOptions(catalogUnit, state.options ?? {}), installedIds), installedIds);
+		if (!catalogUnit) continue;
+		const unit = applyLintStaged(
+			applyPinLines(applyUnitOptions(catalogUnit, state.options ?? {}), installedIds),
+			installedIds,
+		);
 		resolved.push(unit);
 		const root = opts.templateRoots?.get(id) ?? opts.pkgRoot;
 		for (const op of unit.files) {
@@ -83,8 +97,7 @@ export function planUpdate(opts: { targetDir: string; state: StateFile; units: A
 			// unit we couldn't load at all. Throwing here would take down the whole
 			// update over one deleted file in someone's units directory.
 			const src = op.src === undefined ? undefined : join(root, ...op.src.split(posix.sep));
-			if (op.content === undefined && (src === undefined || !existsSync(src)))
-				continue;
+			if (op.content === undefined && (src === undefined || !existsSync(src))) continue;
 			const content = op.content ?? readFileSync(src as string, 'utf-8');
 			replay.set(effectiveDest(op), { op, content, root });
 		}
@@ -119,14 +132,22 @@ export function planUpdate(opts: { targetDir: string; state: StateFile; units: A
 			const plan = planFileOp(entry.op, { pkgRoot: entry.root, targetDir });
 			if (plan.outcome === 'skip' || !plan.diff) {
 				files.push({ rel, status: 'up-to-date' });
-			}
-			else if (plan.outcome === 'conflict') {
+			} else if (plan.outcome === 'conflict') {
 				// Same key, different value. With no base there's no telling a user
 				// customization from a stale template value — the user decides.
-				files.push({ rel, status: 'needs-choice', proposed: plan.diff.proposed, existing: plan.diff.existing });
-			}
-			else {
-				files.push({ rel, status: 'merged', proposed: plan.diff.proposed, existing: plan.diff.existing });
+				files.push({
+					rel,
+					status: 'needs-choice',
+					proposed: plan.diff.proposed,
+					existing: plan.diff.existing,
+				});
+			} else {
+				files.push({
+					rel,
+					status: 'merged',
+					proposed: plan.diff.proposed,
+					existing: plan.diff.existing,
+				});
 			}
 			continue;
 		}
@@ -138,13 +159,14 @@ export function planUpdate(opts: { targetDir: string; state: StateFile; units: A
 		let base = existsSync(baselinePath) ? readFileSync(baselinePath, 'utf-8') : undefined;
 		// No baseline, but the recorded hash proves the disk bytes are exactly
 		// what we wrote — so the disk IS the base, and the merge stays exact.
-		if (base === undefined && hashBuffer(mineBuf) === state.files[rel])
-			base = mine;
+		if (base === undefined && hashBuffer(mineBuf) === state.files[rel]) base = mine;
 
 		if (base === undefined) {
-			files.push(mine === theirs
-				? { rel, status: 'up-to-date', theirs }
-				: { rel, status: 'needs-choice', proposed: theirs, theirs, existing: mine });
+			files.push(
+				mine === theirs
+					? { rel, status: 'up-to-date', theirs }
+					: { rel, status: 'needs-choice', proposed: theirs, theirs, existing: mine },
+			);
 			continue;
 		}
 
@@ -169,22 +191,27 @@ export function planUpdate(opts: { targetDir: string; state: StateFile; units: A
 // in a prompt. Hence no keep-set here, where init passes one (#113).
 function planPkgUpdate(targetDir: string, units: AnyUnit[]): UpdatePkgPlan {
 	const pkgPath = join(targetDir, 'package.json');
-	if (!existsSync(pkgPath) || units.length === 0)
-		return { changed: false };
+	if (!existsSync(pkgPath) || units.length === 0) return { changed: false };
 
 	const raw = readFileSync(pkgPath, 'utf-8');
 	const existing = JSON.parse(raw) as Record<string, unknown>;
-	const merged = mergePackageJson(existing, units.map(u => ({
-		dependencies: u.dependencies,
-		devDependencies: u.devDependencies,
-		scripts: u.packageJsonPatch?.scripts,
-		engines: u.packageJsonPatch?.engines,
-		packageManager: u.packageJsonPatch?.packageManager,
-	})));
+	const merged = mergePackageJson(
+		existing,
+		units.map((u) => ({
+			dependencies: u.dependencies,
+			devDependencies: u.devDependencies,
+			scripts: u.packageJsonPatch?.scripts,
+			engines: u.packageJsonPatch?.engines,
+			packageManager: u.packageJsonPatch?.packageManager,
+		})),
+	);
 
-	if (deepEqualJson(merged, existing))
-		return { changed: false };
-	return { changed: true, existing: raw, proposed: `${JSON.stringify(merged, null, detectIndent(raw))}\n` };
+	if (deepEqualJson(merged, existing)) return { changed: false };
+	return {
+		changed: true,
+		existing: raw,
+		proposed: `${JSON.stringify(merged, null, detectIndent(raw))}\n`,
+	};
 }
 
 const STATUS_LABELS: Record<UpdateFileStatus, string> = {
@@ -200,8 +227,8 @@ const STATUS_LABELS: Record<UpdateFileStatus, string> = {
 
 // Exported for direct testing — pure, no clack.
 export function formatUpdateReport(plan: UpdatePlanResult): string {
-	const width = Math.max(...Object.values(STATUS_LABELS).map(l => l.length));
-	const lines = plan.files.map(f => `${STATUS_LABELS[f.status].padEnd(width)}  ${f.rel}`);
+	const width = Math.max(...Object.values(STATUS_LABELS).map((l) => l.length));
+	const lines = plan.files.map((f) => `${STATUS_LABELS[f.status].padEnd(width)}  ${f.rel}`);
 	lines.push(`${(plan.pkg.changed ? 'merge' : 'up-to-date').padEnd(width)}  package.json`);
 	return lines.join('\n');
 }
@@ -230,19 +257,25 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 		return 1;
 	}
 	if (read.kind === 'none') {
-		process.stdout.write('unbranded update: nothing is tracked in this directory (no .unbranded.json).\n');
+		process.stdout.write(
+			'unbranded update: nothing is tracked in this directory (no .unbranded.json).\n',
+		);
 		return 0;
 	}
 	const state = read.state;
 
 	intro(opts.dryRun ? 'unbranded update (dry run)' : 'unbranded update');
 
-	if (!opts.force && !opts.dryRun && await isDirtyGitTree(cwd)) {
-		log.warn('Uncommitted changes in the git working tree — a clean tree is your undo button (`git checkout .`) if this update goes sideways.');
+	if (!opts.force && !opts.dryRun && (await isDirtyGitTree(cwd))) {
+		log.warn(
+			'Uncommitted changes in the git working tree — a clean tree is your undo button (`git checkout .`) if this update goes sideways.',
+		);
 		if (!opts.yes) {
-			const proceed = await confirm({ message: 'Update a dirty tree anyway?', initialValue: false });
-			if (isCancel(proceed))
-				return cancelAndExit();
+			const proceed = await confirm({
+				message: 'Update a dirty tree anyway?',
+				initialValue: false,
+			});
+			if (isCancel(proceed)) return cancelAndExit();
 			if (!proceed) {
 				cancel('Cancelled.');
 				return 0;
@@ -251,22 +284,41 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 	}
 
 	const catalog = loadCatalog({
-		unitsDirs: unitsDirsFor(state.units.map(u => u.source), cwd, opts.unitsDir),
+		unitsDirs: unitsDirsFor(
+			state.units.map((u) => u.source),
+			cwd,
+			opts.unitsDir,
+		),
 		onMissing: 'warn',
 	});
-	for (const warning of catalog.warnings)
-		log.warn(warning);
+	for (const warning of catalog.warnings) log.warn(warning);
 
-	const plan = planUpdate({ targetDir: cwd, state, units: catalog.units, pkgRoot: PKG_ROOT, templateRoots: catalog.templateRoots });
+	const plan = planUpdate({
+		targetDir: cwd,
+		state,
+		units: catalog.units,
+		pkgRoot: PKG_ROOT,
+		templateRoots: catalog.templateRoots,
+	});
 	note(formatUpdateReport(plan), 'Update plan');
 
 	if (opts.diff) {
 		for (const f of plan.files) {
 			if (f.proposed !== undefined && f.existing !== undefined && f.proposed !== f.existing)
-				log.message(colorizeDiff(createPatch(f.rel, f.existing, f.proposed, 'existing', 'proposed'), colorEnabled()));
+				log.message(
+					colorizeDiff(
+						createPatch(f.rel, f.existing, f.proposed, 'existing', 'proposed'),
+						colorEnabled(),
+					),
+				);
 		}
 		if (plan.pkg.changed && plan.pkg.existing && plan.pkg.proposed)
-			log.message(colorizeDiff(createPatch('package.json', plan.pkg.existing, plan.pkg.proposed, 'existing', 'proposed'), colorEnabled()));
+			log.message(
+				colorizeDiff(
+					createPatch('package.json', plan.pkg.existing, plan.pkg.proposed, 'existing', 'proposed'),
+					colorEnabled(),
+				),
+			);
 	}
 
 	if (opts.dryRun) {
@@ -274,8 +326,10 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 		return 0;
 	}
 
-	const auto = plan.files.filter(f => f.status === 'clean-update' || f.status === 'merged');
-	const contested = plan.files.filter(f => f.status === 'conflict' || f.status === 'needs-choice');
+	const auto = plan.files.filter((f) => f.status === 'clean-update' || f.status === 'merged');
+	const contested = plan.files.filter(
+		(f) => f.status === 'conflict' || f.status === 'needs-choice',
+	);
 	if (auto.length === 0 && contested.length === 0 && !plan.pkg.changed) {
 		outro('Everything up to date.');
 		return 0;
@@ -283,8 +337,7 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 
 	if (!opts.yes) {
 		const proceed = await confirm({ message: 'Apply?', initialValue: true });
-		if (isCancel(proceed))
-			return cancelAndExit();
+		if (isCancel(proceed)) return cancelAndExit();
 		if (!proceed) {
 			cancel('Cancelled.');
 			return 0;
@@ -302,32 +355,34 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 					// file is the only honest fallback.
 					log.warn(`${f.rel}: no merge base for markers; keeping your version.`);
 					resolutions.set(f.rel, 'ours');
-				}
-				else {
+				} else {
 					resolutions.set(f.rel, opts.strategy);
 				}
 			}
-		}
-		else if (opts.yes) {
-			log.error(`Conflicts need a decision: ${contested.map(f => f.rel).join(', ')}. Re-run with --strategy <ours|theirs|markers>, or interactively.`);
+		} else if (opts.yes) {
+			log.error(
+				`Conflicts need a decision: ${contested.map((f) => f.rel).join(', ')}. Re-run with --strategy <ours|theirs|markers>, or interactively.`,
+			);
 			outro('Nothing written.');
 			return 1;
-		}
-		else {
+		} else {
 			for (const f of contested) {
-				const options = f.status === 'conflict'
-					? [
-							{ value: 'ours' as const, label: 'Keep mine' },
-							{ value: 'theirs' as const, label: 'Take the template' },
-							{ value: 'markers' as const, label: 'Write conflict markers' },
-						]
-					: [
-							{ value: 'ours' as const, label: 'Keep mine' },
-							{ value: 'theirs' as const, label: 'Take the template' },
-						];
-				const choice = await select<UpdateStrategy>({ message: `${f.rel}: ${f.status === 'conflict' ? 'edits overlap the template change' : 'no merge base to reconcile with'}`, options });
-				if (isCancel(choice))
-					return cancelAndExit();
+				const options =
+					f.status === 'conflict'
+						? [
+								{ value: 'ours' as const, label: 'Keep mine' },
+								{ value: 'theirs' as const, label: 'Take the template' },
+								{ value: 'markers' as const, label: 'Write conflict markers' },
+							]
+						: [
+								{ value: 'ours' as const, label: 'Keep mine' },
+								{ value: 'theirs' as const, label: 'Take the template' },
+							];
+				const choice = await select<UpdateStrategy>({
+					message: `${f.rel}: ${f.status === 'conflict' ? 'edits overlap the template change' : 'no merge base to reconcile with'}`,
+					options,
+				});
+				if (isCancel(choice)) return cancelAndExit();
 				resolutions.set(f.rel, choice);
 			}
 		}
@@ -343,13 +398,10 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 		let content: string | undefined;
 		if (f.status === 'clean-update' || f.status === 'merged') {
 			content = f.proposed;
-		}
-		else if (f.status === 'conflict' || f.status === 'needs-choice') {
+		} else if (f.status === 'conflict' || f.status === 'needs-choice') {
 			const choice = resolutions.get(f.rel);
-			if (choice === 'theirs')
-				content = f.theirs ?? f.proposed;
-			else if (choice === 'markers')
-				content = f.proposed;
+			if (choice === 'theirs') content = f.theirs ?? f.proposed;
+			else if (choice === 'markers') content = f.proposed;
 		}
 
 		if (content !== undefined) {
@@ -362,8 +414,7 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 		// (or silently overturned) by the next run.
 		if (f.theirs !== undefined)
 			refresh[f.rel] = { hash: hashBuffer(readFileSync(abs)), baseline: f.theirs };
-		else if (content !== undefined)
-			refresh[f.rel] = { hash: hashBuffer(readFileSync(abs)) };
+		else if (content !== undefined) refresh[f.rel] = { hash: hashBuffer(readFileSync(abs)) };
 	}
 
 	if (plan.pkg.changed && plan.pkg.proposed) {
@@ -375,11 +426,14 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 
 	log.success(`Updated ${written} file${written === 1 ? '' : 's'}.`);
 	const followUps = [
-		...(plan.pkg.changed ? ['package.json changed — run your package manager\'s install to sync the lockfile.'] : []),
-		...plan.files.filter(f => resolutions.get(f.rel) === 'markers').map(f => `${f.rel} has conflict markers to resolve.`),
+		...(plan.pkg.changed
+			? ["package.json changed — run your package manager's install to sync the lockfile."]
+			: []),
+		...plan.files
+			.filter((f) => resolutions.get(f.rel) === 'markers')
+			.map((f) => `${f.rel} has conflict markers to resolve.`),
 	];
-	if (followUps.length > 0)
-		note(followUps.map(s => `• ${s}`).join('\n'), 'Next steps');
+	if (followUps.length > 0) note(followUps.map((s) => `• ${s}`).join('\n'), 'Next steps');
 	outro('Done.');
 	return 0;
 }
@@ -387,14 +441,27 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 // Order-insensitive structural equality: mergePackageJson re-sorts keys, and a
 // pure reordering is not a change worth writing.
 function deepEqualJson(a: unknown, b: unknown): boolean {
-	if (a === b)
-		return true;
+	if (a === b) return true;
 	if (Array.isArray(a) && Array.isArray(b))
 		return a.length === b.length && a.every((v, i) => deepEqualJson(v, b[i]));
-	if (a !== null && b !== null && typeof a === 'object' && typeof b === 'object' && !Array.isArray(a) && !Array.isArray(b)) {
+	if (
+		a !== null &&
+		b !== null &&
+		typeof a === 'object' &&
+		typeof b === 'object' &&
+		!Array.isArray(a) &&
+		!Array.isArray(b)
+	) {
 		const ka = Object.keys(a);
 		const kb = Object.keys(b);
-		return ka.length === kb.length && ka.every(k => k in (b as Record<string, unknown>) && deepEqualJson((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+		return (
+			ka.length === kb.length &&
+			ka.every(
+				(k) =>
+					k in (b as Record<string, unknown>) &&
+					deepEqualJson((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]),
+			)
+		);
 	}
 	return false;
 }

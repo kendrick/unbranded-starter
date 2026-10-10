@@ -57,7 +57,7 @@ describe('computeDiff', () => {
 
 		const report = computeDiff({ state, targetDir: tmp });
 		expect(report.drift).toBe(false);
-		expect(report.files.find(f => f.path === '.editorconfig')?.status).toBe('unchanged');
+		expect(report.files.find((f) => f.path === '.editorconfig')?.status).toBe('unchanged');
 	});
 
 	it('flags a user edit as user-modified and reports drift', () => {
@@ -70,7 +70,7 @@ describe('computeDiff', () => {
 
 		const report = computeDiff({ state, targetDir: tmp });
 		expect(report.drift).toBe(true);
-		expect(report.files.find(f => f.path === '.editorconfig')?.status).toBe('user-modified');
+		expect(report.files.find((f) => f.path === '.editorconfig')?.status).toBe('user-modified');
 	});
 
 	it('flags a shipped-template change as template-updated when the file is untouched', () => {
@@ -85,7 +85,7 @@ describe('computeDiff', () => {
 		});
 
 		const report = computeDiff({ state, targetDir: tmp });
-		expect(report.files.find(f => f.path === '.editorconfig')?.status).toBe('template-updated');
+		expect(report.files.find((f) => f.path === '.editorconfig')?.status).toBe('template-updated');
 		expect(report.drift).toBe(true);
 	});
 
@@ -113,7 +113,7 @@ describe('computeDiff', () => {
 		});
 
 		const report = computeDiff({ state, targetDir: tmp });
-		const entry = report.files.find(f => f.path === '.editorconfig');
+		const entry = report.files.find((f) => f.path === '.editorconfig');
 		// planFileOp compares on-disk against the current template, which is the
 		// patch `unbranded diff --diff` renders for a drifted file.
 		expect(entry?.plan?.diff).toBeDefined();

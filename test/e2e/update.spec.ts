@@ -17,14 +17,27 @@ const TEMPLATE = readFileSync(join(PKG_ROOT, '.editorconfig'), 'utf-8');
 const OLD = `# previous header\n${TEMPLATE.split('\n').slice(1).join('\n')}`;
 
 function scaffold(tmp: string): void {
-	writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'update-me', version: '0.0.0' }, null, 2));
-	writeFileSync(join(tmp, 'recipe.json'), JSON.stringify({
-		units: ['core-editorconfig', 'core-vitest', 'opt-vscode'],
-		pm: null,
-		onConflict: 'overwrite',
-		postInstall: 'none',
-	}, null, 2));
-	const applied = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+	writeFileSync(
+		join(tmp, 'package.json'),
+		JSON.stringify({ name: 'update-me', version: '0.0.0' }, null, 2),
+	);
+	writeFileSync(
+		join(tmp, 'recipe.json'),
+		JSON.stringify(
+			{
+				units: ['core-editorconfig', 'core-vitest', 'opt-vscode'],
+				pm: null,
+				onConflict: 'overwrite',
+				postInstall: 'none',
+			},
+			null,
+			2,
+		),
+	);
+	const applied = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+		cwd: tmp,
+		encoding: 'utf-8',
+	});
 	expect(applied.status, `scaffold stderr: ${applied.stderr}`).toBe(0);
 }
 
@@ -133,7 +146,10 @@ describe('unbranded update', () => {
 		scaffold(tmp);
 		// The user deleted a script and a dep the units still ship.
 		const pkgPath = join(tmp, 'package.json');
-		const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { scripts: Record<string, string>; devDependencies: Record<string, string> };
+		const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
+			scripts: Record<string, string>;
+			devDependencies: Record<string, string>;
+		};
 		delete pkg.scripts['test:watch'];
 		delete pkg.devDependencies.jsdom;
 		writeFileSync(pkgPath, `${JSON.stringify(pkg, null, '\t')}\n`);

@@ -16,7 +16,10 @@ function writeJson(path: string, obj: unknown): void {
 // units (core-editorconfig, core-gitattributes, core-node-version) carry zero
 // dependencies, so the real `npm install` the apply pipeline runs stays fast.
 function fixableRepo(dir: string): void {
-	writeJson(join(dir, 'package.json'), { name: 'fix-me', scripts: { test: 'vitest run', lint: 'eslint .' } });
+	writeJson(join(dir, 'package.json'), {
+		name: 'fix-me',
+		scripts: { test: 'vitest run', lint: 'eslint .' },
+	});
 	mkdirSync(join(dir, '.github', 'workflows'), { recursive: true });
 	writeFileSync(join(dir, '.github', 'workflows', 'ci.yml'), 'name: ci\n');
 }

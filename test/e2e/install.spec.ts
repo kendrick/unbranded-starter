@@ -18,15 +18,21 @@ describe('cli runs a real package-manager install', () => {
 
 	beforeEach(() => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-install-'));
-		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'install-target', version: '0.0.0' }));
+		writeFileSync(
+			join(tmp, 'package.json'),
+			JSON.stringify({ name: 'install-target', version: '0.0.0' }),
+		);
 		// core-editorconfig ships files but no dependencies, so the install runs
 		// to completion fast and offline while still spawning the PM.
-		writeFileSync(join(tmp, 'recipe.json'), JSON.stringify({
-			units: ['core-editorconfig'],
-			pm: 'npm',
-			onConflict: 'overwrite',
-			postInstall: 'none',
-		}));
+		writeFileSync(
+			join(tmp, 'recipe.json'),
+			JSON.stringify({
+				units: ['core-editorconfig'],
+				pm: 'npm',
+				onConflict: 'overwrite',
+				postInstall: 'none',
+			}),
+		);
 	});
 
 	afterEach(() => {
@@ -34,7 +40,10 @@ describe('cli runs a real package-manager install', () => {
 	});
 
 	it('spawns npm and completes the install', () => {
-		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: tmp, encoding: 'utf-8' });
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		// npm writes a lockfile on any successful install. Its presence proves the

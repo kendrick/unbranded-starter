@@ -5,22 +5,25 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { UNITS } from './index';
 import { loadUnitsDir } from './load-units';
 
-const BUILTIN_IDS = new Set(UNITS.map(u => u.id));
+const BUILTIN_IDS = new Set(UNITS.map((u) => u.id));
 
 // A unit every field of which is valid, so each fixture only has to override
 // the field it's exercising — mirrors validate-unit.spec.ts's validBase().
 function writeUnit(dir: string, dirName: string, extra: Record<string, unknown> = {}): void {
 	const unitDir = join(dir, dirName);
 	mkdirSync(unitDir, { recursive: true });
-	writeFileSync(join(unitDir, 'unit.json'), JSON.stringify({
-		schema: 1,
-		id: dirName,
-		category: 'foundation',
-		label: dirName,
-		description: `Fixture unit ${dirName}.`,
-		files: [],
-		...extra,
-	}));
+	writeFileSync(
+		join(unitDir, 'unit.json'),
+		JSON.stringify({
+			schema: 1,
+			id: dirName,
+			category: 'foundation',
+			label: dirName,
+			description: `Fixture unit ${dirName}.`,
+			files: [],
+			...extra,
+		}),
+	);
 }
 
 describe('loadUnitsDir', () => {
@@ -43,9 +46,12 @@ describe('loadUnitsDir', () => {
 
 		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
 		expect(loaded.skipped).toEqual([]);
-		const strictDocs = loaded.units.find(u => u.id === 'my-units/strict-docs');
+		const strictDocs = loaded.units.find((u) => u.id === 'my-units/strict-docs');
 		expect(strictDocs?.implies).toEqual(['my-units/banner', 'core-eslint']);
-		expect(loaded.units.map(u => u.id).sort()).toEqual(['my-units/banner', 'my-units/strict-docs']);
+		expect(loaded.units.map((u) => u.id).sort()).toEqual([
+			'my-units/banner',
+			'my-units/strict-docs',
+		]);
 	});
 
 	it('skips a unit whose JSON fails to parse', () => {
@@ -55,7 +61,7 @@ describe('loadUnitsDir', () => {
 		writeUnit(dir, 'banner');
 
 		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
-		expect(loaded.units.map(u => u.id)).toEqual(['my-units/banner']);
+		expect(loaded.units.map((u) => u.id)).toEqual(['my-units/banner']);
 		expect(loaded.skipped).toHaveLength(1);
 		expect(loaded.skipped[0]?.issues[0]?.path).toBe('(document)');
 	});
@@ -67,7 +73,7 @@ describe('loadUnitsDir', () => {
 		expect(loaded.units).toEqual([]);
 		expect(loaded.skipped).toHaveLength(1);
 		expect(loaded.skipped[0]?.id).toBe('bad-category');
-		expect(loaded.skipped[0]?.issues.some(i => i.path === 'category')).toBe(true);
+		expect(loaded.skipped[0]?.issues.some((i) => i.path === 'category')).toBe(true);
 	});
 
 	it('skips the later definition when a bare id is duplicated in the directory, naming the file that claimed it first', () => {
@@ -82,20 +88,29 @@ describe('loadUnitsDir', () => {
 		expect(loaded.skipped[0]?.issues[0]?.got).toContain('a-first');
 	});
 
-	it('skips a unit whose option key collides with a sibling\'s', () => {
-		const flavorOption = (value: string) => [{ key: 'flavor', label: 'Flavor', default: value, choices: [{ value, label: value }] }];
+	it("skips a unit whose option key collides with a sibling's", () => {
+		const flavorOption = (value: string) => [
+			{ key: 'flavor', label: 'Flavor', default: value, choices: [{ value, label: value }] },
+		];
 		writeUnit(dir, 'first', { options: flavorOption('a') });
 		writeUnit(dir, 'second', { options: flavorOption('b') });
 
 		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
-		expect(loaded.units.map(u => u.id)).toEqual(['my-units/first']);
+		expect(loaded.units.map((u) => u.id)).toEqual(['my-units/first']);
 		expect(loaded.skipped).toHaveLength(1);
 		expect(loaded.skipped[0]?.id).toBe('second');
 	});
 
-	it('skips a unit whose option key collides with a built-in\'s', () => {
+	it("skips a unit whose option key collides with a built-in's", () => {
 		writeUnit(dir, 'clashing', {
-			options: [{ key: 'eslintFlavor', label: 'Flavor', default: 'a', choices: [{ value: 'a', label: 'A' }] }],
+			options: [
+				{
+					key: 'eslintFlavor',
+					label: 'Flavor',
+					default: 'a',
+					choices: [{ value: 'a', label: 'A' }],
+				},
+			],
 		});
 
 		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
@@ -108,7 +123,7 @@ describe('loadUnitsDir', () => {
 		writeUnit(dir, 'core-eslint');
 
 		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
-		expect(loaded.units.map(u => u.id)).toEqual(['my-units/core-eslint']);
+		expect(loaded.units.map((u) => u.id)).toEqual(['my-units/core-eslint']);
 		expect(loaded.skipped).toEqual([]);
 		expect(loaded.warnings).toHaveLength(1);
 		expect(loaded.warnings[0]).toContain('my-units/core-eslint');
@@ -120,20 +135,20 @@ describe('loadUnitsDir', () => {
 		expect(loaded.warnings).toEqual([]);
 	});
 
-	it('throws assertValidNamespace\'s rule for a badly named directory', () => {
+	it("throws assertValidNamespace's rule for a badly named directory", () => {
 		const badDir = join(root, 'My Units');
 		mkdirSync(badDir);
 		writeUnit(badDir, 'banner');
 		expect(() => loadUnitsDir(badDir, BUILTIN_IDS)).toThrow(/lowercase id/);
 	});
 
-	it('throws discover\'s error for a directory with no unit.json anywhere', () => {
+	it("throws discover's error for a directory with no unit.json anywhere", () => {
 		const emptyDir = join(root, 'empty-units');
 		mkdirSync(emptyDir);
 		expect(() => loadUnitsDir(emptyDir, BUILTIN_IDS)).toThrow(/no unit\.json/);
 	});
 
-	it('maps baseDirs to each surviving unit\'s own directory', () => {
+	it("maps baseDirs to each surviving unit's own directory", () => {
 		writeUnit(dir, 'banner');
 		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
 		expect(loaded.baseDirs.get('my-units/banner')).toBe(join(dir, 'banner'));

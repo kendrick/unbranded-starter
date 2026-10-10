@@ -6,10 +6,28 @@ describe('planBumps', () => {
 		const report = {
 			schema: 1,
 			packages: [
-				{ name: 'eslint', pin: '9.39.4', latest: '10.0.0', behind: 'major', units: ['core-eslint'] },
+				{
+					name: 'eslint',
+					pin: '9.39.4',
+					latest: '10.0.0',
+					behind: 'major',
+					units: ['core-eslint'],
+				},
 				{ name: 'vitest', pin: '2.1.9', latest: '2.2.0', behind: 'minor', units: ['core-vitest'] },
-				{ name: 'typescript', pin: '5.9.3', latest: '5.9.3', behind: 'up-to-date', units: ['core-typescript'] },
-				{ name: 'weird', pin: 'latest', latest: '1.0.0', behind: 'unknown', units: ['core-eslint'] },
+				{
+					name: 'typescript',
+					pin: '5.9.3',
+					latest: '5.9.3',
+					behind: 'up-to-date',
+					units: ['core-typescript'],
+				},
+				{
+					name: 'weird',
+					pin: 'latest',
+					latest: '1.0.0',
+					behind: 'unknown',
+					units: ['core-eslint'],
+				},
 			],
 		};
 		expect(planBumps(report)).toEqual([
@@ -24,11 +42,27 @@ describe('planBumps with held lines', () => {
 		const report = {
 			schema: 1,
 			packages: [
-				{ name: 'typescript', pin: '6.0.3', line: 6, latest: '6.0.5', behind: 'patch', units: ['core-typescript'] },
-				{ name: 'typescript', pin: '6.0.3', line: 6, latest: '7.0.3', behind: 'major', units: ['core-typescript'] },
+				{
+					name: 'typescript',
+					pin: '6.0.3',
+					line: 6,
+					latest: '6.0.5',
+					behind: 'patch',
+					units: ['core-typescript'],
+				},
+				{
+					name: 'typescript',
+					pin: '6.0.3',
+					line: 6,
+					latest: '7.0.3',
+					behind: 'major',
+					units: ['core-typescript'],
+				},
 			],
 		};
-		expect(planBumps(report)).toEqual([{ name: 'typescript', from: '6.0.3', to: '6.0.5', units: ['core-typescript'] }]);
+		expect(planBumps(report)).toEqual([
+			{ name: 'typescript', from: '6.0.3', to: '6.0.5', units: ['core-typescript'] },
+		]);
 	});
 });
 
@@ -40,8 +74,8 @@ describe('groupByUnit', () => {
 			{ name: 'c', from: '3.0.0', to: '3.0.1', units: ['core-vitest'] },
 		]);
 		expect([...groups.keys()].sort()).toEqual(['core-eslint', 'core-vitest']);
-		expect(groups.get('core-eslint')?.map(b => b.name)).toEqual(['a', 'b']);
-		expect(groups.get('core-vitest')?.map(b => b.name)).toEqual(['c']);
+		expect(groups.get('core-eslint')?.map((b) => b.name)).toEqual(['a', 'b']);
+		expect(groups.get('core-vitest')?.map((b) => b.name)).toEqual(['c']);
 	});
 });
 
@@ -66,10 +100,10 @@ describe('rewritePins', () => {
 			{ name: '@types/node', from: '22.19.19', to: '24.0.0' },
 		]);
 		// Both eslint occurrences move; the coincidental same-version pin does not.
-		expect(source).toContain('eslint: \'10.0.0\'');
-		expect(source).not.toContain('eslint: \'9.39.4\'');
-		expect(source).toContain('coincidence: \'9.39.4\'');
-		expect(source).toContain('\'@types/node\': \'24.0.0\'');
+		expect(source).toContain("eslint: '10.0.0'");
+		expect(source).not.toContain("eslint: '9.39.4'");
+		expect(source).toContain("coincidence: '9.39.4'");
+		expect(source).toContain("'@types/node': '24.0.0'");
 		expect(applied.sort()).toEqual(['@types/node', 'eslint']);
 		expect(missed).toEqual([]);
 	});
@@ -121,17 +155,13 @@ describe('rewritePackageJson', () => {
 
 	it('rewrites a dependencies entry, not just devDependencies', () => {
 		const expected = PKG.replace('"kleur": "^4.1.5"', '"kleur": "^5.0.0"');
-		const { source, applied } = rewritePackageJson(PKG, [
-			{ name: 'kleur', to: '5.0.0' },
-		]);
+		const { source, applied } = rewritePackageJson(PKG, [{ name: 'kleur', to: '5.0.0' }]);
 		expect(source).toBe(expected);
 		expect(applied).toEqual(['kleur']);
 	});
 
 	it('leaves a name in neither map as a miss and the source untouched', () => {
-		const { source, applied, missed } = rewritePackageJson(PKG, [
-			{ name: 'turbo', to: '3.0.0' },
-		]);
+		const { source, applied, missed } = rewritePackageJson(PKG, [{ name: 'turbo', to: '3.0.0' }]);
 		expect(source).toBe(PKG);
 		expect(applied).toEqual([]);
 		expect(missed).toEqual(['turbo']);
@@ -149,9 +179,7 @@ describe('rewritePackageJson', () => {
 	it('counts a package already at the target version as applied, not missed', () => {
 		// A refreshed branch re-running the same bump must be idempotent: the
 		// pin is present and matches, so it's a no-op splice, not a failure to find it.
-		const { source, applied, missed } = rewritePackageJson(PKG, [
-			{ name: 'ajv', to: '8.20.0' },
-		]);
+		const { source, applied, missed } = rewritePackageJson(PKG, [{ name: 'ajv', to: '8.20.0' }]);
 		expect(source).toBe(PKG);
 		expect(applied).toEqual(['ajv']);
 		expect(missed).toEqual([]);
@@ -187,13 +215,17 @@ describe('rewritePackageJson across majors', () => {
 	});
 
 	it('still moves a major bump whose from sits on the range', () => {
-		const r = rewritePackageJson(PKG, [{ name: '@antfu/eslint-config', from: '8.2.0', to: '9.3.0' }]);
+		const r = rewritePackageJson(PKG, [
+			{ name: '@antfu/eslint-config', from: '8.2.0', to: '9.3.0' },
+		]);
 		expect(JSON.parse(r.source).devDependencies['@antfu/eslint-config']).toBe('^9.3.0');
 	});
 
 	it('advances a range already on the target major: manifest 8.x to 9.3.0 moves ^9.2.0', () => {
 		const ahead = PKG.replace('^8.2.0', '^9.2.0');
-		const r = rewritePackageJson(ahead, [{ name: '@antfu/eslint-config', from: '8.2.0', to: '9.3.0' }]);
+		const r = rewritePackageJson(ahead, [
+			{ name: '@antfu/eslint-config', from: '8.2.0', to: '9.3.0' },
+		]);
 		expect(JSON.parse(r.source).devDependencies['@antfu/eslint-config']).toBe('^9.3.0');
 		expect(r.applied).toEqual(['@antfu/eslint-config']);
 	});
@@ -201,9 +233,11 @@ describe('rewritePackageJson across majors', () => {
 
 describe('rewritePins with two typescript pins', () => {
 	it('rewrites only the literal matching from', () => {
-		const src = 'const a = { typescript: \'7.0.2\' };\nconst b = { typescript: \'6.0.3\' };\n';
+		const src = "const a = { typescript: '7.0.2' };\nconst b = { typescript: '6.0.3' };\n";
 		const r = rewritePins(src, [{ name: 'typescript', from: '6.0.3', to: '6.0.5' }]);
-		expect(r.source).toBe('const a = { typescript: \'7.0.2\' };\nconst b = { typescript: \'6.0.5\' };\n');
+		expect(r.source).toBe(
+			"const a = { typescript: '7.0.2' };\nconst b = { typescript: '6.0.5' };\n",
+		);
 		expect(r.applied).toEqual(['typescript']);
 	});
 });

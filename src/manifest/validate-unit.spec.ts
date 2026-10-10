@@ -30,8 +30,7 @@ describe('validateUnitDefinition', () => {
 		const unit = validBase();
 		const result = validateUnitDefinition(unit);
 		expect(result.ok).toBe(true);
-		if (!result.ok)
-			return;
+		if (!result.ok) return;
 		expect(result.unit).toEqual(unit);
 	});
 
@@ -40,17 +39,19 @@ describe('validateUnitDefinition', () => {
 			const { schema: _schema, ...rest } = validBase();
 			const result = validateUnitDefinition(rest);
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
-			expect(result.issues).toContainEqual({ path: 'schema', expected: 'an integer', got: 'missing' });
+			if (result.ok) return;
+			expect(result.issues).toContainEqual({
+				path: 'schema',
+				expected: 'an integer',
+				got: 'missing',
+			});
 		});
 
 		it('flags a non-integer schema without the unsupported-schema code', () => {
 			const result = validateUnitDefinition({ ...validBase(), schema: 1.5 });
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
-			const issue = result.issues.find(i => i.path === 'schema');
+			if (result.ok) return;
+			const issue = result.issues.find((i) => i.path === 'schema');
 			expect(issue).toEqual({ path: 'schema', expected: 'an integer', got: 'number' });
 			expect(issue?.code).toBeUndefined();
 		});
@@ -58,8 +59,7 @@ describe('validateUnitDefinition', () => {
 		it('flags a schema newer than UNIT_SCHEMA with the unsupported-schema code', () => {
 			const result = validateUnitDefinition({ ...validBase(), schema: 2 });
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
+			if (result.ok) return;
 			expect(result.issues).toContainEqual({
 				path: 'schema',
 				expected: `unit schema ${UNIT_SCHEMA_MIN} through ${UNIT_SCHEMA}`,
@@ -71,9 +71,8 @@ describe('validateUnitDefinition', () => {
 		it('flags a schema older than UNIT_SCHEMA_MIN as an ordinary issue', () => {
 			const result = validateUnitDefinition({ ...validBase(), schema: 0 });
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
-			const issue = result.issues.find(i => i.path === 'schema');
+			if (result.ok) return;
+			const issue = result.issues.find((i) => i.path === 'schema');
 			expect(issue).toEqual({
 				path: 'schema',
 				expected: `unit schema ${UNIT_SCHEMA_MIN} through ${UNIT_SCHEMA}`,
@@ -87,16 +86,18 @@ describe('validateUnitDefinition', () => {
 		it('rejects an unknown top-level key', () => {
 			const result = validateUnitDefinition({ ...validBase(), notARealField: true });
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
-			expect(result.issues).toContainEqual({ path: 'notARealField', expected: 'a recognized property', got: 'unknown key "notARealField"' });
+			if (result.ok) return;
+			expect(result.issues).toContainEqual({
+				path: 'notARealField',
+				expected: 'a recognized property',
+				got: 'unknown key "notARealField"',
+			});
 		});
 
 		it('rejects an id that fails the lowercase-dash pattern', () => {
 			const result = validateUnitDefinition({ ...validBase(), id: 'Bad_Id' });
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
+			if (result.ok) return;
 			expect(result.issues).toContainEqual({
 				path: 'id',
 				expected: 'a lowercase id matching ^[a-z0-9][a-z0-9-]*$',
@@ -107,11 +108,11 @@ describe('validateUnitDefinition', () => {
 		it('rejects a category outside the enum', () => {
 			const result = validateUnitDefinition({ ...validBase(), category: 'backend' });
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
+			if (result.ok) return;
 			expect(result.issues).toContainEqual({
 				path: 'category',
-				expected: 'one of: foundation, lint, style, types, test, e2e, monorepo, ui, git, editor, ci',
+				expected:
+					'one of: foundation, lint, style, types, test, e2e, monorepo, ui, git, editor, ci',
 				got: '"backend"',
 			});
 		});
@@ -119,18 +120,24 @@ describe('validateUnitDefinition', () => {
 		it('rejects an empty label', () => {
 			const result = validateUnitDefinition({ ...validBase(), label: '' });
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
-			expect(result.issues).toContainEqual({ path: 'label', expected: 'a non-empty string', got: '""' });
+			if (result.ok) return;
+			expect(result.issues).toContainEqual({
+				path: 'label',
+				expected: 'a non-empty string',
+				got: '""',
+			});
 		});
 
 		it('reports a missing description as "missing", not a type mismatch', () => {
 			const { description: _description, ...rest } = validBase();
 			const result = validateUnitDefinition(rest);
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
-			expect(result.issues).toContainEqual({ path: 'description', expected: 'a non-empty string', got: 'missing' });
+			if (result.ok) return;
+			expect(result.issues).toContainEqual({
+				path: 'description',
+				expected: 'a non-empty string',
+				got: 'missing',
+			});
 		});
 
 		it('allows files: []—a unit may contribute only deps or a package.json patch', () => {
@@ -142,35 +149,43 @@ describe('validateUnitDefinition', () => {
 			const unit = { ...validBase(), files: [{ src: 'a.txt', content: 'x', dest: 'out.txt' }] };
 			const result = validateUnitDefinition(unit);
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
-			expect(result.issues).toContainEqual({ path: 'files[0]', expected: 'exactly one of: src, content', got: 'both src and content' });
+			if (result.ok) return;
+			expect(result.issues).toContainEqual({
+				path: 'files[0]',
+				expected: 'exactly one of: src, content',
+				got: 'both src and content',
+			});
 		});
 
 		it('rejects a file entry with neither src nor content', () => {
 			const unit = { ...validBase(), files: [{ dest: 'out.txt' }] };
 			const result = validateUnitDefinition(unit);
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
-			expect(result.issues).toContainEqual({ path: 'files[0]', expected: 'exactly one of: src, content', got: 'neither src nor content' });
+			if (result.ok) return;
+			expect(result.issues).toContainEqual({
+				path: 'files[0]',
+				expected: 'exactly one of: src, content',
+				got: 'neither src nor content',
+			});
 		});
 
 		it('rejects an unknown key on a file entry', () => {
 			const unit = { ...validBase(), files: [{ content: 'x', dest: 'out.txt', bogus: 1 }] };
 			const result = validateUnitDefinition(unit);
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
-			expect(result.issues).toContainEqual({ path: 'files[0].bogus', expected: 'a recognized property', got: 'unknown key "bogus"' });
+			if (result.ok) return;
+			expect(result.issues).toContainEqual({
+				path: 'files[0].bogus',
+				expected: 'a recognized property',
+				got: 'unknown key "bogus"',
+			});
 		});
 
 		it('rejects an invalid file mode', () => {
 			const unit = { ...validBase(), files: [{ content: 'x', dest: 'out.txt', mode: 'merge' }] };
 			const result = validateUnitDefinition(unit);
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
+			if (result.ok) return;
 			expect(result.issues).toContainEqual({
 				path: 'files[0].mode',
 				expected: 'one of: copy, merge-json, append-if-missing',
@@ -182,8 +197,7 @@ describe('validateUnitDefinition', () => {
 			const unit = { ...validBase(), dependencies: { typescript: '^5.0.0' } };
 			const result = validateUnitDefinition(unit);
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
+			if (result.ok) return;
 			expect(result.issues).toContainEqual({
 				path: 'dependencies["typescript"]',
 				expected: 'an exact semver pin (e.g. 1.2.3)',
@@ -203,9 +217,12 @@ describe('validateUnitDefinition', () => {
 			};
 			const result = validateUnitDefinition(unit);
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
-			expect(result.issues).toContainEqual({ path: 'options[0].choices', expected: 'a non-empty array', got: 'empty array' });
+			if (result.ok) return;
+			expect(result.issues).toContainEqual({
+				path: 'options[0].choices',
+				expected: 'a non-empty array',
+				got: 'empty array',
+			});
 		});
 
 		it('rejects an option default that names no choice', () => {
@@ -215,9 +232,12 @@ describe('validateUnitDefinition', () => {
 			};
 			const result = validateUnitDefinition(unit);
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
-			expect(result.issues).toContainEqual({ path: 'options[0].default', expected: 'one of: a', got: '"zzz"' });
+			if (result.ok) return;
+			expect(result.issues).toContainEqual({
+				path: 'options[0].default',
+				expected: 'one of: a',
+				got: '"zzz"',
+			});
 		});
 
 		it('accepts an option default that matches one of its choices', () => {
@@ -228,20 +248,21 @@ describe('validateUnitDefinition', () => {
 			expect(validateUnitDefinition(unit).ok).toBe(true);
 		});
 
-		it('recurses into an option choice\'s files', () => {
+		it("recurses into an option choice's files", () => {
 			const unit = {
 				...validBase(),
-				options: [{
-					key: 'k',
-					label: 'L',
-					default: 'a',
-					choices: [{ value: 'a', label: 'A', files: [{ dest: 'x.txt' }] }],
-				}],
+				options: [
+					{
+						key: 'k',
+						label: 'L',
+						default: 'a',
+						choices: [{ value: 'a', label: 'A', files: [{ dest: 'x.txt' }] }],
+					},
+				],
 			};
 			const result = validateUnitDefinition(unit);
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
+			if (result.ok) return;
 			expect(result.issues).toContainEqual({
 				path: 'options[0].choices[0].files[0]',
 				expected: 'exactly one of: src, content',
@@ -249,20 +270,21 @@ describe('validateUnitDefinition', () => {
 			});
 		});
 
-		it('recurses into an option choice\'s dependencies', () => {
+		it("recurses into an option choice's dependencies", () => {
 			const unit = {
 				...validBase(),
-				options: [{
-					key: 'k',
-					label: 'L',
-					default: 'a',
-					choices: [{ value: 'a', label: 'A', dependencies: { chalk: 'latest' } }],
-				}],
+				options: [
+					{
+						key: 'k',
+						label: 'L',
+						default: 'a',
+						choices: [{ value: 'a', label: 'A', dependencies: { chalk: 'latest' } }],
+					},
+				],
 			};
 			const result = validateUnitDefinition(unit);
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
+			if (result.ok) return;
 			expect(result.issues).toContainEqual({
 				path: 'options[0].choices[0].dependencies["chalk"]',
 				expected: 'an exact semver pin (e.g. 1.2.3)',
@@ -271,30 +293,45 @@ describe('validateUnitDefinition', () => {
 		});
 
 		it('rejects an empty postInstall.command array', () => {
-			const unit = { ...validBase(), postInstall: [{ id: 'i', command: [], prompt: 'p', default: true }] };
+			const unit = {
+				...validBase(),
+				postInstall: [{ id: 'i', command: [], prompt: 'p', default: true }],
+			};
 			const result = validateUnitDefinition(unit);
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
-			expect(result.issues).toContainEqual({ path: 'postInstall[0].command', expected: 'a non-empty array', got: 'empty array' });
+			if (result.ok) return;
+			expect(result.issues).toContainEqual({
+				path: 'postInstall[0].command',
+				expected: 'a non-empty array',
+				got: 'empty array',
+			});
 		});
 
 		it('rejects a postInstall.requires value other than "git"', () => {
-			const unit = { ...validBase(), postInstall: [{ id: 'i', command: ['x'], prompt: 'p', default: true, requires: 'npm' }] };
+			const unit = {
+				...validBase(),
+				postInstall: [{ id: 'i', command: ['x'], prompt: 'p', default: true, requires: 'npm' }],
+			};
 			const result = validateUnitDefinition(unit);
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
-			expect(result.issues).toContainEqual({ path: 'postInstall[0].requires', expected: 'one of: git', got: '"npm"' });
+			if (result.ok) return;
+			expect(result.issues).toContainEqual({
+				path: 'postInstall[0].requires',
+				expected: 'one of: git',
+				got: '"npm"',
+			});
 		});
 
 		it('rejects a non-string value in packageJsonPatch.scripts', () => {
 			const unit = { ...validBase(), packageJsonPatch: { scripts: { build: 123 } } };
 			const result = validateUnitDefinition(unit);
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
-			expect(result.issues).toContainEqual({ path: 'packageJsonPatch.scripts["build"]', expected: 'a string', got: 'number' });
+			if (result.ok) return;
+			expect(result.issues).toContainEqual({
+				path: 'packageJsonPatch.scripts["build"]',
+				expected: 'a string',
+				got: 'number',
+			});
 		});
 
 		it('accumulates every issue from a badly-formed definition in one pass', () => {
@@ -306,11 +343,14 @@ describe('validateUnitDefinition', () => {
 				files: [],
 			});
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
+			if (result.ok) return;
 			// schema (missing) + id (pattern) + category (enum) + label (empty)—none
 			// of these should have short-circuited the others.
-			expect(result.issues).toContainEqual({ path: 'schema', expected: 'an integer', got: 'missing' });
+			expect(result.issues).toContainEqual({
+				path: 'schema',
+				expected: 'an integer',
+				got: 'missing',
+			});
 			expect(result.issues).toContainEqual({
 				path: 'id',
 				expected: 'a lowercase id matching ^[a-z0-9][a-z0-9-]*$',
@@ -318,10 +358,15 @@ describe('validateUnitDefinition', () => {
 			});
 			expect(result.issues).toContainEqual({
 				path: 'category',
-				expected: 'one of: foundation, lint, style, types, test, e2e, monorepo, ui, git, editor, ci',
+				expected:
+					'one of: foundation, lint, style, types, test, e2e, monorepo, ui, git, editor, ci',
 				got: '"backend"',
 			});
-			expect(result.issues).toContainEqual({ path: 'label', expected: 'a non-empty string', got: '""' });
+			expect(result.issues).toContainEqual({
+				path: 'label',
+				expected: 'a non-empty string',
+				got: '""',
+			});
 			expect(result.issues.length).toBeGreaterThanOrEqual(4);
 		});
 	});
@@ -352,8 +397,7 @@ describe('validateUnitDefinition', () => {
 			const unit = { ...validBase(), files: [{ src: '/etc/passwd', dest: 'out.txt' }] };
 			const result = validateUnitDefinition(unit, { baseDir });
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
+			if (result.ok) return;
 			expect(result.issues).toContainEqual({
 				path: 'files[0].src',
 				expected: 'a relative path inside the unit directory',
@@ -365,8 +409,7 @@ describe('validateUnitDefinition', () => {
 			const unit = { ...validBase(), files: [{ src: '../secret.txt', dest: 'out.txt' }] };
 			const result = validateUnitDefinition(unit, { baseDir });
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
+			if (result.ok) return;
 			expect(result.issues).toContainEqual({
 				path: 'files[0].src',
 				expected: 'a relative path inside the unit directory',
@@ -378,9 +421,12 @@ describe('validateUnitDefinition', () => {
 			const unit = { ...validBase(), files: [{ src: 'missing.txt', dest: 'out.txt' }] };
 			const result = validateUnitDefinition(unit, { baseDir });
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
-			expect(result.issues).toContainEqual({ path: 'files[0].src', expected: 'a file that exists on disk', got: 'not found' });
+			if (result.ok) return;
+			expect(result.issues).toContainEqual({
+				path: 'files[0].src',
+				expected: 'a file that exists on disk',
+				got: 'not found',
+			});
 		});
 	});
 
@@ -391,19 +437,40 @@ describe('validateUnitDefinition', () => {
 		});
 
 		it('accepts relations present in the known set', () => {
-			const unit = { ...validBase(), implies: ['other-unit'], excludes: ['other-unit'], requires: ['other-unit'] };
+			const unit = {
+				...validBase(),
+				implies: ['other-unit'],
+				excludes: ['other-unit'],
+				requires: ['other-unit'],
+			};
 			expect(validateUnitDefinition(unit, { knownIds: new Set(['other-unit']) }).ok).toBe(true);
 		});
 
 		it('flags implies/excludes/requires entries missing from the known set', () => {
-			const unit = { ...validBase(), implies: ['nope'], excludes: ['also-nope'], requires: ['still-nope'] };
+			const unit = {
+				...validBase(),
+				implies: ['nope'],
+				excludes: ['also-nope'],
+				requires: ['still-nope'],
+			};
 			const result = validateUnitDefinition(unit, { knownIds: new Set(['other-unit']) });
 			expect(result.ok).toBe(false);
-			if (result.ok)
-				return;
-			expect(result.issues).toContainEqual({ path: 'implies[0]', expected: 'a known unit id', got: '"nope"' });
-			expect(result.issues).toContainEqual({ path: 'excludes[0]', expected: 'a known unit id', got: '"also-nope"' });
-			expect(result.issues).toContainEqual({ path: 'requires[0]', expected: 'a known unit id', got: '"still-nope"' });
+			if (result.ok) return;
+			expect(result.issues).toContainEqual({
+				path: 'implies[0]',
+				expected: 'a known unit id',
+				got: '"nope"',
+			});
+			expect(result.issues).toContainEqual({
+				path: 'excludes[0]',
+				expected: 'a known unit id',
+				got: '"also-nope"',
+			});
+			expect(result.issues).toContainEqual({
+				path: 'requires[0]',
+				expected: 'a known unit id',
+				got: '"still-nope"',
+			});
 		});
 	});
 });
@@ -415,11 +482,15 @@ describe('fixture corpus (test/fixtures/units)', () => {
 	const fixturesDir = join(PKG_ROOT, 'test/fixtures/units');
 	// Covers every id a fixture's implies/excludes/requires names, so the
 	// knownIds pass only fires where a fixture means to exercise it.
-	const knownIds = new Set(['fixture-minimal', 'fixture-conflicting', 'fixture-with-src', 'fixture-full']);
+	const knownIds = new Set([
+		'fixture-minimal',
+		'fixture-conflicting',
+		'fixture-with-src',
+		'fixture-full',
+	]);
 
 	for (const entry of readdirSync(fixturesDir, { withFileTypes: true })) {
-		if (!entry.isDirectory())
-			continue;
+		if (!entry.isDirectory()) continue;
 		const dir = join(fixturesDir, entry.name);
 		const unit: unknown = JSON.parse(readFileSync(join(dir, 'unit.json'), 'utf-8'));
 
@@ -428,8 +499,7 @@ describe('fixture corpus (test/fixtures/units)', () => {
 				const result = validateUnitDefinition(unit, { baseDir: dir, knownIds });
 				expect(result.ok).toBe(true);
 			});
-		}
-		else if (entry.name.startsWith('invalid-')) {
+		} else if (entry.name.startsWith('invalid-')) {
 			it(`rejects ${entry.name}`, () => {
 				const result = validateUnitDefinition(unit, { baseDir: dir, knownIds });
 				expect(result.ok).toBe(false);
@@ -442,8 +512,7 @@ describe('fixture corpus (test/fixtures/units)', () => {
 		const unit: unknown = JSON.parse(readFileSync(join(dir, 'unit.json'), 'utf-8'));
 		const result = validateUnitDefinition(unit, { baseDir: dir });
 		expect(result.ok).toBe(false);
-		if (result.ok)
-			return;
+		if (result.ok) return;
 		expect(result.issues).toContainEqual({
 			path: 'schema',
 			expected: `unit schema ${UNIT_SCHEMA_MIN} through ${UNIT_SCHEMA}`,
@@ -456,11 +525,17 @@ describe('fixture corpus (test/fixtures/units)', () => {
 		const dir = join(fixturesDir, 'invalid-unknown-relation');
 		const unit: unknown = JSON.parse(readFileSync(join(dir, 'unit.json'), 'utf-8'));
 		expect(validateUnitDefinition(unit, { baseDir: dir }).ok).toBe(true);
-		const result = validateUnitDefinition(unit, { baseDir: dir, knownIds: new Set(['fixture-minimal']) });
+		const result = validateUnitDefinition(unit, {
+			baseDir: dir,
+			knownIds: new Set(['fixture-minimal']),
+		});
 		expect(result.ok).toBe(false);
-		if (result.ok)
-			return;
-		expect(result.issues).toContainEqual({ path: 'implies[0]', expected: 'a known unit id', got: '"does-not-exist"' });
+		if (result.ok) return;
+		expect(result.issues).toContainEqual({
+			path: 'implies[0]',
+			expected: 'a known unit id',
+			got: '"does-not-exist"',
+		});
 	});
 });
 
@@ -483,9 +558,8 @@ describe('containment guard regression table', () => {
 	// cells, per the task's own hazard note.
 	function rejectedDestination(result: UnitValidationResult, path: string): string {
 		expect(result.ok).toBe(false);
-		if (result.ok)
-			throw new Error('unreachable: expected a rejection');
-		const issue = result.issues.find(i => i.path === path);
+		if (result.ok) throw new Error('unreachable: expected a rejection');
+		const issue = result.issues.find((i) => i.path === path);
 		expect(issue).toBeDefined();
 		return JSON.parse(issue!.got) as string;
 	}
@@ -503,12 +577,12 @@ describe('containment guard regression table', () => {
 			// whether the field under test resolves relative to the root itself
 			// (`dest`) or to a subdirectory of it (`rename`, relative to
 			// dirname(dest) — one hop only clears a one-segment-deep dest).
-			{ name: 'relative traversal', probe: marker => `../../../../${marker}` },
-			{ name: 'posix-absolute', probe: marker => `/${marker}` },
-			{ name: 'Windows drive-absolute', probe: marker => `C:\\${marker}` },
-			{ name: 'UNC', probe: marker => `\\\\server\\share\\${marker}` },
-			{ name: 'backslash-rooted', probe: marker => `\\${marker}` },
-			{ name: 'backslash traversal', probe: marker => `..\\..\\${marker}` },
+			{ name: 'relative traversal', probe: (marker) => `../../../../${marker}` },
+			{ name: 'posix-absolute', probe: (marker) => `/${marker}` },
+			{ name: 'Windows drive-absolute', probe: (marker) => `C:\\${marker}` },
+			{ name: 'UNC', probe: (marker) => `\\\\server\\share\\${marker}` },
+			{ name: 'backslash-rooted', probe: (marker) => `\\${marker}` },
+			{ name: 'backslash traversal', probe: (marker) => `..\\..\\${marker}` },
 		];
 		const FIELDS = ['dest', 'rename'] as const;
 		const OP_SHAPES = ['content', 'src'] as const;
@@ -521,10 +595,10 @@ describe('containment guard regression table', () => {
 
 					it(`${accepts ? 'accepts' : 'rejects'} ${shapeName} carried by ${field} (${opShape})`, () => {
 						const probeValue = probe(marker);
-						const fileOp: Record<string, unknown> = field === 'dest'
-							? { dest: probeValue }
-							: { dest: 'ok/base.txt', rename: probeValue };
-						fileOp[opShape === 'content' ? 'content' : 'src'] = opShape === 'content' ? 'body\n' : 'template.txt';
+						const fileOp: Record<string, unknown> =
+							field === 'dest' ? { dest: probeValue } : { dest: 'ok/base.txt', rename: probeValue };
+						fileOp[opShape === 'content' ? 'content' : 'src'] =
+							opShape === 'content' ? 'body\n' : 'template.txt';
 
 						const unit = { ...validBase(), files: [fileOp] };
 						const result = validateUnitDefinition(unit);
@@ -564,15 +638,21 @@ describe('containment guard regression table', () => {
 			const unit = {
 				...validBase(),
 				files: [],
-				options: [{
-					key: 'flavor',
-					label: 'Flavor',
-					default: 'safe',
-					choices: [
-						{ value: 'safe', label: 'Safe', files: [{ dest: 'ok.txt', content: 'fine\n' }] },
-						{ value: 'evil', label: 'Evil', files: [{ dest: '../ESCAPED-walk-nondefault-choice.txt', content: 'pwned\n' }] },
-					],
-				}],
+				options: [
+					{
+						key: 'flavor',
+						label: 'Flavor',
+						default: 'safe',
+						choices: [
+							{ value: 'safe', label: 'Safe', files: [{ dest: 'ok.txt', content: 'fine\n' }] },
+							{
+								value: 'evil',
+								label: 'Evil',
+								files: [{ dest: '../ESCAPED-walk-nondefault-choice.txt', content: 'pwned\n' }],
+							},
+						],
+					},
+				],
 			};
 			const result = validateUnitDefinition(unit);
 			const destination = rejectedDestination(result, 'options[0].choices[1].files[0].dest');
@@ -582,7 +662,9 @@ describe('containment guard regression table', () => {
 		it('catches an escape on an op carrying mode: "append-if-missing"', () => {
 			const unit = {
 				...validBase(),
-				files: [{ dest: '../ESCAPED-walk-mode.txt', content: 'pwned\n', mode: 'append-if-missing' }],
+				files: [
+					{ dest: '../ESCAPED-walk-mode.txt', content: 'pwned\n', mode: 'append-if-missing' },
+				],
 			};
 			const result = validateUnitDefinition(unit);
 			const destination = rejectedDestination(result, 'files[0].dest');
@@ -602,7 +684,7 @@ describe('containment guard regression table', () => {
 		// task's own instruction.
 		const root = '/home/dev/my-proj';
 
-		it('rejects a sibling reached absolutely: the root\'s own value with EVIL/x appended', () => {
+		it("rejects a sibling reached absolutely: the root's own value with EVIL/x appended", () => {
 			// Strip any trailing separator before concatenating, or the probe
 			// lands inside the root and proves nothing — root has none here,
 			// but the strip is what makes this correct for any root a future
@@ -638,14 +720,20 @@ describe('containment guard regression table', () => {
 			const unit = {
 				...validBase(),
 				files: [],
-				options: [{
-					key: 'flavor',
-					label: 'Flavor',
-					default: 'evil',
-					choices: [
-						{ value: 'evil', label: 'Evil', files: [{ dest: '../ESCAPED-default-choice.txt', content: 'pwned\n' }] },
-					],
-				}],
+				options: [
+					{
+						key: 'flavor',
+						label: 'Flavor',
+						default: 'evil',
+						choices: [
+							{
+								value: 'evil',
+								label: 'Evil',
+								files: [{ dest: '../ESCAPED-default-choice.txt', content: 'pwned\n' }],
+							},
+						],
+					},
+				],
 			};
 			const result = validateUnitDefinition(unit);
 			const destination = rejectedDestination(result, 'options[0].choices[0].files[0].dest');
@@ -657,14 +745,22 @@ describe('containment guard regression table', () => {
 	// one accepted cell above; the other two are named here.
 	describe('acceptance cases', () => {
 		it('accepts a conforming relative dest', () => {
-			const unit = { ...validBase(), files: [{ dest: 'src/components/Button.tsx', content: 'export const Button = () => null;\n' }] };
+			const unit = {
+				...validBase(),
+				files: [
+					{ dest: 'src/components/Button.tsx', content: 'export const Button = () => null;\n' },
+				],
+			};
 			expect(validateUnitDefinition(unit).ok).toBe(true);
 		});
 
 		it('accepts a rename that stays inside the root, written relative', () => {
 			// Written relative on purpose, sidestepping the separate question of how
 			// an absolute-but-contained `rename` should be read.
-			const unit = { ...validBase(), files: [{ dest: 'sub/original.template', content: 'x', rename: 'renamed.txt' }] };
+			const unit = {
+				...validBase(),
+				files: [{ dest: 'sub/original.template', content: 'x', rename: 'renamed.txt' }],
+			};
 			expect(validateUnitDefinition(unit).ok).toBe(true);
 		});
 	});

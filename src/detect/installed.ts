@@ -18,13 +18,13 @@ export function detectInstalledUnits(opts: { cwd: string; units: AnyUnit[] }): S
 	// accepted trade-off is that tooling a user wired up by hand after scaffolding
 	// won't badge — we only know what we wrote — and re-applying a unit is harmless,
 	// so under-badging is the safe way to be wrong.
-	const known = new Set(units.map(u => u.id));
+	const known = new Set(units.map((u) => u.id));
 	const stateRead = readStateFile(cwd);
 	// A state file from a newer unbranded falls through to the probes below rather
 	// than refusing. This is a badge, and the commands that actually act on state
 	// gate on the same read and report properly.
 	if (stateRead.kind === 'ok')
-		return new Set(stateRead.state.units.map(u => u.id).filter(id => known.has(id)));
+		return new Set(stateRead.state.units.map((u) => u.id).filter((id) => known.has(id)));
 
 	// No state file: fall back to probing the filesystem. Read package.json once.
 	const read = readPackageJson(cwd);
@@ -32,8 +32,7 @@ export function detectInstalledUnits(opts: { cwd: string; units: AnyUnit[] }): S
 
 	const installed = new Set<string>();
 	for (const unit of units) {
-		if (isPresent(unit, cwd, pkg))
-			installed.add(unit.id);
+		if (isPresent(unit, cwd, pkg)) installed.add(unit.id);
 	}
 	return installed;
 }
@@ -58,5 +57,5 @@ function isPresent(unit: AnyUnit, cwd: string, pkg: PackageJson): boolean {
 	// not `some` — a half-landed unit isn't really installed, and under-claiming is
 	// safe since the picker still lets the user (re-)select it. Accepted false positive:
 	// opt-vscode badges off a user's own .vscode/settings.json. That's fine; it's a hint.
-	return unit.files.length > 0 && unit.files.every(f => existsSync(join(cwd, effectiveDest(f))));
+	return unit.files.length > 0 && unit.files.every((f) => existsSync(join(cwd, effectiveDest(f))));
 }
