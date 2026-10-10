@@ -38,13 +38,34 @@ Before you remove anything, write down which units the project has. Each entry i
 
    Without `opt-ci-github`, skip `--cascade`. The command deletes `eslint.config.mjs` if you haven't modified it, and drops `@antfu/eslint-config`, `eslint`, `eslint-plugin-format`, `lint`, and `lint:fix` from `package.json`. A file you've edited stays on disk and you delete it yourself.
 
-2. Add `core-oxlint`, and add back every unit you had whose files call ESLint. That is `opt-ci-github`, which the cascade removed, and `opt-husky`, whose `lint-staged.config.mjs` runs `eslint --fix` until you regenerate it. This run also moves `typescript` to 7.x, installs `oxlint` and `oxfmt`, and rewrites the lint-staged config to call them:
+2. Add `core-oxlint`, and add back every unit you had whose files call ESLint. That is `opt-ci-github`, which the cascade removed, and `opt-husky`, whose `lint-staged.config.mjs` runs `eslint --fix` until you regenerate it. This run also moves `typescript` to 7.x and installs `oxlint` and `oxfmt`. Preview it first, because the command overwrites differing files:
+
+   ```bash
+   npx unbranded --units core-oxlint,opt-ci-github,opt-husky --pm pnpm --yes --dry-run --diff
+   ```
+
+   Every `conflict` entry is a file you changed, and the diff shows what the run would replace. Run it for real once you've read them:
 
    ```bash
    npx unbranded --units core-oxlint,opt-ci-github,opt-husky --pm pnpm --yes
    ```
 
-   Drop `opt-ci-github` or `opt-husky` from `--units` if you didn't have it. Replace `pnpm` with your package manager. `opt-vscode` doesn't regenerate its `.vscode/settings.json`, so edit out the ESLint entries there by hand.
+   Drop `opt-ci-github` or `opt-husky` from `--units` if you didn't have it. Replace `pnpm` with your package manager.
+
+   Don't add `--on-conflict skip` to protect your edits. It also keeps `typescript` on 6.x. Instead, restore the files you customized from your baseline commit. This example restores two of them:
+
+   ```bash
+   git checkout -- .husky/pre-commit .github/workflows/ci.yml
+   ```
+
+   Neither file calls ESLint, so your versions work unchanged. A customized `lint-staged.config.mjs` is different, because it has to change. Restore it the same way, then replace each `eslint --fix` with the commands a fresh scaffold writes:
+
+   ```js
+   '*.{js,mjs,cjs,ts,tsx,jsx}': ['oxlint --no-error-on-unmatched-pattern --fix', 'oxfmt --no-error-on-unmatched-pattern'],
+   '*.{json,md,mdx,yaml,yml}': ['oxfmt --no-error-on-unmatched-pattern'],
+   ```
+
+   If you have `opt-vscode`, edit `.vscode/settings.json` by hand, because re-selecting the unit leaves it untouched. Delete `source.fixAll.eslint`, `eslint.useFlatConfig`, and the `editor.defaultFormatter` entry that names `dbaeumer.vscode-eslint`. Then delete `dbaeumer.vscode-eslint` from `.vscode/extensions.json`. The CLI doesn't generate oxc editor settings yet, so add the oxc extension's own by hand if you want format-on-save.
 
 3. Format the tree once:
 
