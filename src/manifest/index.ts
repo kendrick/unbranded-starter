@@ -164,7 +164,7 @@ export const UNITS: Unit[] = [
 		],
 		devDependencies: {
 			'typescript': '7.0.2',
-			'@types/node': '26.6.4',
+			'@types/node': '26.6.5',
 		},
 		packageJsonPatch: {
 			scripts: {
