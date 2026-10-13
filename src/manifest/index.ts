@@ -1,6 +1,6 @@
 import type { EslintFlavor } from './eslint-config';
 import type { OxlintFlavor } from './oxlint-config';
-import type { ImpliesOneOf, PinLine, Unit, UnitOptionChoice } from './types';
+import type { ImpliesOneOf, OptionCoupling, PinLine, Unit, UnitOptionChoice } from './types';
 import { buildEslintConfig, ESLINT_FLAVORS, eslintDevDependencies } from './eslint-config';
 import {
 	buildOxfmtConfig,
@@ -38,6 +38,21 @@ const OXLINT_FLAVOR_META: Record<OxlintFlavor, { label: string; hint: string }> 
 	react: { label: 'React', hint: 'React and jsx-a11y rules' },
 	next: { label: 'Next.js', hint: 'React plus Next.js rules' },
 };
+
+const TYPESCRIPT_LINE_CHOICES: UnitOptionChoice[] = [
+	{
+		value: '7',
+		label: 'TypeScript 7',
+		hint: "Native compiler. typescript-eslint can't load it yet, so it pairs with oxlint",
+		devDependencies: { typescript: '7.0.2' },
+	},
+	{
+		value: '6',
+		label: 'TypeScript 6',
+		hint: 'Works with either lint unit',
+		devDependencies: { typescript: '6.0.3' },
+	},
+];
 
 // Both configs ride on the choice rather than the unit so they stay out of
 // `list --json`, which never surfaces inline file content.
@@ -163,9 +178,16 @@ export const UNITS: Unit[] = [
 			{ src: 'templates/tsconfig.json', dest: 'tsconfig.json' },
 		],
 		devDependencies: {
-			'typescript': '7.0.2',
 			'@types/node': '26.6.5',
 		},
+		options: [
+			{
+				key: 'typescriptLine',
+				label: 'TypeScript line',
+				default: '7',
+				choices: TYPESCRIPT_LINE_CHOICES,
+			},
+		],
 		packageJsonPatch: {
 			scripts: {
 				typecheck: 'tsc --noEmit',
@@ -373,6 +395,22 @@ export const UNITS: Unit[] = [
 // and TS 7 has no JS compiler API for it to load.
 export const PIN_LINES: PinLine[] = [
 	{ unit: 'core-typescript', when: 'core-eslint', devDependencies: { typescript: '6.0.3' } },
+];
+
+// Options whose choices are major lines of one package. A non-default choice is
+// held to its major (outdated, bump-pins, --latest), and a project's declared
+// major picks the choice when nothing recorded one.
+export const LINE_OPTIONS: readonly string[] = ['typescriptLine'];
+
+export const OPTION_COUPLINGS: OptionCoupling[] = [
+	{
+		key: 'typescriptLine',
+		when: 'core-eslint',
+		allowed: ['6'],
+		default: '6',
+		reason:
+			"typescript-eslint can't load TypeScript 7. Use core-typescript:6, or core-oxlint instead of core-eslint",
+	},
 ];
 
 // opt-ci-github's workflow runs `pnpm lint`, so it needs a lint unit, but either one

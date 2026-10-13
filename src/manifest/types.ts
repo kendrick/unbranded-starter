@@ -186,6 +186,18 @@ export interface PinLine {
 	devDependencies: Record<string, string>;
 }
 
+// An option whose allowed values depend on another unit being in the resolved set.
+// typescript-eslint can't load TS 7, so beside core-eslint typescriptLine is held
+// to 6. A defaulted value bends to `default`; an explicit one outside `allowed`
+// fails the run.
+export interface OptionCoupling {
+	key: string;
+	when: string;
+	allowed: string[];
+	default: string;
+	reason: string;
+}
+
 // Exists because `implies` names one unit, and some needs are for a role. opt-ci-github
 // needs a lint unit: implying core-eslint forced ESLint (and TS 6) on oxlint users, and
 // implying core-oxlint would collide with core-eslint through its `excludes`.

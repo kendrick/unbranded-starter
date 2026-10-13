@@ -1,7 +1,7 @@
-import type { PinLine, Unit, UnitId } from '../manifest/types';
+import type { Unit, UnitId } from '../manifest/types';
 import type { ManifestPin } from './outdated';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PIN_LINES, UNITS } from '../manifest/index';
+import { LINE_OPTIONS, UNITS } from '../manifest/index';
 import { classifyBehind, collectManifestPins, newestInLine, runOutdated } from './outdated';
 
 function unit(id: UnitId, extras: Partial<Unit> = {}): Unit {
@@ -68,18 +68,29 @@ describe('collectManifestPins', () => {
 		expect(names.has('vitest')).toBe(true);
 	});
 
-	it('emits a PIN_LINES pin as its own entry carrying its major as line', () => {
-		const catalog = [unit('core-typescript', { devDependencies: { typescript: '7.0.2' } })];
-		const lines: PinLine[] = [
-			{ unit: 'core-typescript', when: 'core-eslint', devDependencies: { typescript: '6.0.3' } },
+	it('emits a non-default line choice as its own entry carrying its major as line', () => {
+		const catalog = [
+			unit('core-typescript', {
+				options: [
+					{
+						key: 'typescriptLine',
+						label: '',
+						default: '7',
+						choices: [
+							{ value: '7', label: '', devDependencies: { typescript: '7.0.2' } },
+							{ value: '6', label: '', devDependencies: { typescript: '6.0.3' } },
+						],
+					},
+				],
+			}),
 		];
-		expect(collectManifestPins(catalog, lines)).toEqual([
+		expect(collectManifestPins(catalog, ['typescriptLine'])).toEqual([
 			{ name: 'typescript', pin: '7.0.2', units: ['core-typescript'] },
 			{ name: 'typescript', pin: '6.0.3', units: ['core-typescript'], line: 6 },
 		]);
 	});
 
-	it('reaches the real PIN_LINES TS pin', () => {
+	it('reaches the real held TS line choice', () => {
 		expect(
 			collectManifestPins(UNITS)
 				.filter((p) => p.name === 'typescript')
@@ -298,7 +309,7 @@ describe('runOutdated', () => {
 	});
 
 	it('serves the real held TS pin as current from the echo registry', async () => {
-		expect(PIN_LINES.some((l) => 'typescript' in l.devDependencies)).toBe(true);
+		expect(LINE_OPTIONS).toContain('typescriptLine');
 		expect(
 			await runOutdated({ fetchImpl: echoRegistry(), json: true, registry: 'https://reg.test' }),
 		).toBe(0);

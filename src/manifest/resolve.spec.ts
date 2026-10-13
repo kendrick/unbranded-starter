@@ -1,6 +1,7 @@
 import type { Unit, UnitId } from './types';
 import { describe, expect, it } from 'vitest';
 import { IMPLIES_ONE_OF, UNITS } from './index';
+import { applyUnitOptions } from './options';
 import { applyPinLines } from './pin-lines';
 import { dependentsOf, exclusionAgainstTracked, resolveSelection } from './resolve';
 
@@ -298,7 +299,7 @@ describe('the TypeScript line and the lint slot, against the real manifest (#158
 			ids: result.ids,
 			typescript:
 				ts && selected.has(ts.id)
-					? applyPinLines(ts, selected).devDependencies?.typescript
+					? applyPinLines(applyUnitOptions(ts, {}), selected).devDependencies?.typescript
 					: undefined,
 		};
 	}
