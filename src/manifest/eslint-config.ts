@@ -19,13 +19,13 @@ const BASE_DEPS: Record<string, string> = {
 // antfu opts into these via `react: true`; jsx-a11y is our own strict a11y pass
 // appended on top. Without them installed the config fails to load.
 const REACT_DEPS: Record<string, string> = {
-	'@eslint-react/eslint-plugin': '5.24.4',
+	'@eslint-react/eslint-plugin': '5.26.1',
 	'eslint-plugin-jsx-a11y': '6.10.2',
 	'eslint-plugin-react-refresh': '0.5.7',
 };
 
 const NEXT_DEPS: Record<string, string> = {
-	'@next/eslint-plugin-next': '16.3.8',
+	'@next/eslint-plugin-next': '16.4.0',
 };
 
 // The exact devDependencies a flavor installs. Pinned like every other unit; the
