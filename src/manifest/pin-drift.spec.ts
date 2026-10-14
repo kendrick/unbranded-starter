@@ -1,9 +1,9 @@
-import type { AnyUnit, PinLine } from './types';
+import type { AnyUnit } from './types';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PKG_ROOT } from '../util/paths';
-import { PIN_LINES, UNITS } from './index';
+import { UNITS } from './index';
 import { findPinDrift } from './pin-drift';
 
 // This repo scaffolds config it also runs on itself: every manifest pin names
@@ -26,34 +26,41 @@ const tsUnit: AnyUnit = {
 	label: '',
 	description: '',
 	files: [],
-	devDependencies: { typescript: '7.0.2' },
+	options: [
+		{
+			key: 'typescriptLine',
+			label: '',
+			default: '7',
+			choices: [
+				{ value: '7', label: '', devDependencies: { typescript: '7.0.2' } },
+				{ value: '6', label: '', devDependencies: { typescript: '6.0.3' } },
+			],
+		},
+	],
 };
-const tsLines: PinLine[] = [
-	{ unit: 'core-typescript', when: 'core-eslint', devDependencies: { typescript: '6.0.3' } },
-];
 
 describe("manifest pins match this repo's own installed majors", () => {
 	it('every exact manifest pin resolves to the same major as node_modules, on some line', () => {
-		expect(findPinDrift(UNITS, PIN_LINES, installedVersion)).toEqual([]);
+		expect(findPinDrift(UNITS, installedVersion)).toEqual([]);
 	});
 
 	it('accepts a package whose installed major matches either of its lines', () => {
-		expect(findPinDrift([tsUnit], tsLines, () => '6.0.3')).toEqual([]);
-		expect(findPinDrift([tsUnit], tsLines, () => '7.0.2')).toEqual([]);
+		expect(findPinDrift([tsUnit], () => '6.0.3')).toEqual([]);
+		expect(findPinDrift([tsUnit], () => '7.0.2')).toEqual([]);
 	});
 
 	it('reports a package whose installed major matches neither line', () => {
-		expect(findPinDrift([tsUnit], tsLines, () => '5.9.3')).toEqual([
+		expect(findPinDrift([tsUnit], () => '5.9.3')).toEqual([
 			'typescript: manifest pins 7.0.2 or 6.0.3, node_modules has 5.9.3',
 		]);
 	});
 
 	it("reports the real manifest's typescript when the install matches neither of its lines", () => {
-		// Against UNITS/PIN_LINES, not the fixture, so a line dropped or re-pinned in the
+		// Against UNITS, not the fixture, so a line dropped or re-pinned in the
 		// manifest shows up here instead of passing silently.
-		expect(
-			findPinDrift(UNITS, PIN_LINES, (name) => (name === 'typescript' ? '5.9.3' : undefined)),
-		).toEqual(['typescript: manifest pins 7.0.2 or 6.0.3, node_modules has 5.9.3']);
+		expect(findPinDrift(UNITS, (name) => (name === 'typescript' ? '5.9.3' : undefined))).toEqual([
+			'typescript: manifest pins 7.0.2 or 6.0.3, node_modules has 5.9.3',
+		]);
 	});
 
 	it("skips ranges and packages this repo doesn't install", () => {
@@ -65,7 +72,7 @@ describe("manifest pins match this repo's own installed majors", () => {
 			files: [],
 			devDependencies: { a: '^1.0.0', b: '2.0.0' },
 		};
-		expect(findPinDrift([unit], [], (name) => (name === 'a' ? '9.0.0' : undefined))).toEqual([]);
+		expect(findPinDrift([unit], (name) => (name === 'a' ? '9.0.0' : undefined))).toEqual([]);
 	});
 
 	it('checks dependencies and option-choice pins, not only devDependencies', () => {
@@ -85,7 +92,7 @@ describe("manifest pins match this repo's own installed majors", () => {
 				},
 			],
 		};
-		expect(findPinDrift([unit], [], () => '9.0.0')).toEqual([
+		expect(findPinDrift([unit], () => '9.0.0')).toEqual([
 			'd: manifest pins 1.0.0, node_modules has 9.0.0',
 			'e: manifest pins 2.0.0, node_modules has 9.0.0',
 		]);

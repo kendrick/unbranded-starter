@@ -1,14 +1,14 @@
-import type { PinLine, Unit, UnitId } from '../manifest/types';
+import type { Unit, UnitId } from '../manifest/types';
 import type { PackageVersions } from '../registry/client';
-import { PIN_LINES, UNITS } from '../manifest/index';
+import { LINE_OPTIONS, UNITS } from '../manifest/index';
 import { DEFAULT_REGISTRY, fetchVersions } from '../registry/client';
 
 // Exact pins are the right default, but they rot. `outdated` is the freshness
 // check: every pin in the manifest (flavor choices included) against the
-// registry's latest dist-tag, or for a PIN_LINES pin the newest version inside
-// its held major (#159). Read-only, no TTY, exit 0 by default so a report
-// never fails a job; --strict trips only on majors, which is the gate the
-// maintainer-side bump automation cares about.
+// registry's latest dist-tag, or for a non-default line choice the newest
+// version inside its held major (#159). Read-only, no TTY, exit 0 by default so
+// a report never fails a job; --strict trips only on majors, which is the gate
+// the maintainer-side bump automation cares about.
 export const OUTDATED_SCHEMA = 2;
 
 export interface ManifestPin {
@@ -16,9 +16,9 @@ export interface ManifestPin {
 	pin: string;
 	// Every unit that declares the pin, so bump PRs can group per unit.
 	units: UnitId[];
-	// Set when the pin comes from PIN_LINES: the major it's held to, so it's
-	// graded and bumped inside that line (#159). typescript-eslint can't load
-	// TS 7 (#131).
+	// Set when the pin comes from a non-default line choice: the major it's held
+	// to, so it's graded and bumped inside that line (#159). typescript-eslint
+	// can't load TS 7 (#131).
 	line?: number;
 }
 
@@ -26,7 +26,7 @@ export interface ManifestPin {
 // a future option-bearing unit is covered without anyone remembering this file.
 export function collectManifestPins(
 	units: Unit[],
-	lines: readonly PinLine[] = PIN_LINES,
+	lineOptions: readonly string[] = LINE_OPTIONS,
 ): ManifestPin[] {
 	// A held pin keys on name@pin, so it never merges into the unit walk's entry
 	// for the same name. The two share a name but grade against different
@@ -41,20 +41,26 @@ export function collectManifestPins(
 	for (const unit of units) {
 		const sources = [unit.dependencies, unit.devDependencies];
 		for (const option of unit.options ?? []) {
-			for (const choice of option.choices)
-				sources.push(choice.dependencies, choice.devDependencies);
+			const isLine = lineOptions.includes(option.key);
+			for (const choice of option.choices) {
+				if (!isLine || choice.value === option.default) {
+					sources.push(choice.dependencies, choice.devDependencies);
+					continue;
+				}
+				for (const [name, pin] of Object.entries({
+					...choice.dependencies,
+					...choice.devDependencies,
+				})) {
+					// An unparsable held pin has no major to hold it to, so it grades
+					// against latest like any other.
+					const major = parseExact(pin)?.[0];
+					if (major === undefined) add(name, { name, pin }, unit.id);
+					else add(`${name}@${pin}`, { name, pin, line: major }, unit.id);
+				}
+			}
 		}
 		for (const source of sources) {
 			for (const [name, pin] of Object.entries(source ?? {})) add(name, { name, pin }, unit.id);
-		}
-	}
-
-	for (const line of lines) {
-		for (const [name, pin] of Object.entries(line.devDependencies)) {
-			// An unparsable held pin has no major to hold it to.
-			const major = parseExact(pin)?.[0];
-			if (major !== undefined)
-				add(`${name}@${pin}`, { name, pin, line: major }, line.unit as UnitId);
 		}
 	}
 

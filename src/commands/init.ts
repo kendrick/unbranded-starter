@@ -27,16 +27,23 @@ import { runPostInstalls } from '../install/post';
 import { writeAndInstall } from '../install/run';
 import { loadCatalog } from '../manifest/catalog';
 import { detectEslintFlavor } from '../manifest/eslint-config';
-import { IMPLIES_ONE_OF } from '../manifest/index';
+import { IMPLIES_ONE_OF, LINE_OPTIONS } from '../manifest/index';
 import { applyLintStaged } from '../manifest/lint-staged';
+import {
+	allowedValues,
+	constrain,
+	findCouplingViolation,
+	heldPins,
+	resolveLine,
+	specsToWrite,
+} from '../manifest/option-lines';
 import { applyUnitOptions } from '../manifest/options';
-import { applyPinLines, specsToWrite } from '../manifest/pin-lines';
 import { exclusionAgainstTracked, resolveSelection } from '../manifest/resolve';
 import { unitPicker } from '../prompts/unit-picker/prompt';
 import { readStateFile, unsupportedStateMessage, writeStateFile } from '../state/state';
 import { cancelAndExit } from '../util/cancel';
 import { EXIT_ERROR } from '../util/exit-codes';
-import { readPackageJson } from '../util/package-json';
+import { declaredSpecs, readPackageJson } from '../util/package-json';
 import { PKG_ROOT } from '../util/paths';
 
 export interface RunInitOpts {
@@ -158,10 +165,41 @@ function openCatalog(opts: { configPath?: string; preset?: string; unitsDir?: st
 // which strands a half-applied scaffold.
 function readTracked(
 	dir: string,
-): { ids: string[]; unsupported?: undefined } | { unsupported: string } {
+):
+	| { ids: string[]; options: Record<string, string>; unsupported?: undefined }
+	| { unsupported: string } {
 	const read = readStateFile(dir);
 	if (read.kind === 'unsupported') return { unsupported: unsupportedStateMessage(read.schema) };
-	return { ids: read.kind === 'ok' ? read.state.units.map((u) => u.id) : [] };
+	if (read.kind !== 'ok') return { ids: [], options: {} };
+	return { ids: read.state.units.map((u) => u.id), options: read.state.options ?? {} };
+}
+
+// The picker hands back a value for every option in the catalog, and a recipe or
+// preset can name one for a unit it never installs. Neither is a choice, and once
+// recorded, a later run would read it ahead of the project's declared line (#193).
+// A tracked unit the run doesn't re-resolve counts as unowned too: its pins aren't
+// rewritten, so recording a new value would leave state disagreeing with
+// package.json. Its earlier value survives through writeStateFile's merge.
+function ownedOptions(
+	selections: Record<string, string> | undefined,
+	owners: readonly AnyUnit[],
+): Record<string, string> {
+	const keys = new Set(owners.flatMap((u) => (u.options ?? []).map((o) => o.key)));
+	return Object.fromEntries(Object.entries(selections ?? {}).filter(([key]) => keys.has(key)));
+}
+
+// Only a value the run named can break a coupling, since a defaulted one was
+// already constrained. Checked before the first write so a refused run leaves
+// the target untouched.
+function couplingViolationMessage(
+	selections: Record<string, string>,
+	selectedIds: ReadonlySet<string>,
+	selectedUnits: AnyUnit[],
+): string | undefined {
+	const violation = findCouplingViolation(selections, selectedIds);
+	if (!violation) return undefined;
+	const unit = selectedUnits.find((u) => u.options?.some((o) => o.key === violation.key));
+	return `${unit?.id ?? violation.key}:${violation.value} can't be combined with ${violation.when}: ${violation.reason}.`;
 }
 
 // The machine half of --dry-run. Deliberately a separate path from runInit:
@@ -242,23 +280,29 @@ export async function runPlanJson(opts: {
 	const selectedUnits = resolution.ids
 		.map((id) => byId.get(id))
 		.filter((u): u is AnyUnit => u !== undefined);
+	const selectedIds = new Set([...resolution.ids, ...tracked.ids]);
 	const optionSelections = await resolveUnitOptions(
 		selectedUnits,
-		config.options,
+		ownedOptions(config.options, selectedUnits),
 		false,
-		target.dir,
+		{
+			targetDir: target.dir,
+			selected: selectedIds,
+			recorded: tracked.options,
+		},
 	);
-	const selectedIds = new Set([...resolution.ids, ...tracked.ids]);
+	const violation = couplingViolationMessage(optionSelections, selectedIds, selectedUnits);
+	if (violation) {
+		process.stderr.write(`${violation}\n`);
+		return 1;
+	}
 	const units = selectedUnits.map((unit) =>
-		applyLintStaged(
-			applyPinLines(applyUnitOptions(unit, optionSelections), selectedIds),
-			selectedIds,
-		),
+		applyLintStaged(applyUnitOptions(unit, optionSelections), selectedIds),
 	);
 
 	// Same precedence as runInit (flag, then recipe).
 	const latest = opts.latest === true || config.versions === 'latest';
-	const written = specsToWrite(units, selectedIds, latest);
+	const written = specsToWrite(units, heldPins(selectedUnits, optionSelections), latest);
 
 	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
 	const plans = units.flatMap((unit) =>
@@ -331,7 +375,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// catalog comes with it, since a recipe may be what names the units directory.
 	const { catalog, fileConfig } = openCatalog(opts);
 	const known = catalog.ids;
-	// The option surface (core-eslint's flavor today) so a recipe's `options` map
+	// The option surface (lint flavors, the TS line) so a recipe's `options` map
 	// and the `--units id:value` inline syntax validate against the manifest.
 	const optionSchema = catalog.optionSchema;
 
@@ -439,13 +483,30 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 			}
 		}
 
+		// An unreadable state file fails the run right after the picker; until then
+		// it just contributes no tracked ids and no recorded line.
+		const early = readTracked(target.dir);
+		const trackedIds = new Set(early.unsupported === undefined ? early.ids : []);
 		const picked = await unitPicker({
 			message: 'What do you want to install?',
 			units: catalog.units,
 			installed,
+			// Couplings count tracked ids, the same set runInit checks. `installed` can
+			// be a filesystem probe, which runInit never counts.
+			tracked: trackedIds,
 			// A preset's recorded flavor beats the environment sniff: choosing
 			// next-app should open the picker on the next flavor.
-			initialFlavors: { ...pickerInitialFlavors(catalog.units, target.dir), ...presetFlavors },
+			initialFlavors: {
+				...pickerInitialFlavors(catalog.units, {
+					targetDir: target.dir,
+					// Tracked ids only. The picker bends the seed against the preselection
+					// itself, so it can remember the replaced value and restore it when
+					// the user deselects whatever forced the bend.
+					selected: trackedIds,
+					recorded: early.unsupported === undefined ? early.options : {},
+				}),
+				...presetFlavors,
+			},
 			initialSelected,
 		});
 		if (isCancel(picked)) return cancelAndExit();
@@ -489,24 +550,28 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		.map((id) => byId.get(id))
 		.filter((u): u is AnyUnit => u !== undefined);
 
-	// Resolve each selected unit's options (core-eslint's flavor today) to a concrete
+	// Resolve each selected unit's options (lint flavors, the TS line) to a concrete
 	// value, then bake them in. Precedence: a recipe/inline value wins, then the
-	// flavor cycled in the picker, then the environment default. Because the picker
-	// already seeds every option-bearing unit's flavor, the interactive select branch
-	// inside resolveUnitOptions no longer fires — cycling ←/→ replaced it.
-	const seededOptions = { ...pickerFlavors, ...config?.options };
-	const optionSelections = await resolveUnitOptions(
-		selectedUnits,
-		seededOptions,
-		!skipApply,
-		target.dir,
-	);
+	// flavor cycled in the picker, then optionDefault (for a line option: recorded,
+	// then declared, then the option default, bent by any coupling). The picker seeds
+	// every option, so the select inside resolveUnitOptions fires only on inline
+	// --units without --yes, the one interactive run that skips the picker.
 	const selectedIds = new Set([...resolution.ids, ...tracked.ids]);
+	const seededOptions = ownedOptions({ ...pickerFlavors, ...config?.options }, selectedUnits);
+	const optionSelections = await resolveUnitOptions(selectedUnits, seededOptions, !skipApply, {
+		targetDir: target.dir,
+		selected: selectedIds,
+		recorded: tracked.options,
+	});
+	const violation = couplingViolationMessage(optionSelections, selectedIds, selectedUnits);
+	if (violation) {
+		// Like the dry run, write the refusal to stderr so a `2>` capture or CI log
+		// finds it apart from clack's chrome on stdout.
+		log.error(violation, { output: process.stderr });
+		process.exit(1);
+	}
 	const units = selectedUnits.map((unit) =>
-		applyLintStaged(
-			applyPinLines(applyUnitOptions(unit, optionSelections), selectedIds),
-			selectedIds,
-		),
+		applyLintStaged(applyUnitOptions(unit, optionSelections), selectedIds),
 	);
 
 	note(formatPlan(units, resolution.auto, resolution.requiredBy, pm, latest), 'Plan');
@@ -579,7 +644,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	const installResult = await writeAndInstall({
 		targetDir: target.dir,
 		pm,
-		units: specsToWrite(units, selectedIds, latest),
+		units: specsToWrite(units, heldPins(selectedUnits, optionSelections), latest),
 		latest,
 		// Undefined on an interactive run, which is what makes dependency
 		// collisions prompt. resolveConfig defaults it to 'overwrite' on every
@@ -737,7 +802,7 @@ async function resolveUnitOptions(
 	units: AnyUnit[],
 	fromConfig: Record<string, string> | undefined,
 	interactive: boolean,
-	targetDir: string,
+	ctx: OptionContext,
 ): Promise<Record<string, string>> {
 	const selections: Record<string, string> = { ...fromConfig };
 
@@ -745,19 +810,22 @@ async function resolveUnitOptions(
 		for (const option of unit.options ?? []) {
 			if (selections[option.key] !== undefined) continue;
 
-			const fallback = optionDefault(option, targetDir);
+			const fallback = optionDefault(option, ctx);
 			if (!interactive) {
 				selections[option.key] = fallback;
 				continue;
 			}
 
+			const allowed = allowedValues(option, ctx.selected);
 			const chosen = await select<string>({
 				message: `${unit.label}: ${option.label}`,
-				options: option.choices.map((c: UnitOption['choices'][number]) => ({
-					value: c.value,
-					label: c.label,
-					hint: c.hint,
-				})),
+				options: option.choices
+					.filter((c: UnitOption['choices'][number]) => allowed.includes(c.value))
+					.map((c: UnitOption['choices'][number]) => ({
+						value: c.value,
+						label: c.label,
+						hint: c.hint,
+					})),
 				initialValue: fallback,
 			});
 			if (isCancel(chosen)) return cancelAndExit();
@@ -768,15 +836,30 @@ async function resolveUnitOptions(
 	return selections;
 }
 
-// The one place an option default is computed from the environment rather than a
-// static value. F-14 will fold this into the option schema; for now the only
-// options are core-eslint's and core-oxlint's flavors, defaulted by sniffing the
-// target's dependencies (a repo that pulls next/react wants that flavor,
-// everything else gets base).
-function optionDefault(option: UnitOption, targetDir: string): string {
+// What an option defaults to when the run doesn't name a value.
+interface OptionContext {
+	targetDir: string;
+	// The units a coupling counts. runInit passes the resolved set plus tracked units,
+	// so a coupling sees an installed core-eslint. The picker seed passes tracked
+	// units alone, because the picker bends against its own selection.
+	selected: ReadonlySet<string>;
+	// The state file's options, so augmenting a project keeps its recorded line.
+	recorded: Record<string, string>;
+}
+
+// Where an option default comes from the environment rather than a static value.
+// F-14 will fold this into the option schema. The lint flavors sniff the target's
+// dependencies (a repo that pulls next/react wants that flavor, everything else
+// gets base). A line option prefers the recorded value, then the major the
+// project's package.json declares, so re-running init on a TS 6 project doesn't
+// reset it to 7. Either way a coupling gets the last word, since nobody chose a
+// defaulted value.
+function optionDefault(option: UnitOption, ctx: OptionContext): string {
 	if (option.key === 'eslintFlavor' || option.key === 'oxlintFlavor')
-		return detectEslintFlavor(targetDependencyNames(targetDir));
-	return option.default;
+		return detectEslintFlavor(targetDependencyNames(ctx.targetDir));
+	return LINE_OPTIONS.includes(option.key)
+		? resolveLine(option, ctx.recorded[option.key], declaredSpecs(ctx.targetDir), ctx.selected)
+		: constrain(option.key, option.default, ctx.selected);
 }
 
 function targetDependencyNames(targetDir: string): string[] {
@@ -791,10 +874,10 @@ function targetDependencyNames(targetDir: string): string[] {
 // Seed the picker's flavor tags with the same environment-sniffed default the
 // follow-up select prompt used to compute, so the row starts on the right flavor (a
 // repo pulling next/react opens on that flavor) before the user cycles it.
-function pickerInitialFlavors(units: AnyUnit[], targetDir: string): Record<string, string> {
+function pickerInitialFlavors(units: AnyUnit[], ctx: OptionContext): Record<string, string> {
 	const flavors: Record<string, string> = {};
 	for (const unit of units) {
-		for (const option of unit.options ?? []) flavors[option.key] = optionDefault(option, targetDir);
+		for (const option of unit.options ?? []) flavors[option.key] = optionDefault(option, ctx);
 	}
 	return flavors;
 }

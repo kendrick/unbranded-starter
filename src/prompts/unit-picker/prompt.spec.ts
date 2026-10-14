@@ -4,6 +4,7 @@ import { PassThrough } from 'node:stream';
 import { settings } from '@clack/core';
 import { isCancel } from '@clack/prompts';
 import { afterEach, describe, expect, it } from 'vitest';
+import { UNITS as REAL_UNITS } from '../../manifest';
 import { translateKey, unitPicker } from './prompt';
 
 function unit(id: UnitId, extras: Partial<Unit> = {}): Unit {
@@ -91,6 +92,7 @@ describe('unitPicker (stream-driven)', () => {
 			message: 'Pick',
 			units: UNITS,
 			installed: new Set(),
+			tracked: new Set(),
 			input,
 			output,
 		});
@@ -105,6 +107,7 @@ describe('unitPicker (stream-driven)', () => {
 			message: 'Pick',
 			units: UNITS,
 			installed: new Set(),
+			tracked: new Set(),
 			initialSelected: ['core-vitest'],
 			input,
 			output,
@@ -114,9 +117,36 @@ describe('unitPicker (stream-driven)', () => {
 		expect(result.ids).toEqual(['core-vitest']);
 	});
 
+	it('couples the TypeScript line to tracked units, not installed badges', async () => {
+		const submit = async (installed: string[], tracked: string[]) => {
+			const { input, output } = drive('\r');
+			return unitPicker({
+				message: 'Pick',
+				units: REAL_UNITS,
+				installed: new Set(installed),
+				tracked: new Set(tracked),
+				initialFlavors: { typescriptLine: '7' },
+				input,
+				output,
+			});
+		};
+		const badged = await submit(['core-eslint'], []);
+		const tracked = await submit([], ['core-eslint']);
+		if (isCancel(badged) || isCancel(tracked)) throw new Error('picker cancelled');
+		expect(badged.flavors.typescriptLine).toBe('7');
+		expect(tracked.flavors.typescriptLine).toBe('6');
+	});
+
 	it('restores the escape alias after a submit', async () => {
 		const { input, output } = drive('\r');
-		await unitPicker({ message: 'Pick', units: UNITS, installed: new Set(), input, output });
+		await unitPicker({
+			message: 'Pick',
+			units: UNITS,
+			installed: new Set(),
+			tracked: new Set(),
+			input,
+			output,
+		});
 		// The afterEach assertion is the real check; this awaits the resolution.
 		expect(settings.aliases.get('escape')).toBe('cancel');
 	});

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -73,6 +73,53 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main')(
 				env: { ...process.env, CI: 'true' },
 			});
 			expect(lint.status, `${lint.stdout}\n${lint.stderr}`).toBe(0);
+		});
+
+		// #193: the TS line is its own choice, so oxlint must also lint and typecheck clean
+		// on 6. A recipe's `units` take bare ids only; the line rides in `options`.
+		it('lints and typechecks a core-typescript:6 + core-oxlint scaffold', () => {
+			writeFileSync(
+				join(tmp, 'recipe.json'),
+				JSON.stringify(
+					{
+						units: ['core-typescript', 'core-oxlint'],
+						options: { typescriptLine: '6' },
+						pm: 'pnpm',
+						onConflict: 'overwrite',
+						postInstall: 'none',
+						projectName: '.',
+					},
+					null,
+					2,
+				),
+			);
+
+			const run = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+				cwd: tmp,
+				encoding: 'utf-8',
+			});
+			expect(run.status, `scaffold stderr: ${run.stderr}`).toBe(0);
+			rmSync(join(tmp, 'recipe.json'));
+
+			const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as {
+				devDependencies: Record<string, string>;
+			};
+			expect(pkg.devDependencies.typescript).toMatch(/^\^?6\./);
+
+			// The scaffold's `lint` script is plain `oxlint` and installs no oxlint-tsgolint, so
+			// type-aware rules don't run here; this proves the TS 6 line lints and typechecks.
+			// Write one typed source so lint and typecheck have something to check.
+			mkdirSync(join(tmp, 'src'));
+			writeFileSync(join(tmp, 'src', 'index.ts'), 'export const n: number = [1, 2].length;\n');
+
+			for (const script of ['lint', 'typecheck']) {
+				const result = spawnSync('pnpm', [script], {
+					cwd: tmp,
+					encoding: 'utf-8',
+					shell: process.platform === 'win32',
+				});
+				expect(result.status, `pnpm ${script}:\n${result.stdout}\n${result.stderr}`).toBe(0);
+			}
 		});
 	},
 );

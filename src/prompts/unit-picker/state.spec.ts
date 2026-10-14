@@ -1,5 +1,6 @@
 import type { Unit, UnitId } from '../../manifest/types';
 import { describe, expect, it } from 'vitest';
+import { UNITS as REAL_UNITS } from '../../manifest';
 import {
 	createPickerState,
 	filteredOptions,
@@ -7,6 +8,7 @@ import {
 	pickerSummary,
 	reducePicker,
 } from './state';
+import type { PickerState } from './state';
 
 function unit(id: UnitId, extras: Partial<Unit> = {}): Unit {
 	return { id, category: 'lint', label: id, description: '', files: [], ...extras };
@@ -261,5 +263,156 @@ describe('pickerSummary', () => {
 		expect(pickerSummary(s)).toEqual({ units: 2, files: 3, deps: 2 });
 		s = reducePicker(s, { type: 'cycleFlavor', delta: 1 }); // → react adds a dep
 		expect(pickerSummary(s)).toEqual({ units: 2, files: 3, deps: 3 });
+	});
+});
+
+describe('typescriptLine coupling with the real manifest', () => {
+	function realState() {
+		return createPickerState(REAL_UNITS, new Set());
+	}
+	function typeFilter(s: PickerState, text: string) {
+		return [...text].reduce((acc, char) => reducePicker(acc, { type: 'char', char }), s);
+	}
+	function pick(s: PickerState, id: string) {
+		const filtered = reducePicker(typeFilter(s, id), { type: 'clearFilter' });
+		const idx = filteredOptions(filtered).findIndex((o) => o.value === id);
+		return reducePicker({ ...filtered, cursor: idx }, { type: 'toggle' });
+	}
+	function cycleOn(s: PickerState, id: string, delta: number) {
+		const idx = filteredOptions(s).findIndex((o) => o.value === id);
+		return reducePicker({ ...s, cursor: idx }, { type: 'cycleFlavor', delta });
+	}
+
+	it('snaps typescriptLine 7 to 6 when core-eslint is toggled on', () => {
+		const s = createPickerState(REAL_UNITS, new Set(), { typescriptLine: '7' });
+		expect(s.flavors.typescriptLine).toBe('7');
+		expect(pick(s, 'core-eslint').flavors.typescriptLine).toBe('6');
+	});
+
+	it('leaves typescriptLine alone when core-oxlint is toggled on', () => {
+		expect(pick(realState(), 'core-oxlint').flavors.typescriptLine).toBe('7');
+	});
+
+	it('skips 7 when cycling the TypeScript row beside core-eslint', () => {
+		const s = pick(
+			createPickerState(REAL_UNITS, new Set(), { typescriptLine: '6' }),
+			'core-eslint',
+		);
+		expect(cycleOn(s, 'core-typescript', 1).flavors.typescriptLine).toBe('6');
+		expect(cycleOn(s, 'core-typescript', -1).flavors.typescriptLine).toBe('6');
+	});
+
+	it('cycles between 7 and 6 beside core-oxlint', () => {
+		const s = pick(realState(), 'core-oxlint');
+		const six = cycleOn(s, 'core-typescript', 1);
+		expect(six.flavors.typescriptLine).toBe('6');
+		expect(cycleOn(six, 'core-typescript', 1).flavors.typescriptLine).toBe('7');
+	});
+
+	it('counts typescript once for a core-eslint selection', () => {
+		const s = pick(realState(), 'core-eslint');
+		expect(s.flavors.typescriptLine).toBe('6');
+		// core-eslint base: @antfu/eslint-config, eslint, eslint-plugin-format, and
+		// eslint.config.mjs. core-typescript: @types/node, typescript, and the two
+		// tsconfigs. Counted by hand off the manifest, so a doubled option bake or a
+		// typescript pin counted twice moves a number here.
+		expect(pickerSummary(s)).toEqual({ units: 2, files: 3, deps: 5 });
+	});
+});
+
+describe('typescriptLine coupling against tracked units', () => {
+	function cycleOn(s: PickerState, id: string, delta: number) {
+		const idx = filteredOptions(s).findIndex((o) => o.value === id);
+		return reducePicker({ ...s, cursor: idx }, { type: 'cycleFlavor', delta });
+	}
+
+	it('skips 7 when cycling the TypeScript row beside a tracked core-eslint', () => {
+		const s = createPickerState(
+			REAL_UNITS,
+			new Set(),
+			{ typescriptLine: '6' },
+			['core-typescript'],
+			new Set(['core-eslint']),
+		);
+		expect(cycleOn(s, 'core-typescript', 1).flavors.typescriptLine).toBe('6');
+		expect(cycleOn(s, 'core-typescript', -1).flavors.typescriptLine).toBe('6');
+	});
+
+	it('opens on 6 when a seeded 7 sits beside a tracked core-eslint', () => {
+		const s = createPickerState(
+			REAL_UNITS,
+			new Set(),
+			{ typescriptLine: '7' },
+			[],
+			new Set(['core-eslint']),
+		);
+		expect(s.flavors.typescriptLine).toBe('6');
+	});
+
+	// With no state file, `installed` is a filesystem probe, so a bare
+	// eslint.config.mjs badges core-eslint. runInit never counts a probe, so the
+	// picker can't either.
+	it('leaves 7 available beside a core-eslint that is only badged installed', () => {
+		const s = createPickerState(REAL_UNITS, new Set(['core-eslint']), { typescriptLine: '7' }, [
+			'core-typescript',
+		]);
+		expect(s.flavors.typescriptLine).toBe('7');
+		expect(
+			cycleOn(cycleOn(s, 'core-typescript', 1), 'core-typescript', 1).flavors.typescriptLine,
+		).toBe('7');
+	});
+});
+
+describe('typescriptLine snap memory', () => {
+	function at(s: PickerState, id: string): PickerState {
+		return { ...s, cursor: filteredOptions(s).findIndex((o) => o.value === id) };
+	}
+	function toggle(s: PickerState, id: string): PickerState {
+		return reducePicker(at(s, id), { type: 'toggle' });
+	}
+	function seven(tracked: string[] = []): PickerState {
+		return createPickerState(REAL_UNITS, new Set(), { typescriptLine: '7' }, [], new Set(tracked));
+	}
+
+	it('restores 7 once core-eslint is toggled back off', () => {
+		const on = toggle(seven(), 'core-eslint');
+		expect(on.flavors.typescriptLine).toBe('6');
+		const off = toggle(on, 'core-eslint');
+		expect(off.flavors.typescriptLine).toBe('7');
+		expect(toggle(off, 'core-oxlint').flavors.typescriptLine).toBe('7');
+	});
+
+	it('holds the snapped value through unrelated toggles while core-eslint stays on', () => {
+		let s = toggle(seven(), 'core-eslint');
+		s = toggle(s, 'core-vitest');
+		expect(s.flavors.typescriptLine).toBe('6');
+		s = toggle(s, 'core-vitest');
+		expect(s.flavors.typescriptLine).toBe('6');
+		expect(toggle(s, 'core-eslint').flavors.typescriptLine).toBe('7');
+	});
+
+	it("never overwrites the user's own cycle with a restore", () => {
+		let s = toggle(seven(), 'core-eslint');
+		s = reducePicker(at(s, 'core-typescript'), { type: 'cycleFlavor', delta: 1 });
+		expect(s.flavors.typescriptLine).toBe('6');
+		expect(toggle(s, 'core-eslint').flavors.typescriptLine).toBe('6');
+	});
+
+	// doctor --fix seeds core-eslint into the selection. The picker bends the
+	// seed's 7 itself, so it remembers the snap and the swap restores 7.
+	it('restores 7 when a preselected core-eslint is swapped for core-oxlint', () => {
+		const seeded = createPickerState(REAL_UNITS, new Set(), { typescriptLine: '7' }, [
+			'core-eslint',
+		]);
+		expect(seeded.flavors.typescriptLine).toBe('6');
+		const swapped = toggle(toggle(seeded, 'core-eslint'), 'core-oxlint');
+		expect(swapped.flavors.typescriptLine).toBe('7');
+	});
+
+	it('keeps 6 while a tracked core-eslint still rules 7 out', () => {
+		let s = toggle(seven(['core-eslint']), 'core-vitest');
+		expect(s.flavors.typescriptLine).toBe('6');
+		s = toggle(s, 'core-vitest');
+		expect(s.flavors.typescriptLine).toBe('6');
 	});
 });

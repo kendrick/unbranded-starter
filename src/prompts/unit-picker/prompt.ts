@@ -73,6 +73,9 @@ export interface UnitPickerOptions {
 	message: string;
 	units: AnyUnit[];
 	installed: Set<string>;
+	// No default. A caller that forgot it would let the picker offer a line runInit
+	// refuses. See PickerState.tracked.
+	tracked: Set<string>;
 	initialFlavors?: Record<string, string>;
 	// Seed the selection (doctor --fix, presets): the picker opens with these checked
 	// and editable, so confirming is one keystroke but nothing applies sight unseen.
@@ -107,6 +110,7 @@ class UnitPickerPrompt extends Prompt<string[]> {
 			opts.installed,
 			opts.initialFlavors ?? {},
 			opts.initialSelected ?? [],
+			opts.tracked,
 		);
 		this._setValue([...this.picker.selected]);
 		this.on('key', (char, key) => this.onKey(char, key));

@@ -186,7 +186,7 @@ export function formatCatalog(units: AnyUnit[] = UNITS): string {
 			lines.push(
 				`  ${unit.id.padEnd(idWidth)}  ${unit.label} — ${unit.description}${implies}${local}`,
 			);
-			// A unit's options (core-eslint's flavor) get their own indented line so
+			// A unit's options (a lint flavor, the TS line) get their own indented line so
 			// the picker's choices are visible from `list` without running the CLI.
 			for (const option of unit.options ?? []) {
 				const values = option.choices.map((c) => c.value).join(' | ');

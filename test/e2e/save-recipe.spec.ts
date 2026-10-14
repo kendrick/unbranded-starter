@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildRecipe, serializeRecipe } from '../../src/config/recipe';
 import { eslintDevDependencies } from '../../src/manifest/eslint-config';
-import { PIN_LINES, UNITS } from '../../src/manifest/index';
+import { UNITS } from '../../src/manifest/index';
 import { resolveSelection } from '../../src/manifest/resolve';
 import { PKG_ROOT } from '../../src/util/paths';
 
@@ -14,9 +14,9 @@ const OFFER = /Save this configuration as a recipe/i;
 // Pins read from the manifest so a bump doesn't require touching these assertions.
 const ESLINT_PIN = eslintDevDependencies('base').eslint;
 // core-eslint scaffolds take the 6.x line (#158), not core-typescript's default.
-const TYPESCRIPT_PIN = PIN_LINES.find(
-	(l) => l.unit === 'core-typescript' && l.when === 'core-eslint',
-)?.devDependencies.typescript;
+const TYPESCRIPT_PIN = UNITS.find((u) => u.id === 'core-typescript')
+	?.options?.find((o) => o.key === 'typescriptLine')
+	?.choices.find((c) => c.value === '6')?.devDependencies?.typescript;
 
 function writeJson(path: string, obj: unknown): void {
 	writeFileSync(path, JSON.stringify(obj, null, 2));

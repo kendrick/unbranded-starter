@@ -477,6 +477,152 @@ describe('runInit install-failure branching (#114)', () => {
 	});
 });
 
+describe('runInit records only options its units own (#193)', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-owned-options-'));
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		vi.mocked(writeAndInstall).mockResolvedValue({
+			wrote: true,
+			installed: true,
+			cancelled: false,
+			failed: false,
+			computedWrites: [],
+		});
+	});
+
+	afterEach(async () => {
+		vi.restoreAllMocks();
+		rmSync(tmp, { recursive: true, force: true });
+		vi.mocked(unitPicker).mockReset();
+		vi.mocked(writeAndInstall).mockReset();
+		const { confirm } = await import('@clack/prompts');
+		vi.mocked(confirm).mockReset();
+	});
+
+	function recordedOptions(): Record<string, string> | undefined {
+		return (
+			JSON.parse(readFileSync(join(tmp, STATE_FILENAME), 'utf-8')) as {
+				options?: Record<string, string>;
+			}
+		).options;
+	}
+
+	// The picker hands back a value for every option in the catalog, selected or not.
+	async function pick(ids: string[], flavors: Record<string, string>): Promise<void> {
+		vi.mocked(unitPicker).mockResolvedValue({ ids, flavors });
+		const { confirm } = await import('@clack/prompts');
+		vi.mocked(confirm).mockResolvedValueOnce(true);
+		expect(await runInit({ targetDir: tmp, inline: { pm: 'pnpm' } })).toEqual({ ok: true });
+	}
+
+	it('never records a picker value for a unit the run did not select', async () => {
+		await pick(['core-editorconfig'], {
+			typescriptLine: '7',
+			eslintFlavor: 'base',
+			oxlintFlavor: 'base',
+		});
+
+		expect(recordedOptions()?.typescriptLine).toBeUndefined();
+		expect(recordedOptions()?.eslintFlavor).toBeUndefined();
+		expect(recordedOptions()?.oxlintFlavor).toBeUndefined();
+	});
+
+	it('records the line for a selected core-typescript and nothing for the unselected lint units', async () => {
+		await pick(['core-typescript'], {
+			typescriptLine: '6',
+			eslintFlavor: 'next',
+			oxlintFlavor: 'next',
+		});
+
+		expect(recordedOptions()).toEqual({ typescriptLine: '6' });
+	});
+
+	it("leaves a later core-typescript run on the project's declared 6.x line", async () => {
+		await pick(['core-editorconfig'], { typescriptLine: '7' });
+		writeFileSync(
+			join(tmp, 'package.json'),
+			JSON.stringify({ name: 'x', version: '0.0.0', devDependencies: { typescript: '^6.0.3' } }),
+		);
+
+		const out: string[] = [];
+		vi.spyOn(process.stdout, 'write').mockImplementation(((m: string) => {
+			out.push(String(m));
+			return true;
+		}) as typeof process.stdout.write);
+		expect(
+			await runPlanJson({ targetDir: tmp, inline: { units: 'core-typescript', pm: 'pnpm' } }),
+		).toBe(0);
+		const plan = JSON.parse(out.join('')) as { devDependencies: Record<string, string> };
+		expect(plan.devDependencies.typescript).toBe('6.0.3');
+	});
+
+	it('hands the picker tracked units as its coupling set, so it sees a tracked core-eslint', async () => {
+		writeFileSync(
+			join(tmp, STATE_FILENAME),
+			JSON.stringify({
+				schema: 3,
+				units: [{ id: 'core-eslint', source: { kind: 'builtin' } }],
+				files: {},
+			}),
+		);
+		vi.mocked(unitPicker).mockResolvedValue({ ids: [], flavors: {} });
+
+		await runInit({ targetDir: tmp, dryRun: true, inline: { pm: 'pnpm' } });
+
+		const picker = vi.mocked(unitPicker).mock.calls[0]?.[0];
+		expect([...(picker?.tracked ?? [])]).toEqual(['core-eslint']);
+		expect(picker?.initialFlavors?.typescriptLine).toBe('6');
+	});
+
+	// A bare eslint.config.mjs badges core-eslint installed, but runInit's own
+	// coupling check never counts a probe, and the non-interactive path plans 7.
+	it('keeps a probed-only core-eslint out of the coupling set and the seed', async () => {
+		writeFileSync(join(tmp, 'eslint.config.mjs'), 'export default [];\n');
+		vi.mocked(unitPicker).mockResolvedValue({ ids: [], flavors: {} });
+
+		await runInit({ targetDir: tmp, dryRun: true, inline: { pm: 'pnpm' } });
+
+		const picker = vi.mocked(unitPicker).mock.calls[0]?.[0];
+		expect(picker?.installed.has('core-eslint')).toBe(true);
+		expect([...(picker?.tracked ?? [])]).toEqual([]);
+		expect(picker?.initialFlavors?.typescriptLine).toBe('7');
+	});
+
+	// doctor --fix preselects core-eslint. Bending the seed here would leave the
+	// picker nothing to restore once the user swaps ESLint for oxlint.
+	it('seeds the line without bending it by the preselection', async () => {
+		vi.mocked(unitPicker).mockResolvedValue({ ids: [], flavors: {} });
+
+		await runInit({
+			targetDir: tmp,
+			dryRun: true,
+			preselect: ['core-eslint'],
+			inline: { pm: 'pnpm' },
+		});
+
+		expect(vi.mocked(unitPicker).mock.calls[0]?.[0]?.initialFlavors?.typescriptLine).toBe('7');
+	});
+
+	it("drops an untracked unit's picker value on a re-run", async () => {
+		await pick(['core-typescript'], { typescriptLine: '6' });
+		await pick(['core-editorconfig'], { typescriptLine: '6', eslintFlavor: 'next' });
+
+		expect(recordedOptions()).toEqual({ typescriptLine: '6' });
+	});
+
+	// A run that doesn't re-resolve core-typescript never rewrites its pin, so a
+	// new line recorded here would leave state on 7 with package.json still on 6,
+	// and the next update would follow the state (PR #194 review).
+	it('keeps the recorded line when a re-run does not re-resolve core-typescript', async () => {
+		await pick(['core-typescript'], { typescriptLine: '6' });
+		await pick(['core-editorconfig'], { typescriptLine: '7' });
+
+		expect(recordedOptions()).toEqual({ typescriptLine: '6' });
+	});
+});
+
 describe('runInit onConflict threading (#113)', () => {
 	let tmp: string;
 

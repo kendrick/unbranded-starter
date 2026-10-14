@@ -31,3 +31,12 @@ export function readPackageJson(dir: string): PackageJsonRead {
 		return { kind: 'malformed', error: (err as Error).message };
 	}
 }
+
+// What the project's package.json declares for each package, deps and devDeps
+// together. Used to infer which line an install is on when state never recorded one.
+export function declaredSpecs(dir: string): (name: string) => string | undefined {
+	const read = readPackageJson(dir);
+	if (read.kind !== 'ok') return () => undefined;
+	const all = { ...read.pkg.dependencies, ...read.pkg.devDependencies };
+	return (name) => all[name];
+}

@@ -10,7 +10,11 @@ const CLI = join(PKG_ROOT, 'dist/cli.js');
 // Read the pinned versions from the manifest, not literals, so a weekly
 // pin-bump PR doesn't redden this file every time a pin moves.
 const CORE_TYPESCRIPT = UNITS.find((u) => u.id === 'core-typescript');
-const TYPESCRIPT_PIN = CORE_TYPESCRIPT?.devDependencies?.typescript;
+// The typescript pin moved onto the typescriptLine option (#193). A ^5.9.3
+// project matches no line, so it gets the option's default choice.
+const TS_LINE = CORE_TYPESCRIPT?.options?.find((o) => o.key === 'typescriptLine');
+const TYPESCRIPT_PIN = TS_LINE?.choices.find((c) => c.value === TS_LINE.default)?.devDependencies
+	?.typescript;
 const TYPES_NODE_PIN = CORE_TYPESCRIPT?.devDependencies?.['@types/node'];
 if (!TYPESCRIPT_PIN || !TYPES_NODE_PIN)
 	throw new Error("core-typescript manifest shape changed—update this test's pin lookups.");

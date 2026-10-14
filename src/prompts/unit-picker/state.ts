@@ -2,7 +2,7 @@ import type { AnyUnit } from '../../manifest/types';
 import type { PickerOption } from './options';
 import { applyLintStaged } from '../../manifest/lint-staged';
 import { applyUnitOptions } from '../../manifest/options';
-import { applyPinLines } from '../../manifest/pin-lines';
+import { allowedValues, constrain } from '../../manifest/option-lines';
 import { resolveSelection } from '../../manifest/resolve';
 import { buildUnitPickerOptions } from './options';
 
@@ -26,8 +26,20 @@ export interface PickerState {
 	requiredBy: Record<string, string>;
 	// At most one detail block open at a time.
 	expanded: string | null;
-	// optionKey → chosen value (core-eslint's eslintFlavor today).
+	// Units that look installed, for the badge only. With no state file this is a
+	// filesystem probe, so it must never feed a coupling.
+	installed: Set<string>;
+	// The ids `.unbranded.json` tracks. runInit checks couplings against these plus
+	// the resolved selection, so the picker has to, or a tracked core-eslint lets
+	// the row offer TS 7 that runInit then refuses.
+	tracked: Set<string>;
+	// optionKey → chosen value (eslintFlavor, typescriptLine). Always within what the
+	// effective set allows: toggling snaps a value a coupling rules out.
 	flavors: Record<string, string>;
+	// optionKey → the value a snap replaced, put back once nothing rules it out, so
+	// trying core-eslint and backing out doesn't leave the line on 6. Cleared by an
+	// explicit cycle, since a restore must never undo the user's own choice.
+	snapped: Record<string, string>;
 }
 
 export type PickerEvent =
@@ -57,6 +69,7 @@ export function createPickerState(
 	installed: Set<string>,
 	initialFlavors: Record<string, string> = {},
 	initialSelected: string[] = [],
+	tracked: Set<string> = new Set(),
 ): PickerState {
 	const options = buildUnitPickerOptions(units, installed);
 	const flavors: Record<string, string> = {};
@@ -69,15 +82,18 @@ export function createPickerState(
 	// the same way a manual toggle would.
 	const known = new Set(units.map((u) => u.id));
 	const selected = new Set(initialSelected.filter((id) => known.has(id)));
+	const preview = previewAuto(selected, units);
 	return {
 		units,
 		options,
 		filter: '',
 		cursor: 0,
 		selected,
-		...previewAuto(selected, units),
+		...preview,
 		expanded: null,
-		flavors,
+		installed,
+		tracked,
+		...constrainFlavors(flavors, {}, effectiveSet({ ...preview, selected, tracked })),
 	};
 }
 
@@ -126,6 +142,34 @@ function previewAuto(
 	return { auto: new Set<string>(), requiredBy: {} };
 }
 
+// The picker can't hand runInit a coupling violation: a value the resolved set
+// (tracked units included, as runInit counts them) rules out snaps to the
+// coupling's default, same as a defaulted CLI value.
+function constrainFlavors(
+	flavors: Record<string, string>,
+	snapped: Record<string, string>,
+	effective: ReadonlySet<string>,
+): Pick<PickerState, 'flavors' | 'snapped'> {
+	const nextFlavors: Record<string, string> = {};
+	const nextSnapped: Record<string, string> = {};
+	for (const [key, value] of Object.entries(flavors)) {
+		const prior = snapped[key];
+		if (prior !== undefined && constrain(key, prior, effective) === prior) {
+			nextFlavors[key] = prior;
+			continue;
+		}
+		const bent = constrain(key, value, effective);
+		nextFlavors[key] = bent;
+		const replaced = prior ?? (bent === value ? undefined : value);
+		if (replaced !== undefined) nextSnapped[key] = replaced;
+	}
+	return { flavors: nextFlavors, snapped: nextSnapped };
+}
+
+function effectiveSet(state: Pick<PickerState, 'selected' | 'auto' | 'tracked'>): Set<string> {
+	return new Set([...state.selected, ...state.auto, ...state.tracked]);
+}
+
 export function reducePicker(state: PickerState, event: PickerEvent): PickerState {
 	switch (event.type) {
 		case 'move': {
@@ -148,7 +192,17 @@ export function reducePicker(state: PickerState, event: PickerEvent): PickerStat
 			const selected = new Set(state.selected);
 			if (selected.has(opt.value)) selected.delete(opt.value);
 			else selected.add(opt.value);
-			return { ...state, selected, ...previewAuto(selected, state.units) };
+			const preview = previewAuto(selected, state.units);
+			return {
+				...state,
+				selected,
+				...preview,
+				...constrainFlavors(
+					state.flavors,
+					state.snapped,
+					effectiveSet({ ...preview, selected, tracked: state.tracked }),
+				),
+			};
 		}
 		case 'toggleExpand': {
 			const opt = filteredOptions(state)[state.cursor];
@@ -158,13 +212,14 @@ export function reducePicker(state: PickerState, event: PickerEvent): PickerStat
 		case 'cycleFlavor': {
 			const option = filteredOptions(state)[state.cursor]?.options?.[0];
 			if (!option) return state;
-			const values = option.choices.map((c) => c.value);
+			const values = allowedValues(option, effectiveSet(state));
 			const len = values.length;
 			const cur = state.flavors[option.key] ?? option.default;
 			const base = values.indexOf(cur);
 			// Normalize into range so any delta sign wraps cleanly.
 			const next = values[((((base < 0 ? 0 : base) + event.delta) % len) + len) % len] ?? cur;
-			return { ...state, flavors: { ...state.flavors, [option.key]: next } };
+			const { [option.key]: _cleared, ...snapped } = state.snapped;
+			return { ...state, flavors: { ...state.flavors, [option.key]: next }, snapped };
 		}
 	}
 }
@@ -177,9 +232,7 @@ export function pickerSummary(state: PickerState): { units: number; files: numbe
 	const effective = new Set<string>([...state.selected, ...state.auto]);
 	const units = state.units
 		.filter((u) => effective.has(u.id))
-		.map((u) =>
-			applyLintStaged(applyPinLines(applyUnitOptions(u, state.flavors), effective), effective),
-		);
+		.map((u) => applyLintStaged(applyUnitOptions(u, state.flavors), effective));
 	return {
 		units: units.length,
 		files: units.reduce((n, u) => n + u.files.length, 0),
