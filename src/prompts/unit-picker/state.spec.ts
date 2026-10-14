@@ -1,7 +1,6 @@
 import type { Unit, UnitId } from '../../manifest/types';
 import { describe, expect, it } from 'vitest';
 import { UNITS as REAL_UNITS } from '../../manifest';
-import { applyUnitOptions } from '../../manifest/options';
 import {
 	createPickerState,
 	filteredOptions,
@@ -312,21 +311,74 @@ describe('typescriptLine coupling with the real manifest', () => {
 
 	it('counts typescript once for a core-eslint selection', () => {
 		const s = pick(realState(), 'core-eslint');
-		const expected = ['core-eslint', 'core-typescript']
-			.map((id) =>
-				applyUnitOptions(
-					REAL_UNITS.find((u) => u.id === id)!,
-					s.flavors,
-				),
-			)
-			.reduce(
-				(n, u) =>
-					n +
-					Object.keys(u.dependencies ?? {}).length +
-					Object.keys(u.devDependencies ?? {}).length,
-				0,
-			);
-		expect(pickerSummary(s).deps).toBeGreaterThanOrEqual(expected);
-		expect(pickerSummary(s).deps).toBe(expected);
+		expect(s.flavors.typescriptLine).toBe('6');
+		// core-eslint base: @antfu/eslint-config, eslint, eslint-plugin-format, and
+		// eslint.config.mjs. core-typescript: @types/node, typescript, and the two
+		// tsconfigs. Counted by hand off the manifest, so a doubled option bake or a
+		// typescript pin counted twice moves a number here.
+		expect(pickerSummary(s)).toEqual({ units: 2, files: 3, deps: 5 });
+	});
+});
+
+describe('typescriptLine coupling against installed units', () => {
+	function cycleOn(s: PickerState, id: string, delta: number) {
+		const idx = filteredOptions(s).findIndex((o) => o.value === id);
+		return reducePicker({ ...s, cursor: idx }, { type: 'cycleFlavor', delta });
+	}
+
+	it('skips 7 when cycling the TypeScript row beside an installed core-eslint', () => {
+		const s = createPickerState(REAL_UNITS, new Set(['core-eslint']), { typescriptLine: '6' }, [
+			'core-typescript',
+		]);
+		expect(cycleOn(s, 'core-typescript', 1).flavors.typescriptLine).toBe('6');
+		expect(cycleOn(s, 'core-typescript', -1).flavors.typescriptLine).toBe('6');
+	});
+
+	it('opens on 6 when a seeded 7 sits beside an installed core-eslint', () => {
+		const s = createPickerState(REAL_UNITS, new Set(['core-eslint']), { typescriptLine: '7' });
+		expect(s.flavors.typescriptLine).toBe('6');
+	});
+});
+
+describe('typescriptLine snap memory', () => {
+	function at(s: PickerState, id: string): PickerState {
+		return { ...s, cursor: filteredOptions(s).findIndex((o) => o.value === id) };
+	}
+	function toggle(s: PickerState, id: string): PickerState {
+		return reducePicker(at(s, id), { type: 'toggle' });
+	}
+	function seven(installed: string[] = []): PickerState {
+		return createPickerState(REAL_UNITS, new Set(installed), { typescriptLine: '7' });
+	}
+
+	it('restores 7 once core-eslint is toggled back off', () => {
+		const on = toggle(seven(), 'core-eslint');
+		expect(on.flavors.typescriptLine).toBe('6');
+		const off = toggle(on, 'core-eslint');
+		expect(off.flavors.typescriptLine).toBe('7');
+		expect(toggle(off, 'core-oxlint').flavors.typescriptLine).toBe('7');
+	});
+
+	it('holds the snapped value through unrelated toggles while core-eslint stays on', () => {
+		let s = toggle(seven(), 'core-eslint');
+		s = toggle(s, 'core-vitest');
+		expect(s.flavors.typescriptLine).toBe('6');
+		s = toggle(s, 'core-vitest');
+		expect(s.flavors.typescriptLine).toBe('6');
+		expect(toggle(s, 'core-eslint').flavors.typescriptLine).toBe('7');
+	});
+
+	it("never overwrites the user's own cycle with a restore", () => {
+		let s = toggle(seven(), 'core-eslint');
+		s = reducePicker(at(s, 'core-typescript'), { type: 'cycleFlavor', delta: 1 });
+		expect(s.flavors.typescriptLine).toBe('6');
+		expect(toggle(s, 'core-eslint').flavors.typescriptLine).toBe('6');
+	});
+
+	it('keeps 6 while an installed core-eslint still rules 7 out', () => {
+		let s = toggle(seven(['core-eslint']), 'core-vitest');
+		expect(s.flavors.typescriptLine).toBe('6');
+		s = toggle(s, 'core-vitest');
+		expect(s.flavors.typescriptLine).toBe('6');
 	});
 });

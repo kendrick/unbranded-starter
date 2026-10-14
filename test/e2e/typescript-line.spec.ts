@@ -275,6 +275,44 @@ describe('typeScript line (#158, #193)', () => {
 		).toMatch(/^\^?6\./);
 	});
 
+	it('a recipe option for a unit the run does not install never becomes the recorded line', () => {
+		const dir = mkdtempSync(join(tmp, 'unowned-option-'));
+		writeFileSync(
+			join(dir, 'package.json'),
+			JSON.stringify({ name: 'ts-line', version: '0.0.0' }, null, 2),
+		);
+		writeFileSync(
+			join(dir, 'recipe.json'),
+			JSON.stringify({
+				units: ['core-editorconfig'],
+				options: { typescriptLine: '7', eslintFlavor: 'next' },
+				pm: null,
+				onConflict: 'overwrite',
+				postInstall: 'none',
+			}),
+		);
+		const scaffold = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: dir,
+			encoding: 'utf-8',
+		});
+		expect(scaffold.status, scaffold.stderr).toBe(0);
+		const state = JSON.parse(readFileSync(join(dir, STATE_FILENAME), 'utf-8'));
+		expect(state.options?.typescriptLine).toBeUndefined();
+		expect(state.options?.eslintFlavor).toBeUndefined();
+
+		writeFileSync(
+			join(dir, 'package.json'),
+			JSON.stringify(
+				{ name: 'ts-line', version: '0.0.0', devDependencies: { typescript: '^6.0.3' } },
+				null,
+				2,
+			),
+		);
+		const r = dryRun('core-typescript', dir);
+		expect(r.status, r.stderr).toBe(0);
+		expect(r.plan.devDependencies?.typescript).toMatch(/^\^?6\./);
+	});
+
 	it('re-selecting core-oxlint in a project on TS 6 keeps 6.x', () => {
 		const dir = mkdtempSync(join(tmp, 'reselect-'));
 		writeFileSync(

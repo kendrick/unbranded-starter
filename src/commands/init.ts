@@ -174,6 +174,17 @@ function readTracked(
 	return { ids: read.state.units.map((u) => u.id), options: read.state.options ?? {} };
 }
 
+// The picker hands back a value for every option in the catalog, and a recipe or
+// preset can name one for a unit it never installs. Neither is a choice, and once
+// recorded, a later run would read it ahead of the project's declared line (#193).
+function ownedOptions(
+	selections: Record<string, string> | undefined,
+	owners: readonly AnyUnit[],
+): Record<string, string> {
+	const keys = new Set(owners.flatMap((u) => (u.options ?? []).map((o) => o.key)));
+	return Object.fromEntries(Object.entries(selections ?? {}).filter(([key]) => keys.has(key)));
+}
+
 // Only a value the run named can break a coupling, since a defaulted one was
 // already constrained. Checked before the first write so a refused run leaves
 // the target untouched.
@@ -267,11 +278,17 @@ export async function runPlanJson(opts: {
 		.map((id) => byId.get(id))
 		.filter((u): u is AnyUnit => u !== undefined);
 	const selectedIds = new Set([...resolution.ids, ...tracked.ids]);
-	const optionSelections = await resolveUnitOptions(selectedUnits, config.options, false, {
-		targetDir: target.dir,
-		selected: selectedIds,
-		recorded: tracked.options,
-	});
+	const owners = [...selectedIds].map((id) => byId.get(id)).filter((u) => u !== undefined);
+	const optionSelections = await resolveUnitOptions(
+		selectedUnits,
+		ownedOptions(config.options, owners),
+		false,
+		{
+			targetDir: target.dir,
+			selected: selectedIds,
+			recorded: tracked.options,
+		},
+	);
 	const violation = couplingViolationMessage(optionSelections, selectedIds, selectedUnits);
 	if (violation) {
 		process.stderr.write(`${violation}\n`);
@@ -425,7 +442,10 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 
 	// Badge already-installed units, but only in an interactive augment run: a new
 	// project has nothing pre-existing to badge, and non-interactive paths never
-	// prompt, so detecting there would be wasted work that changes no output.
+	// prompt, so detecting there would be wasted work that changes no output. The
+	// picker also checks couplings against this set, which is why it has to be the
+	// tracked ids when a state file exists (detection prefers them): runInit's own
+	// coupling check counts tracked units.
 	const installed =
 		config === null && target.mode === 'augment'
 			? detectInstalledUnits({ cwd: target.dir, units: catalog.units })
@@ -530,8 +550,9 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// then declared, then the option default, bent by any coupling). The picker seeds
 	// every option, so the select inside resolveUnitOptions fires only on inline
 	// --units without --yes, the one interactive run that skips the picker.
-	const seededOptions = { ...pickerFlavors, ...config?.options };
 	const selectedIds = new Set([...resolution.ids, ...tracked.ids]);
+	const owners = [...selectedIds].map((id) => byId.get(id)).filter((u) => u !== undefined);
+	const seededOptions = ownedOptions({ ...pickerFlavors, ...config?.options }, owners);
 	const optionSelections = await resolveUnitOptions(selectedUnits, seededOptions, !skipApply, {
 		targetDir: target.dir,
 		selected: selectedIds,

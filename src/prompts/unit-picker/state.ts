@@ -26,9 +26,16 @@ export interface PickerState {
 	requiredBy: Record<string, string>;
 	// At most one detail block open at a time.
 	expanded: string | null;
+	// Units already in the project. runInit checks couplings against these too, so
+	// the picker has to, or an installed core-eslint lets the row offer TS 7.
+	installed: Set<string>;
 	// optionKey → chosen value (eslintFlavor, typescriptLine). Always within what the
 	// effective set allows: toggling snaps a value a coupling rules out.
 	flavors: Record<string, string>;
+	// optionKey → the value a snap replaced, put back once nothing rules it out, so
+	// trying core-eslint and backing out doesn't leave the line on 6. Cleared by an
+	// explicit cycle, since a restore must never undo the user's own choice.
+	snapped: Record<string, string>;
 }
 
 export type PickerEvent =
@@ -70,15 +77,17 @@ export function createPickerState(
 	// the same way a manual toggle would.
 	const known = new Set(units.map((u) => u.id));
 	const selected = new Set(initialSelected.filter((id) => known.has(id)));
+	const preview = previewAuto(selected, units);
 	return {
 		units,
 		options,
 		filter: '',
 		cursor: 0,
 		selected,
-		...previewAuto(selected, units),
+		...preview,
 		expanded: null,
-		flavors,
+		installed,
+		...constrainFlavors(flavors, {}, effectiveSet({ ...preview, selected, installed })),
 	};
 }
 
@@ -128,14 +137,31 @@ function previewAuto(
 }
 
 // The picker can't hand runInit a coupling violation: a value the resolved set
-// rules out snaps to the coupling's default, same as a defaulted CLI value.
+// (installed units included, as runInit counts them) rules out snaps to the
+// coupling's default, same as a defaulted CLI value.
 function constrainFlavors(
 	flavors: Record<string, string>,
+	snapped: Record<string, string>,
 	effective: ReadonlySet<string>,
-): Record<string, string> {
-	return Object.fromEntries(
-		Object.entries(flavors).map(([key, value]) => [key, constrain(key, value, effective)]),
-	);
+): Pick<PickerState, 'flavors' | 'snapped'> {
+	const nextFlavors: Record<string, string> = {};
+	const nextSnapped: Record<string, string> = {};
+	for (const [key, value] of Object.entries(flavors)) {
+		const prior = snapped[key];
+		if (prior !== undefined && constrain(key, prior, effective) === prior) {
+			nextFlavors[key] = prior;
+			continue;
+		}
+		const bent = constrain(key, value, effective);
+		nextFlavors[key] = bent;
+		const replaced = prior ?? (bent === value ? undefined : value);
+		if (replaced !== undefined) nextSnapped[key] = replaced;
+	}
+	return { flavors: nextFlavors, snapped: nextSnapped };
+}
+
+function effectiveSet(state: Pick<PickerState, 'selected' | 'auto' | 'installed'>): Set<string> {
+	return new Set([...state.selected, ...state.auto, ...state.installed]);
 }
 
 export function reducePicker(state: PickerState, event: PickerEvent): PickerState {
@@ -161,12 +187,15 @@ export function reducePicker(state: PickerState, event: PickerEvent): PickerStat
 			if (selected.has(opt.value)) selected.delete(opt.value);
 			else selected.add(opt.value);
 			const preview = previewAuto(selected, state.units);
-			const effective = new Set([...selected, ...preview.auto]);
 			return {
 				...state,
 				selected,
 				...preview,
-				flavors: constrainFlavors(state.flavors, effective),
+				...constrainFlavors(
+					state.flavors,
+					state.snapped,
+					effectiveSet({ ...preview, selected, installed: state.installed }),
+				),
 			};
 		}
 		case 'toggleExpand': {
@@ -177,13 +206,14 @@ export function reducePicker(state: PickerState, event: PickerEvent): PickerStat
 		case 'cycleFlavor': {
 			const option = filteredOptions(state)[state.cursor]?.options?.[0];
 			if (!option) return state;
-			const values = allowedValues(option, new Set([...state.selected, ...state.auto]));
+			const values = allowedValues(option, effectiveSet(state));
 			const len = values.length;
 			const cur = state.flavors[option.key] ?? option.default;
 			const base = values.indexOf(cur);
 			// Normalize into range so any delta sign wraps cleanly.
 			const next = values[((((base < 0 ? 0 : base) + event.delta) % len) + len) % len] ?? cur;
-			return { ...state, flavors: { ...state.flavors, [option.key]: next } };
+			const { [option.key]: _cleared, ...snapped } = state.snapped;
+			return { ...state, flavors: { ...state.flavors, [option.key]: next }, snapped };
 		}
 	}
 }
