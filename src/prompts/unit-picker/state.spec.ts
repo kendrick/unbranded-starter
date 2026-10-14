@@ -320,23 +320,46 @@ describe('typescriptLine coupling with the real manifest', () => {
 	});
 });
 
-describe('typescriptLine coupling against installed units', () => {
+describe('typescriptLine coupling against tracked units', () => {
 	function cycleOn(s: PickerState, id: string, delta: number) {
 		const idx = filteredOptions(s).findIndex((o) => o.value === id);
 		return reducePicker({ ...s, cursor: idx }, { type: 'cycleFlavor', delta });
 	}
 
-	it('skips 7 when cycling the TypeScript row beside an installed core-eslint', () => {
-		const s = createPickerState(REAL_UNITS, new Set(['core-eslint']), { typescriptLine: '6' }, [
-			'core-typescript',
-		]);
+	it('skips 7 when cycling the TypeScript row beside a tracked core-eslint', () => {
+		const s = createPickerState(
+			REAL_UNITS,
+			new Set(),
+			{ typescriptLine: '6' },
+			['core-typescript'],
+			new Set(['core-eslint']),
+		);
 		expect(cycleOn(s, 'core-typescript', 1).flavors.typescriptLine).toBe('6');
 		expect(cycleOn(s, 'core-typescript', -1).flavors.typescriptLine).toBe('6');
 	});
 
-	it('opens on 6 when a seeded 7 sits beside an installed core-eslint', () => {
-		const s = createPickerState(REAL_UNITS, new Set(['core-eslint']), { typescriptLine: '7' });
+	it('opens on 6 when a seeded 7 sits beside a tracked core-eslint', () => {
+		const s = createPickerState(
+			REAL_UNITS,
+			new Set(),
+			{ typescriptLine: '7' },
+			[],
+			new Set(['core-eslint']),
+		);
 		expect(s.flavors.typescriptLine).toBe('6');
+	});
+
+	// With no state file, `installed` is a filesystem probe, so a bare
+	// eslint.config.mjs badges core-eslint. runInit never counts a probe, so the
+	// picker can't either.
+	it('leaves 7 available beside a core-eslint that is only badged installed', () => {
+		const s = createPickerState(REAL_UNITS, new Set(['core-eslint']), { typescriptLine: '7' }, [
+			'core-typescript',
+		]);
+		expect(s.flavors.typescriptLine).toBe('7');
+		expect(
+			cycleOn(cycleOn(s, 'core-typescript', 1), 'core-typescript', 1).flavors.typescriptLine,
+		).toBe('7');
 	});
 });
 
@@ -347,8 +370,8 @@ describe('typescriptLine snap memory', () => {
 	function toggle(s: PickerState, id: string): PickerState {
 		return reducePicker(at(s, id), { type: 'toggle' });
 	}
-	function seven(installed: string[] = []): PickerState {
-		return createPickerState(REAL_UNITS, new Set(installed), { typescriptLine: '7' });
+	function seven(tracked: string[] = []): PickerState {
+		return createPickerState(REAL_UNITS, new Set(), { typescriptLine: '7' }, [], new Set(tracked));
 	}
 
 	it('restores 7 once core-eslint is toggled back off', () => {
@@ -375,7 +398,18 @@ describe('typescriptLine snap memory', () => {
 		expect(toggle(s, 'core-eslint').flavors.typescriptLine).toBe('6');
 	});
 
-	it('keeps 6 while an installed core-eslint still rules 7 out', () => {
+	// doctor --fix seeds core-eslint into the selection. The picker bends the
+	// seed's 7 itself, so it remembers the snap and the swap restores 7.
+	it('restores 7 when a preselected core-eslint is swapped for core-oxlint', () => {
+		const seeded = createPickerState(REAL_UNITS, new Set(), { typescriptLine: '7' }, [
+			'core-eslint',
+		]);
+		expect(seeded.flavors.typescriptLine).toBe('6');
+		const swapped = toggle(toggle(seeded, 'core-eslint'), 'core-oxlint');
+		expect(swapped.flavors.typescriptLine).toBe('7');
+	});
+
+	it('keeps 6 while a tracked core-eslint still rules 7 out', () => {
 		let s = toggle(seven(['core-eslint']), 'core-vitest');
 		expect(s.flavors.typescriptLine).toBe('6');
 		s = toggle(s, 'core-vitest');

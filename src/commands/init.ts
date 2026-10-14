@@ -442,10 +442,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 
 	// Badge already-installed units, but only in an interactive augment run: a new
 	// project has nothing pre-existing to badge, and non-interactive paths never
-	// prompt, so detecting there would be wasted work that changes no output. The
-	// picker also checks couplings against this set, which is why it has to be the
-	// tracked ids when a state file exists (detection prefers them): runInit's own
-	// coupling check counts tracked units.
+	// prompt, so detecting there would be wasted work that changes no output.
 	const installed =
 		config === null && target.mode === 'augment'
 			? detectInstalledUnits({ cwd: target.dir, units: catalog.units })
@@ -484,19 +481,26 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 			}
 		}
 
+		// An unreadable state file fails the run right after the picker; until then
+		// it just contributes no tracked ids and no recorded line.
 		const early = readTracked(target.dir);
+		const trackedIds = new Set(early.unsupported === undefined ? early.ids : []);
 		const picked = await unitPicker({
 			message: 'What do you want to install?',
 			units: catalog.units,
 			installed,
+			// Couplings count tracked ids, the same set runInit checks. `installed` can
+			// be a filesystem probe, which runInit never counts.
+			tracked: trackedIds,
 			// A preset's recorded flavor beats the environment sniff: choosing
 			// next-app should open the picker on the next flavor.
 			initialFlavors: {
 				...pickerInitialFlavors(catalog.units, {
 					targetDir: target.dir,
-					selected: new Set([...(initialSelected ?? []), ...installed]),
-					// An unreadable state file fails the run right after the picker; until
-					// then it just contributes no recorded line.
+					// Tracked ids only. The picker bends the seed against the preselection
+					// itself, so it can remember the replaced value and restore it when
+					// the user deselects whatever forced the bend.
+					selected: trackedIds,
 					recorded: early.unsupported === undefined ? early.options : {},
 				}),
 				...presetFlavors,
@@ -834,7 +838,9 @@ async function resolveUnitOptions(
 // What an option defaults to when the run doesn't name a value.
 interface OptionContext {
 	targetDir: string;
-	// The resolved set plus tracked units, so a coupling sees an installed core-eslint.
+	// The units a coupling counts. runInit passes the resolved set plus tracked units,
+	// so a coupling sees an installed core-eslint. The picker seed passes tracked
+	// units alone, because the picker bends against its own selection.
 	selected: ReadonlySet<string>;
 	// The state file's options, so augmenting a project keeps its recorded line.
 	recorded: Record<string, string>;

@@ -26,9 +26,13 @@ export interface PickerState {
 	requiredBy: Record<string, string>;
 	// At most one detail block open at a time.
 	expanded: string | null;
-	// Units already in the project. runInit checks couplings against these too, so
-	// the picker has to, or an installed core-eslint lets the row offer TS 7.
+	// Units that look installed, for the badge only. With no state file this is a
+	// filesystem probe, so it must never feed a coupling.
 	installed: Set<string>;
+	// The ids `.unbranded.json` tracks. runInit checks couplings against these plus
+	// the resolved selection, so the picker has to, or a tracked core-eslint lets
+	// the row offer TS 7 that runInit then refuses.
+	tracked: Set<string>;
 	// optionKey → chosen value (eslintFlavor, typescriptLine). Always within what the
 	// effective set allows: toggling snaps a value a coupling rules out.
 	flavors: Record<string, string>;
@@ -65,6 +69,7 @@ export function createPickerState(
 	installed: Set<string>,
 	initialFlavors: Record<string, string> = {},
 	initialSelected: string[] = [],
+	tracked: Set<string> = new Set(),
 ): PickerState {
 	const options = buildUnitPickerOptions(units, installed);
 	const flavors: Record<string, string> = {};
@@ -87,7 +92,8 @@ export function createPickerState(
 		...preview,
 		expanded: null,
 		installed,
-		...constrainFlavors(flavors, {}, effectiveSet({ ...preview, selected, installed })),
+		tracked,
+		...constrainFlavors(flavors, {}, effectiveSet({ ...preview, selected, tracked })),
 	};
 }
 
@@ -137,7 +143,7 @@ function previewAuto(
 }
 
 // The picker can't hand runInit a coupling violation: a value the resolved set
-// (installed units included, as runInit counts them) rules out snaps to the
+// (tracked units included, as runInit counts them) rules out snaps to the
 // coupling's default, same as a defaulted CLI value.
 function constrainFlavors(
 	flavors: Record<string, string>,
@@ -160,8 +166,8 @@ function constrainFlavors(
 	return { flavors: nextFlavors, snapped: nextSnapped };
 }
 
-function effectiveSet(state: Pick<PickerState, 'selected' | 'auto' | 'installed'>): Set<string> {
-	return new Set([...state.selected, ...state.auto, ...state.installed]);
+function effectiveSet(state: Pick<PickerState, 'selected' | 'auto' | 'tracked'>): Set<string> {
+	return new Set([...state.selected, ...state.auto, ...state.tracked]);
 }
 
 export function reducePicker(state: PickerState, event: PickerEvent): PickerState {
@@ -194,7 +200,7 @@ export function reducePicker(state: PickerState, event: PickerEvent): PickerStat
 				...constrainFlavors(
 					state.flavors,
 					state.snapped,
-					effectiveSet({ ...preview, selected, installed: state.installed }),
+					effectiveSet({ ...preview, selected, tracked: state.tracked }),
 				),
 			};
 		}

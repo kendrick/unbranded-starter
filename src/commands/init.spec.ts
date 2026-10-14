@@ -558,7 +558,7 @@ describe('runInit records only options its units own (#193)', () => {
 		expect(plan.devDependencies.typescript).toBe('6.0.3');
 	});
 
-	it('hands the picker tracked units as installed, so its coupling sees a tracked core-eslint', async () => {
+	it('hands the picker tracked units as its coupling set, so it sees a tracked core-eslint', async () => {
 		writeFileSync(
 			join(tmp, STATE_FILENAME),
 			JSON.stringify({
@@ -572,15 +572,54 @@ describe('runInit records only options its units own (#193)', () => {
 		await runInit({ targetDir: tmp, dryRun: true, inline: { pm: 'pnpm' } });
 
 		const picker = vi.mocked(unitPicker).mock.calls[0]?.[0];
-		expect(picker?.installed.has('core-eslint')).toBe(true);
+		expect([...(picker?.tracked ?? [])]).toEqual(['core-eslint']);
 		expect(picker?.initialFlavors?.typescriptLine).toBe('6');
 	});
 
-	it("keeps a tracked unit's recorded line while dropping an untracked unit's picker value", async () => {
+	// A bare eslint.config.mjs badges core-eslint installed, but runInit's own
+	// coupling check never counts a probe, and the non-interactive path plans 7.
+	it('keeps a probed-only core-eslint out of the coupling set and the seed', async () => {
+		writeFileSync(join(tmp, 'eslint.config.mjs'), 'export default [];\n');
+		vi.mocked(unitPicker).mockResolvedValue({ ids: [], flavors: {} });
+
+		await runInit({ targetDir: tmp, dryRun: true, inline: { pm: 'pnpm' } });
+
+		const picker = vi.mocked(unitPicker).mock.calls[0]?.[0];
+		expect(picker?.installed.has('core-eslint')).toBe(true);
+		expect([...(picker?.tracked ?? [])]).toEqual([]);
+		expect(picker?.initialFlavors?.typescriptLine).toBe('7');
+	});
+
+	// doctor --fix preselects core-eslint. Bending the seed here would leave the
+	// picker nothing to restore once the user swaps ESLint for oxlint.
+	it('seeds the line without bending it by the preselection', async () => {
+		vi.mocked(unitPicker).mockResolvedValue({ ids: [], flavors: {} });
+
+		await runInit({
+			targetDir: tmp,
+			dryRun: true,
+			preselect: ['core-eslint'],
+			inline: { pm: 'pnpm' },
+		});
+
+		expect(vi.mocked(unitPicker).mock.calls[0]?.[0]?.initialFlavors?.typescriptLine).toBe('7');
+	});
+
+	it("drops an untracked unit's picker value on a re-run", async () => {
 		await pick(['core-typescript'], { typescriptLine: '6' });
 		await pick(['core-editorconfig'], { typescriptLine: '6', eslintFlavor: 'next' });
 
 		expect(recordedOptions()).toEqual({ typescriptLine: '6' });
+	});
+
+	// A tracked unit's key is owned, so the re-run's picker value replaces the
+	// recorded one. The picker opened on the recorded line, so a different value
+	// is the user's own cycle.
+	it("records a re-run's picker line for a tracked core-typescript", async () => {
+		await pick(['core-typescript'], { typescriptLine: '6' });
+		await pick(['core-editorconfig'], { typescriptLine: '7' });
+
+		expect(recordedOptions()).toEqual({ typescriptLine: '7' });
 	});
 });
 
