@@ -1,14 +1,14 @@
-# Switching an ESLint Project to oxlint and TypeScript 7
+# Switching an ESLint Project to oxlint
 
-This is for projects scaffolded with `core-eslint`, which includes anything an older preset generated before `core-oxlint` became the default. Follow it to swap ESLint for oxlint and oxfmt, and to move `typescript` from 6.x to 7.
+This is for projects scaffolded with `core-eslint`, which includes anything an older preset generated before `core-oxlint` became the default. Follow it to swap ESLint for oxlint and oxfmt. The TypeScript line is a separate choice on `core-typescript`, so the swap leaves `typescript` on 6.x, and moving to 7 is an optional step at the end.
 
 ## What Doesn't Change on Its Own
 
-`update` keeps pulling template changes, but it holds `typescript` on 6.x for as long as `core-eslint` is installed. typescript-eslint peers `typescript <6.1.0`, and the main entry point of TypeScript 7 exports no `createProgram` for it to load. Your ESLint setup keeps working, and you can stay on it indefinitely.
+`update` keeps pulling template changes, and it keeps `typescript` on the 6.x line your project declares. `core-eslint` requires that line: typescript-eslint peers `typescript <6.1.0`, and the main entry point of TypeScript 7 exports no `createProgram` for it to load. `--units core-typescript:7,core-eslint` exits 1 and names typescript-eslint. Your ESLint setup keeps working, and you can stay on it indefinitely.
 
 ## Why Switch, and Why Not To
 
-Switching gets you TypeScript 7 and the oxc toolchain: `oxlint` for linting and `oxfmt` for formatting.
+Switching gets you the oxc toolchain: `oxlint` for linting and `oxfmt` for formatting. It also lifts the TypeScript 6 limit, so you can move to TypeScript 7 afterward.
 
 Stay on ESLint if you depend on ESLint plugins or rules that oxlint doesn't cover. The switch deletes `eslint.config.mjs` and its `@antfu/eslint-config` setup, and your custom rules don't carry over.
 
@@ -38,21 +38,21 @@ Before you remove anything, write down which units the project has. Each entry i
 
    Without `opt-ci-github`, skip `--cascade`. The command deletes `eslint.config.mjs` if you haven't modified it, and drops `@antfu/eslint-config`, `eslint`, `eslint-plugin-format`, `lint`, and `lint:fix` from `package.json`. A file you've edited stays on disk and you delete it yourself.
 
-2. Add `core-oxlint`, and add back every unit you had whose files call ESLint. That is `opt-ci-github`, which the cascade removed, and `opt-husky`, whose `lint-staged.config.mjs` runs `eslint --fix` until you regenerate it. This run also moves `typescript` to 7.x and installs `oxlint` and `oxfmt`. Preview it first, because the command overwrites differing files:
+2. Add `core-oxlint`, and add back every unit you had whose files call ESLint. That is `opt-ci-github`, which the cascade removed, and `opt-husky`, whose `lint-staged.config.mjs` runs `eslint --fix` until you regenerate it. Add `core-typescript:6` to pin the line explicitly. The run installs `oxlint` and `oxfmt` and leaves `typescript` on 6.x. Preview it first, because the command overwrites differing files:
 
    ```bash
-   npx unbranded --units core-oxlint,opt-ci-github,opt-husky --pm pnpm --yes --dry-run --diff
+   npx unbranded --units core-typescript:6,core-oxlint,opt-ci-github,opt-husky --pm pnpm --yes --dry-run --diff
    ```
 
    Every `conflict` entry is a file you changed, and the diff shows what the run would replace. Run it for real once you've read them:
 
    ```bash
-   npx unbranded --units core-oxlint,opt-ci-github,opt-husky --pm pnpm --yes
+   npx unbranded --units core-typescript:6,core-oxlint,opt-ci-github,opt-husky --pm pnpm --yes
    ```
 
    Drop `opt-ci-github` or `opt-husky` from `--units` if you didn't have it. Replace `pnpm` with your package manager.
 
-   Don't add `--on-conflict skip` to protect your edits. It also keeps `typescript` on 6.x. Instead, restore the files you customized from your baseline commit. This example restores two of them:
+   Don't add `--on-conflict skip` to protect your edits. It also keeps the existing `typescript` pin when you later move to 7. Instead, restore the files you customized from your baseline commit. This example restores two of them:
 
    ```bash
    git checkout -- .husky/pre-commit .github/workflows/ci.yml
@@ -89,6 +89,16 @@ Both exit 0. Then confirm the TypeScript line:
 grep '"typescript"' package.json
 ```
 
-The version starts with `7.`.
+The version starts with `6.`.
 
 After `pnpm format`, `npx unbranded diff` lists the rewritten files as user-modified. Judge the switch by lint and typecheck.
+
+## Moving to TypeScript 7
+
+This is a separate step. Do it once the oxlint swap is committed and green, so a lint failure and a compiler failure never arrive together. Re-select `core-typescript` with the new line:
+
+```bash
+npx unbranded --units core-typescript:7,core-oxlint --pm pnpm --yes
+```
+
+Add your other units to `--units` if you want them re-rendered too. Then run `pnpm lint && pnpm typecheck` again, and check that `grep '"typescript"' package.json` starts with `7.`.
