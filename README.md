@@ -116,7 +116,7 @@ Sixteen units, grouped by category. Selecting one can pull in others: either lin
 
 **TypeScript**
 
-- **TypeScript** — the full strict suite plus `noUncheckedIndexedAccess` and the rest. The `typescriptLine` option picks the compiler line: `core-typescript:6` or `core-typescript:7`, default 7. Either lint unit works on 6.
+- **TypeScript**—the full strict suite plus `noUncheckedIndexedAccess` and the rest. The `typescriptLine` option picks the compiler line: `core-typescript:6` or `core-typescript:7`, default 7. Either lint unit works on 6.
 
 **Styles**
 

@@ -9,6 +9,7 @@ import {
 	inferLineChoice,
 	lineDefault,
 	majorOf,
+	resolveLine,
 	specsToWrite,
 } from './option-lines';
 
@@ -40,8 +41,37 @@ describe('majorOf', () => {
 		['^6.0.3', 6],
 		['~7.0.2', 7],
 		['^6', 6],
+		['6', 6],
+		['~6.0', 6],
+		['6.x', 6],
+		['6.X', 6],
+		['6.*', 6],
+		['6.0.x', 6],
+		['=6.0.3', 6],
+		['v6.0.3', 6],
+		['>=6.0.0 <7', 6],
+		['>=6.0.0 <7.0.0', 6],
+		['>=6.0.0 <6.5', 6],
+		['^6.0.3-rc.1', 6],
+		[' ^6.0.3 ', 6],
 		['latest', undefined],
+		['*', undefined],
+		['x', undefined],
+		['', undefined],
+		['<7', undefined],
 		['>=6', undefined],
+		['>=6.0.0', undefined],
+		['<=6.9.9', undefined],
+		['6 || 7', undefined],
+		['^6.0.0 || ^7.0.0', undefined],
+		['>=6.0.0 <8', undefined],
+		['6.0.0 - 7.0.0', undefined],
+		['git+https://github.com/microsoft/TypeScript.git', undefined],
+		['file:../typescript', undefined],
+		['workspace:*', undefined],
+		['workspace:^6.0.3', undefined],
+		['npm:typescript@6.0.3', undefined],
+		['github:microsoft/TypeScript#v6.0.3', undefined],
 	])('%s → %s', (spec, major) => expect(majorOf(spec)).toBe(major));
 });
 
@@ -80,6 +110,23 @@ describe('lineDefault', () => {
 	it('falls back to the option default', () => {
 		expect(lineDefault(line, undefined, decl('5.9.3'))).toBe('7');
 		expect(lineDefault(line, undefined, decl(undefined))).toBe('7');
+	});
+});
+
+describe('resolveLine', () => {
+	const eslint = new Set(['core-eslint']);
+	const oxlint = new Set(['core-oxlint']);
+	it('keeps an inferred line the coupling allows', () => {
+		expect(resolveLine(line, undefined, decl('6.x'), oxlint, couplings)).toBe('6');
+		expect(resolveLine(line, undefined, decl('>=6.0.0 <7'), oxlint, couplings)).toBe('6');
+		expect(resolveLine(line, undefined, decl('^6.0.3'), eslint, couplings)).toBe('6');
+	});
+	it('bends a defaulted or recorded line the coupling forbids', () => {
+		expect(resolveLine(line, undefined, decl(undefined), eslint, couplings)).toBe('6');
+		expect(resolveLine(line, '7', decl(undefined), eslint, couplings)).toBe('6');
+	});
+	it('falls to the option default with nothing recorded or readable', () => {
+		expect(resolveLine(line, undefined, decl('latest'), oxlint, couplings)).toBe('7');
 	});
 });
 

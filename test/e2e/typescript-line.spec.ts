@@ -7,8 +7,9 @@ import { STATE_FILENAME } from '../../src/state/state';
 import { PKG_ROOT } from '../../src/util/paths';
 
 // #158/#193: core-typescript's typescriptLine option picks the TypeScript line,
-// core-eslint holds it to 6, and opt-ci-github takes whichever lint unit is present. Read off the dry-run envelope, which is
-// what a consumer sees before anything is written.
+// core-eslint holds it to 6, and opt-ci-github takes whichever lint unit is
+// present. Read off the dry-run envelope, which is what a consumer sees before
+// anything is written.
 const CLI = join(PKG_ROOT, 'dist/cli.js');
 
 function dryRun(
@@ -215,7 +216,8 @@ describe('typeScript line (#158, #193)', () => {
 			encoding: 'utf-8',
 		});
 		expect(real.status, `${real.stdout}${real.stderr}`).toBe(1);
-		expect(`${real.stdout}${real.stderr}`).toMatch(/typescript-eslint/);
+		expect(real.stderr).toMatch(/typescript-eslint/);
+		expect(real.stdout).not.toMatch(/typescript-eslint/);
 		expect(readdirSync(tmp).sort()).toEqual([...before, 'recipe.json'].sort());
 	});
 
@@ -228,6 +230,8 @@ describe('typeScript line (#158, #193)', () => {
 	it('update infers the line from the declared typescript major, not from the lint unit', () => {
 		for (const [declared, line] of [
 			['^6.0.3', /^\^?6\./],
+			['6.x', /^\^?6\./],
+			['>=6.0.0 <7', /^\^?6\./],
 			['^7.0.2', /^\^?7\./],
 		] as const) {
 			const dir = mkdtempSync(join(tmp, 'infer-'));

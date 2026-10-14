@@ -34,7 +34,7 @@ import {
 	constrain,
 	findCouplingViolation,
 	heldPins,
-	lineDefault,
+	resolveLine,
 	specsToWrite,
 } from '../manifest/option-lines';
 import { applyUnitOptions } from '../manifest/options';
@@ -526,9 +526,10 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 
 	// Resolve each selected unit's options (lint flavors, the TS line) to a concrete
 	// value, then bake them in. Precedence: a recipe/inline value wins, then the
-	// flavor cycled in the picker, then the environment default. Because the picker
-	// already seeds every option-bearing unit's flavor, the interactive select branch
-	// inside resolveUnitOptions no longer fires — cycling ←/→ replaced it.
+	// flavor cycled in the picker, then optionDefault (for a line option: recorded,
+	// then declared, then the option default, bent by any coupling). The picker seeds
+	// every option, so the select inside resolveUnitOptions fires only on inline
+	// --units without --yes, the one interactive run that skips the picker.
 	const seededOptions = { ...pickerFlavors, ...config?.options };
 	const selectedIds = new Set([...resolution.ids, ...tracked.ids]);
 	const optionSelections = await resolveUnitOptions(selectedUnits, seededOptions, !skipApply, {
@@ -538,7 +539,9 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	});
 	const violation = couplingViolationMessage(optionSelections, selectedIds, selectedUnits);
 	if (violation) {
-		log.error(violation);
+		// Like the dry run, write the refusal to stderr so a `2>` capture or CI log
+		// finds it apart from clack's chrome on stdout.
+		log.error(violation, { output: process.stderr });
 		process.exit(1);
 	}
 	const units = selectedUnits.map((unit) =>
@@ -826,10 +829,9 @@ interface OptionContext {
 function optionDefault(option: UnitOption, ctx: OptionContext): string {
 	if (option.key === 'eslintFlavor' || option.key === 'oxlintFlavor')
 		return detectEslintFlavor(targetDependencyNames(ctx.targetDir));
-	const value = LINE_OPTIONS.includes(option.key)
-		? lineDefault(option, ctx.recorded[option.key], declaredSpecs(ctx.targetDir))
-		: option.default;
-	return constrain(option.key, value, ctx.selected);
+	return LINE_OPTIONS.includes(option.key)
+		? resolveLine(option, ctx.recorded[option.key], declaredSpecs(ctx.targetDir), ctx.selected)
+		: constrain(option.key, option.default, ctx.selected);
 }
 
 function targetDependencyNames(targetDir: string): string[] {

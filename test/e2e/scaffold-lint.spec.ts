@@ -108,7 +108,7 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main')(
 
 			// The scaffold's `lint` script is plain `oxlint` and installs no oxlint-tsgolint, so
 			// type-aware rules don't run here; this proves the TS 6 line lints and typechecks.
-			// A typed declaration gives the type-aware rules something to look at.
+			// Write one typed source so lint and typecheck have something to check.
 			mkdirSync(join(tmp, 'src'));
 			writeFileSync(join(tmp, 'src', 'index.ts'), 'export const n: number = [1, 2].length;\n');
 

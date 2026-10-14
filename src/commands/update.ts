@@ -13,7 +13,7 @@ import { detectIndent } from '../install/run';
 import { loadCatalog, unitsDirsFor } from '../manifest/catalog';
 import { LINE_OPTIONS } from '../manifest/index';
 import { applyLintStaged } from '../manifest/lint-staged';
-import { constrain, lineDefault } from '../manifest/option-lines';
+import { resolveLine } from '../manifest/option-lines';
 import { applyUnitOptions } from '../manifest/options';
 import {
 	hashBuffer,
@@ -92,9 +92,10 @@ export function planUpdate(opts: {
 	for (const { id } of state.units) {
 		for (const option of byId.get(id)?.options ?? []) {
 			if (!LINE_OPTIONS.includes(option.key)) continue;
-			selections[option.key] = constrain(
-				option.key,
-				lineDefault(option, state.options?.[option.key], declared),
+			selections[option.key] = resolveLine(
+				option,
+				state.options?.[option.key],
+				declared,
 				installedIds,
 			);
 		}

@@ -1,10 +1,28 @@
 import type { AnyUnit, OptionCoupling, UnitOption } from './types';
 import { LINE_OPTIONS, OPTION_COUPLINGS } from './index';
 
+// One version or one-major range: ^6, ~6.0, 6.x, =6.0.3, v6.0.3, 6.0.3-rc.1.
 // '^6' is what --latest writes for a held line, so a bare major counts too.
+const SINGLE = /^(?:[\^~]|=)?v?(\d+)(?:\.(?:\d+|[xX*])){0,2}(?:[-+][0-9A-Za-z.-]+)?$/;
+// A bounded range, `>=6.0.0 <7`. Open-ended `>=6` admits 7, so it names no line.
+const BOUNDED = /^>=\s*v?(\d+)(?:\.\d+){0,2}\s+<\s*v?(\d+)((?:\.\d+){0,2})$/;
+
+// The major a declared range holds to. A range that spans majors or isn't semver
+// at all (latest, *, git/file/workspace specs, a `||` union) gets undefined, which
+// sends inference to the default line instead of a guess.
 export function majorOf(spec: string): number | undefined {
-	const m = /^[\^~]?(\d+)(?:\.\d+){0,2}$/.exec(spec)?.[1];
-	return m === undefined ? undefined : Number(m);
+	const s = spec.trim();
+	const single = SINGLE.exec(s);
+	if (single) return Number(single[1]);
+	const bounded = BOUNDED.exec(s);
+	if (!bounded) return undefined;
+	const lower = Number(bounded[1]);
+	const upper = Number(bounded[2]);
+	const upperIsZero = /^(?:\.0){0,2}$/.test(bounded[3] ?? '');
+	// `<7` and `<7.0.0` stop at the next major; `<6.5` stays inside this one.
+	if (upper === lower + 1 && upperIsZero) return lower;
+	if (upper === lower && !upperIsZero) return lower;
+	return undefined;
 }
 
 // Only a package every choice pins can identify a line; a package one choice
@@ -66,6 +84,18 @@ export function constrain(
 ): string {
 	const coupling = couplingFor(key, selected, couplings);
 	return coupling && !coupling.allowed.includes(value) ? coupling.default : value;
+}
+
+// The line a run lands on when it doesn't name one. init and update both call
+// this, so a project re-run through init and one updated in place can't disagree.
+export function resolveLine(
+	option: UnitOption,
+	recorded: string | undefined,
+	declared: (name: string) => string | undefined,
+	selected: ReadonlySet<string>,
+	couplings: readonly OptionCoupling[] = OPTION_COUPLINGS,
+): string {
+	return constrain(option.key, lineDefault(option, recorded, declared), selected, couplings);
 }
 
 export interface CouplingViolation {
