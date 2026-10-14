@@ -110,3 +110,33 @@ export function heldPins(
 	}
 	return held;
 }
+
+// Under --latest, a pin held by a non-default line choice gets a caret on its own
+// major instead of the dist-tag, so a TS 6 project isn't jumped to 7 (#159). The
+// plan note keeps the manifest's pins, because only the specs a run writes go
+// through applyLatest.
+export function applyLatest(unit: AnyUnit, held: ReadonlyMap<string, string>): AnyUnit {
+	// Line choices pin only devDependencies, so a held name never reaches
+	// `dependencies`.
+	const rewrite = (
+		deps: Record<string, string> | undefined,
+		holds: ReadonlyMap<string, string>,
+	): Record<string, string> | undefined =>
+		deps &&
+		Object.fromEntries(Object.keys(deps).map((name) => [name, holds.get(name) ?? 'latest']));
+	return {
+		...unit,
+		dependencies: rewrite(unit.dependencies, new Map()),
+		devDependencies: rewrite(unit.devDependencies, held),
+	};
+}
+
+// The specs a run writes. runPlanJson's envelope and runInit's install both call
+// this, so a dry run can't report a spec the real run wouldn't write.
+export function specsToWrite(
+	units: AnyUnit[],
+	held: ReadonlyMap<string, string>,
+	latest: boolean,
+): AnyUnit[] {
+	return latest ? units.map((u) => applyLatest(u, held)) : units;
+}

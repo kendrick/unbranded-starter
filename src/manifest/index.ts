@@ -1,6 +1,6 @@
 import type { EslintFlavor } from './eslint-config';
 import type { OxlintFlavor } from './oxlint-config';
-import type { ImpliesOneOf, OptionCoupling, PinLine, Unit, UnitOptionChoice } from './types';
+import type { ImpliesOneOf, OptionCoupling, Unit, UnitOptionChoice } from './types';
 import { buildEslintConfig, ESLINT_FLAVORS, eslintDevDependencies } from './eslint-config';
 import {
 	buildOxfmtConfig,
@@ -388,13 +388,6 @@ export const UNITS: Unit[] = [
 			turbo: '2.11.7',
 		},
 	},
-];
-
-// core-typescript ships two TypeScript lines. 7.x is its own pin; 6.x replaces it
-// whenever core-eslint resolves, because typescript-eslint peers `typescript <6.1.0`
-// and TS 7 has no JS compiler API for it to load.
-export const PIN_LINES: PinLine[] = [
-	{ unit: 'core-typescript', when: 'core-eslint', devDependencies: { typescript: '6.0.3' } },
 ];
 
 // Options whose choices are major lines of one package. A non-default choice is

@@ -2,7 +2,7 @@ import type { AnyUnit } from '../../manifest/types';
 import type { PickerOption } from './options';
 import { applyLintStaged } from '../../manifest/lint-staged';
 import { applyUnitOptions } from '../../manifest/options';
-import { applyPinLines } from '../../manifest/pin-lines';
+import { allowedValues, constrain } from '../../manifest/option-lines';
 import { resolveSelection } from '../../manifest/resolve';
 import { buildUnitPickerOptions } from './options';
 
@@ -26,7 +26,8 @@ export interface PickerState {
 	requiredBy: Record<string, string>;
 	// At most one detail block open at a time.
 	expanded: string | null;
-	// optionKey → chosen value (core-eslint's eslintFlavor today).
+	// optionKey → chosen value (eslintFlavor, typescriptLine). Always within what the
+	// effective set allows: toggling snaps a value a coupling rules out.
 	flavors: Record<string, string>;
 }
 
@@ -126,6 +127,17 @@ function previewAuto(
 	return { auto: new Set<string>(), requiredBy: {} };
 }
 
+// The picker can't hand runInit a coupling violation: a value the resolved set
+// rules out snaps to the coupling's default, same as a defaulted CLI value.
+function constrainFlavors(
+	flavors: Record<string, string>,
+	effective: ReadonlySet<string>,
+): Record<string, string> {
+	return Object.fromEntries(
+		Object.entries(flavors).map(([key, value]) => [key, constrain(key, value, effective)]),
+	);
+}
+
 export function reducePicker(state: PickerState, event: PickerEvent): PickerState {
 	switch (event.type) {
 		case 'move': {
@@ -148,7 +160,14 @@ export function reducePicker(state: PickerState, event: PickerEvent): PickerStat
 			const selected = new Set(state.selected);
 			if (selected.has(opt.value)) selected.delete(opt.value);
 			else selected.add(opt.value);
-			return { ...state, selected, ...previewAuto(selected, state.units) };
+			const preview = previewAuto(selected, state.units);
+			const effective = new Set([...selected, ...preview.auto]);
+			return {
+				...state,
+				selected,
+				...preview,
+				flavors: constrainFlavors(state.flavors, effective),
+			};
 		}
 		case 'toggleExpand': {
 			const opt = filteredOptions(state)[state.cursor];
@@ -158,7 +177,7 @@ export function reducePicker(state: PickerState, event: PickerEvent): PickerStat
 		case 'cycleFlavor': {
 			const option = filteredOptions(state)[state.cursor]?.options?.[0];
 			if (!option) return state;
-			const values = option.choices.map((c) => c.value);
+			const values = allowedValues(option, new Set([...state.selected, ...state.auto]));
 			const len = values.length;
 			const cur = state.flavors[option.key] ?? option.default;
 			const base = values.indexOf(cur);
@@ -177,9 +196,7 @@ export function pickerSummary(state: PickerState): { units: number; files: numbe
 	const effective = new Set<string>([...state.selected, ...state.auto]);
 	const units = state.units
 		.filter((u) => effective.has(u.id))
-		.map((u) =>
-			applyLintStaged(applyPinLines(applyUnitOptions(u, state.flavors), effective), effective),
-		);
+		.map((u) => applyLintStaged(applyUnitOptions(u, state.flavors), effective));
 	return {
 		units: units.length,
 		files: units.reduce((n, u) => n + u.files.length, 0),

@@ -11,9 +11,10 @@ import { mergePackageJson } from '../fs/merge-json';
 import { isDirtyGitTree } from '../install/git';
 import { detectIndent } from '../install/run';
 import { loadCatalog, unitsDirsFor } from '../manifest/catalog';
+import { LINE_OPTIONS } from '../manifest/index';
 import { applyLintStaged } from '../manifest/lint-staged';
+import { constrain, lineDefault } from '../manifest/option-lines';
 import { applyUnitOptions } from '../manifest/options';
-import { applyPinLines } from '../manifest/pin-lines';
 import {
 	hashBuffer,
 	readStateFile,
@@ -23,6 +24,7 @@ import {
 } from '../state/state';
 import { cancelAndExit } from '../util/cancel';
 import { colorEnabled } from '../util/color';
+import { declaredSpecs } from '../util/package-json';
 import { PKG_ROOT } from '../util/paths';
 
 // Per-file verdicts. The first four are #34's contract; the rest are the honest
@@ -82,13 +84,25 @@ export function planUpdate(opts: {
 	const replay = new Map<string, { op: FileOp; content: string; root: string }>();
 	const resolved: AnyUnit[] = [];
 	const installedIds = new Set(state.units.map((u) => u.id));
+	const declared = declaredSpecs(targetDir);
+	// Pre-#193 installs never recorded a line, and update doesn't write options, so
+	// infer it on every run the same way init defaults one. That's stable because
+	// the inferred pin is what update writes back.
+	const selections: Record<string, string> = { ...state.options };
+	for (const { id } of state.units) {
+		for (const option of byId.get(id)?.options ?? []) {
+			if (!LINE_OPTIONS.includes(option.key)) continue;
+			selections[option.key] = constrain(
+				option.key,
+				lineDefault(option, state.options?.[option.key], declared),
+				installedIds,
+			);
+		}
+	}
 	for (const { id } of state.units) {
 		const catalogUnit = byId.get(id);
 		if (!catalogUnit) continue;
-		const unit = applyLintStaged(
-			applyPinLines(applyUnitOptions(catalogUnit, state.options ?? {}), installedIds),
-			installedIds,
-		);
+		const unit = applyLintStaged(applyUnitOptions(catalogUnit, selections), installedIds);
 		resolved.push(unit);
 		const root = opts.templateRoots?.get(id) ?? opts.pkgRoot;
 		for (const op of unit.files) {

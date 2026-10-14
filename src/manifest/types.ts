@@ -175,17 +175,6 @@ export type UnitSource =
 	| { kind: 'dir'; path: string }
 	| { kind: 'pack'; name: string; version: string };
 
-// An alternate set of devDependency pins for one unit, chosen when another unit
-// is in the resolved set. core-typescript's typescript pin uses it: 7.x by
-// default, 6.x beside core-eslint, whose typescript-eslint can't load TS 7.
-// Top-level manifest data rather than a UnitBase field, so the published unit
-// contract doesn't widen for a need only built-ins have.
-export interface PinLine {
-	unit: string;
-	when: string;
-	devDependencies: Record<string, string>;
-}
-
 // An option whose allowed values depend on another unit being in the resolved set.
 // typescript-eslint can't load TS 7, so beside core-eslint typescriptLine is held
 // to 6. A defaulted value bends to `default`; an explicit one outside `allowed`

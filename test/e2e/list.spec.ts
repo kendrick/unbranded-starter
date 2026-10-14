@@ -66,6 +66,12 @@ describe('unbranded list', () => {
 		expect(oxlintFlavor?.choices.map((c) => c.value)).toEqual(['base', 'react', 'next']);
 		expect(oxlint?.excludes).toEqual(['core-eslint']);
 
+		// #193: the TypeScript line is core-typescript's own option.
+		const ts = parsed.units.find((u) => u.id === 'core-typescript');
+		const tsLine = ts?.options?.find((o) => o.key === 'typescriptLine');
+		expect(tsLine?.default).toBe('7');
+		expect(tsLine?.choices.map((c) => c.value)).toEqual(['7', '6']);
+
 		// Byte-for-byte determinism is the whole point of the versioned envelope.
 		const again = spawnSync('node', [CLI, 'list', '--json'], { cwd: tmp, encoding: 'utf-8' });
 		expect(again.stdout).toBe(result.stdout);

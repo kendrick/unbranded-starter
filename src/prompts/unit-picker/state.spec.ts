@@ -1,5 +1,7 @@
 import type { Unit, UnitId } from '../../manifest/types';
 import { describe, expect, it } from 'vitest';
+import { UNITS as REAL_UNITS } from '../../manifest';
+import { applyUnitOptions } from '../../manifest/options';
 import {
 	createPickerState,
 	filteredOptions,
@@ -7,6 +9,7 @@ import {
 	pickerSummary,
 	reducePicker,
 } from './state';
+import type { PickerState } from './state';
 
 function unit(id: UnitId, extras: Partial<Unit> = {}): Unit {
 	return { id, category: 'lint', label: id, description: '', files: [], ...extras };
@@ -261,5 +264,69 @@ describe('pickerSummary', () => {
 		expect(pickerSummary(s)).toEqual({ units: 2, files: 3, deps: 2 });
 		s = reducePicker(s, { type: 'cycleFlavor', delta: 1 }); // → react adds a dep
 		expect(pickerSummary(s)).toEqual({ units: 2, files: 3, deps: 3 });
+	});
+});
+
+describe('typescriptLine coupling with the real manifest', () => {
+	function realState() {
+		return createPickerState(REAL_UNITS, new Set());
+	}
+	function typeFilter(s: PickerState, text: string) {
+		return [...text].reduce((acc, char) => reducePicker(acc, { type: 'char', char }), s);
+	}
+	function pick(s: PickerState, id: string) {
+		const filtered = reducePicker(typeFilter(s, id), { type: 'clearFilter' });
+		const idx = filteredOptions(filtered).findIndex((o) => o.value === id);
+		return reducePicker({ ...filtered, cursor: idx }, { type: 'toggle' });
+	}
+	function cycleOn(s: PickerState, id: string, delta: number) {
+		const idx = filteredOptions(s).findIndex((o) => o.value === id);
+		return reducePicker({ ...s, cursor: idx }, { type: 'cycleFlavor', delta });
+	}
+
+	it('snaps typescriptLine 7 to 6 when core-eslint is toggled on', () => {
+		const s = createPickerState(REAL_UNITS, new Set(), { typescriptLine: '7' });
+		expect(s.flavors.typescriptLine).toBe('7');
+		expect(pick(s, 'core-eslint').flavors.typescriptLine).toBe('6');
+	});
+
+	it('leaves typescriptLine alone when core-oxlint is toggled on', () => {
+		expect(pick(realState(), 'core-oxlint').flavors.typescriptLine).toBe('7');
+	});
+
+	it('skips 7 when cycling the TypeScript row beside core-eslint', () => {
+		const s = pick(
+			createPickerState(REAL_UNITS, new Set(), { typescriptLine: '6' }),
+			'core-eslint',
+		);
+		expect(cycleOn(s, 'core-typescript', 1).flavors.typescriptLine).toBe('6');
+		expect(cycleOn(s, 'core-typescript', -1).flavors.typescriptLine).toBe('6');
+	});
+
+	it('cycles between 7 and 6 beside core-oxlint', () => {
+		const s = pick(realState(), 'core-oxlint');
+		const six = cycleOn(s, 'core-typescript', 1);
+		expect(six.flavors.typescriptLine).toBe('6');
+		expect(cycleOn(six, 'core-typescript', 1).flavors.typescriptLine).toBe('7');
+	});
+
+	it('counts typescript once for a core-eslint selection', () => {
+		const s = pick(realState(), 'core-eslint');
+		const expected = ['core-eslint', 'core-typescript']
+			.map((id) =>
+				applyUnitOptions(
+					REAL_UNITS.find((u) => u.id === id)!,
+					s.flavors,
+				),
+			)
+			.reduce(
+				(n, u) =>
+					n +
+					Object.keys(u.dependencies ?? {}).length +
+					Object.keys(u.devDependencies ?? {}).length,
+				0,
+			);
+		expect(pickerSummary(s).deps).toBeGreaterThanOrEqual(expected);
+		expect(pickerSummary(s).deps).toBe(expected);
 	});
 });

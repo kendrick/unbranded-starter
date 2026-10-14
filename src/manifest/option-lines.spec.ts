@@ -2,12 +2,14 @@ import type { AnyUnit, OptionCoupling, UnitOption } from './types';
 import { describe, expect, it } from 'vitest';
 import {
 	allowedValues,
+	applyLatest,
 	constrain,
 	findCouplingViolation,
 	heldPins,
 	inferLineChoice,
 	lineDefault,
 	majorOf,
+	specsToWrite,
 } from './option-lines';
 
 // Synthetic option and couplings rather than UNITS, so the rules are tested apart
@@ -134,5 +136,60 @@ describe('heldPins', () => {
 		expect(heldPins([unit], { typescriptLine: '7' }, ['typescriptLine']).size).toBe(0);
 		expect(heldPins([unit], {}, ['typescriptLine']).size).toBe(0);
 		expect(heldPins([unit], { typescriptLine: '6' }, []).size).toBe(0);
+	});
+});
+
+describe('applyLatest', () => {
+	const ts: AnyUnit = {
+		id: 'core-typescript',
+		category: 'types',
+		label: '',
+		description: '',
+		files: [],
+		devDependencies: { 'typescript': '6.0.3', '@types/node': '22.19.19' },
+	};
+	const held = new Map([['typescript', '^6']]);
+
+	it('writes a held pin as a caret on its major and everything else as latest', () => {
+		expect(applyLatest(ts, held).devDependencies).toEqual({
+			'typescript': '^6',
+			'@types/node': 'latest',
+		});
+	});
+
+	it('writes latest for the same pin when nothing holds it', () => {
+		expect(applyLatest(ts, new Map()).devDependencies?.typescript).toBe('latest');
+	});
+
+	it('rewrites dependencies too, never holds them, and leaves an absent map absent', () => {
+		const withDeps: AnyUnit = { ...ts, dependencies: { clsx: '2.1.1', typescript: '6.0.3' } };
+		expect(applyLatest(withDeps, held).dependencies).toEqual({
+			clsx: 'latest',
+			typescript: 'latest',
+		});
+		expect(applyLatest(ts, held).dependencies).toBeUndefined();
+	});
+});
+
+describe('specsToWrite', () => {
+	const ts: AnyUnit = {
+		id: 'core-typescript',
+		category: 'types',
+		label: '',
+		description: '',
+		files: [],
+		devDependencies: { typescript: '6.0.3' },
+	};
+	const held = new Map([['typescript', '^6']]);
+
+	it("hands back the manifest's units untouched without --latest", () => {
+		const units = [ts];
+		expect(specsToWrite(units, held, false)).toBe(units);
+	});
+
+	it('runs every unit through applyLatest under --latest', () => {
+		expect(specsToWrite([ts], held, true).map((u) => u.devDependencies)).toEqual([
+			{ typescript: '^6' },
+		]);
 	});
 });

@@ -304,7 +304,7 @@ export function formatDepResolutions(resolutions: DepResolution[], latest: boole
 
 	// Under `--latest` nearly every incoming spec is the same word, so a per-package
 	// column would print `latest` N times. The summary counts them instead, and
-	// names the few a PIN_LINES line held to a caret (#159).
+	// names the few a held line choice kept to a caret (#159).
 	if (latest) {
 		const held = resolutions.filter((r) => r.incoming !== 'latest');
 		const toTag = resolutions.length - held.length;
