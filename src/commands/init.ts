@@ -177,6 +177,9 @@ function readTracked(
 // The picker hands back a value for every option in the catalog, and a recipe or
 // preset can name one for a unit it never installs. Neither is a choice, and once
 // recorded, a later run would read it ahead of the project's declared line (#193).
+// A tracked unit the run doesn't re-resolve counts as unowned too: its pins aren't
+// rewritten, so recording a new value would leave state disagreeing with
+// package.json. Its earlier value survives through writeStateFile's merge.
 function ownedOptions(
 	selections: Record<string, string> | undefined,
 	owners: readonly AnyUnit[],
@@ -278,10 +281,9 @@ export async function runPlanJson(opts: {
 		.map((id) => byId.get(id))
 		.filter((u): u is AnyUnit => u !== undefined);
 	const selectedIds = new Set([...resolution.ids, ...tracked.ids]);
-	const owners = [...selectedIds].map((id) => byId.get(id)).filter((u) => u !== undefined);
 	const optionSelections = await resolveUnitOptions(
 		selectedUnits,
-		ownedOptions(config.options, owners),
+		ownedOptions(config.options, selectedUnits),
 		false,
 		{
 			targetDir: target.dir,
@@ -555,8 +557,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// every option, so the select inside resolveUnitOptions fires only on inline
 	// --units without --yes, the one interactive run that skips the picker.
 	const selectedIds = new Set([...resolution.ids, ...tracked.ids]);
-	const owners = [...selectedIds].map((id) => byId.get(id)).filter((u) => u !== undefined);
-	const seededOptions = ownedOptions({ ...pickerFlavors, ...config?.options }, owners);
+	const seededOptions = ownedOptions({ ...pickerFlavors, ...config?.options }, selectedUnits);
 	const optionSelections = await resolveUnitOptions(selectedUnits, seededOptions, !skipApply, {
 		targetDir: target.dir,
 		selected: selectedIds,

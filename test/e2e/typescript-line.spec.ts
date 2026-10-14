@@ -313,6 +313,43 @@ describe('typeScript line (#158, #193)', () => {
 		expect(r.plan.devDependencies?.typescript).toMatch(/^\^?6\./);
 	});
 
+	it('a recipe line for a tracked core-typescript the run does not re-resolve is not recorded', () => {
+		// Recording it would leave state on 6 with package.json still on 7, and the
+		// next update would read the recorded 6 and move the compiler (PR #194 review).
+		const dir = mkdtempSync(join(tmp, 'tracked-unowned-'));
+		scaffoldUnit(dir, 'core-typescript');
+		const pkgPath = join(dir, 'package.json');
+		expect(JSON.parse(readFileSync(pkgPath, 'utf-8')).devDependencies.typescript).toMatch(
+			/^\^?7\./,
+		);
+		writeFileSync(
+			join(dir, 'recipe.json'),
+			JSON.stringify({
+				units: ['core-editorconfig'],
+				options: { typescriptLine: '6' },
+				pm: null,
+				onConflict: 'overwrite',
+				postInstall: 'none',
+			}),
+		);
+		const run = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: dir,
+			encoding: 'utf-8',
+		});
+		expect(run.status, run.stderr).toBe(0);
+		const state = JSON.parse(readFileSync(join(dir, STATE_FILENAME), 'utf-8'));
+		expect(state.options?.typescriptLine).not.toBe('6');
+
+		const update = spawnSync('node', [CLI, 'update', '--yes', '--strategy', 'theirs'], {
+			cwd: dir,
+			encoding: 'utf-8',
+		});
+		expect(update.status, `${update.stdout}${update.stderr}`).toBe(0);
+		expect(JSON.parse(readFileSync(pkgPath, 'utf-8')).devDependencies.typescript).toMatch(
+			/^\^?7\./,
+		);
+	});
+
 	it('re-selecting core-oxlint in a project on TS 6 keeps 6.x', () => {
 		const dir = mkdtempSync(join(tmp, 'reselect-'));
 		writeFileSync(

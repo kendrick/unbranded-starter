@@ -7,6 +7,9 @@ const SINGLE = /^(?:[\^~]|=)?v?(\d+)(?:\.(?:\d+|[xX*])){0,2}(?:[-+][0-9A-Za-z.-]
 // A bounded range, `>=6.0.0 <7`. Open-ended `>=6` admits 7, so it names no line.
 const BOUNDED = /^>=\s*v?(\d+)(?:\.\d+){0,2}\s+<\s*v?(\d+)((?:\.\d+){0,2})$/;
 
+// A hyphen range, `6.0.0 - 6.9.9`. It names a line only when both ends share a major.
+const HYPHEN = /^v?(\d+)(?:\.(?:\d+|[xX*])){0,2}\s+-\s+v?(\d+)(?:\.(?:\d+|[xX*])){0,2}$/;
+
 // The major a declared range holds to. A range that spans majors or isn't semver
 // at all (latest, *, git/file/workspace specs, a `||` union) gets undefined, which
 // sends inference to the default line instead of a guess.
@@ -14,6 +17,8 @@ export function majorOf(spec: string): number | undefined {
 	const s = spec.trim();
 	const single = SINGLE.exec(s);
 	if (single) return Number(single[1]);
+	const hyphen = HYPHEN.exec(s);
+	if (hyphen) return hyphen[1] === hyphen[2] ? Number(hyphen[1]) : undefined;
 	const bounded = BOUNDED.exec(s);
 	if (!bounded) return undefined;
 	const lower = Number(bounded[1]);

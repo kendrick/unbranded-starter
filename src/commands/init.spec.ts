@@ -612,14 +612,14 @@ describe('runInit records only options its units own (#193)', () => {
 		expect(recordedOptions()).toEqual({ typescriptLine: '6' });
 	});
 
-	// A tracked unit's key is owned, so the re-run's picker value replaces the
-	// recorded one. The picker opened on the recorded line, so a different value
-	// is the user's own cycle.
-	it("records a re-run's picker line for a tracked core-typescript", async () => {
+	// A run that doesn't re-resolve core-typescript never rewrites its pin, so a
+	// new line recorded here would leave state on 7 with package.json still on 6,
+	// and the next update would follow the state (PR #194 review).
+	it('keeps the recorded line when a re-run does not re-resolve core-typescript', async () => {
 		await pick(['core-typescript'], { typescriptLine: '6' });
 		await pick(['core-editorconfig'], { typescriptLine: '7' });
 
-		expect(recordedOptions()).toEqual({ typescriptLine: '7' });
+		expect(recordedOptions()).toEqual({ typescriptLine: '6' });
 	});
 });
 
