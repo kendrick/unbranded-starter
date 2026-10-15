@@ -87,6 +87,22 @@
 						"type": "string"
 					}
 				},
+				"impliesOneOf": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["anyOf", "fallback"],
+					"properties": {
+						"anyOf": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"fallback": {
+							"type": "string"
+						}
+					}
+				},
 				"excludes": {
 					"type": "array",
 					"items": {
