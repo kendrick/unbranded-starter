@@ -1,5 +1,6 @@
 import type { EslintFlavor } from './eslint-config';
 import type { OxlintFlavor } from './oxlint-config';
+import type { TsFlavor } from './tsconfig-base';
 import type { ImpliesOneOf, OptionCoupling, Unit, UnitOptionChoice } from './types';
 import { buildEslintConfig, ESLINT_FLAVORS, eslintDevDependencies } from './eslint-config';
 import {
@@ -8,6 +9,7 @@ import {
 	OXC_DEV_DEPENDENCIES,
 	OXLINT_FLAVORS,
 } from './oxlint-config';
+import { buildTsconfigBase, TS_FLAVORS } from './tsconfig-base';
 
 // core-eslint's three flavors, built as UnitOption choices. Each choice ships the
 // exact plugins it needs and a generated eslint.config.mjs delivered inline (via
@@ -53,6 +55,23 @@ const TYPESCRIPT_LINE_CHOICES: UnitOptionChoice[] = [
 		devDependencies: { typescript: '6.0.3' },
 	},
 ];
+
+const TS_FLAVOR_META: Record<TsFlavor, { label: string; hint: string }> = {
+	node: { label: 'Node (no DOM)', hint: 'ES2022 libs only, for libraries and CLIs' },
+	dom: {
+		label: 'Browser (DOM)',
+		hint: 'Adds DOM and DOM.Iterable, for apps that run in a browser',
+	},
+};
+
+// Every flavor writes the same dest, so tsconfig.base.json lives on the choice and
+// never in core-typescript's static files, where two writers would collide.
+const TS_FLAVOR_CHOICES: UnitOptionChoice[] = TS_FLAVORS.map((flavor) => ({
+	value: flavor,
+	label: TS_FLAVOR_META[flavor].label,
+	hint: TS_FLAVOR_META[flavor].hint,
+	files: [{ content: buildTsconfigBase(flavor), dest: 'tsconfig.base.json' }],
+}));
 
 // Both configs ride on the choice rather than the unit so they stay out of
 // `list --json`, which never surfaces inline file content.
@@ -170,9 +189,9 @@ export const UNITS: Unit[] = [
 		id: 'core-typescript',
 		category: 'types',
 		label: 'TypeScript',
-		description: 'Strict suite with noUncheckedIndexedAccess plus the rest.',
+		description:
+			'Strict suite with noUncheckedIndexedAccess plus the rest, with Node-only or DOM lib types.',
 		files: [
-			{ src: 'tsconfig.base.json', dest: 'tsconfig.base.json' },
 			// A small tsconfig.json that extends the base. The plan calls this
 			// out specifically — `extends` beats deep-merging for clarity.
 			{ src: 'templates/tsconfig.json', dest: 'tsconfig.json' },
@@ -186,6 +205,12 @@ export const UNITS: Unit[] = [
 				label: 'TypeScript line',
 				default: '7',
 				choices: TYPESCRIPT_LINE_CHOICES,
+			},
+			{
+				key: 'tsFlavor',
+				label: 'TypeScript libs',
+				default: 'node',
+				choices: TS_FLAVOR_CHOICES,
 			},
 		],
 		packageJsonPatch: {

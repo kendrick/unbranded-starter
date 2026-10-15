@@ -1,11 +1,12 @@
 import type { Unit, UnitId } from '../manifest/types';
 import type { StateFile } from '../state/state';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { buildTsconfigBase } from '../manifest/tsconfig-base';
 import { builtinUnits, hashBuffer, STATE_SCHEMA } from '../state/state';
-import { planUpdate } from './update';
+import { planUpdate, runUpdate } from './update';
 
 function unit(id: UnitId, extras: Partial<Unit> = {}): Unit {
 	return { id, category: 'lint', label: id, description: '', files: [], ...extras };
@@ -230,5 +231,39 @@ describe('planUpdate', () => {
 		expect(
 			planUpdate({ targetDir: tmp, state: s, units: pkgCatalog, pkgRoot: tmp }).pkg.changed,
 		).toBe(false);
+	});
+});
+
+describe('runUpdate on a pre-#117 core-typescript', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-update-tsflavor-'));
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	it('keeps the DOM libs when no tsFlavor was recorded', async () => {
+		const old = '{ "compilerOptions": { "lib": ["ES2022", "DOM", "DOM.Iterable"] } }\n';
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		writeFileSync(join(tmp, 'tsconfig.base.json'), old);
+		const state: StateFile = {
+			_tool: 'x',
+			schema: STATE_SCHEMA,
+			version: '2.0.0',
+			units: builtinUnits(['core-typescript']),
+			files: { 'tsconfig.base.json': hashBuffer(Buffer.from(old)) },
+			attribution: { 'tsconfig.base.json': 'core-typescript' },
+			modes: { 'tsconfig.base.json': 'copy' },
+		};
+		writeFileSync(join(tmp, '.unbranded.json'), JSON.stringify(state));
+
+		expect(await runUpdate({ cwd: tmp, yes: true, force: true, strategy: 'theirs' })).toBe(0);
+
+		const updated = readFileSync(join(tmp, 'tsconfig.base.json'), 'utf-8');
+		expect(updated).toContain('"DOM"');
+		expect(updated).toBe(buildTsconfigBase('dom'));
 	});
 });

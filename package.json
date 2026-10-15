@@ -50,7 +50,6 @@
 		"schemas",
 		"stylelint.config.mjs",
 		"templates",
-		"tsconfig.base.json",
 		"vitest.config.ts"
 	],
 	"engines": {

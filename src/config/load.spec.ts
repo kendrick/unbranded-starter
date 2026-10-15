@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { UNITS } from '../manifest/index';
 import { buildOptionSchema } from '../manifest/options';
 import { assertValidPm, loadConfig, resolveConfig, validate } from './load';
 
@@ -324,6 +325,70 @@ describe('options (unit-option selections)', () => {
 		expect(() =>
 			resolveConfig(null, { units: 'core-eslint:svelte', yes: true }, KNOWN_UNITS, SCHEMA),
 		).toThrow(/eslintFlavor must be one of/);
+	});
+});
+
+// Against the shipped manifest, since what matters is how the parser reads the
+// real core-typescript, which carries two options.
+describe('inline `id:value:value` against the real manifest', () => {
+	const REAL_SCHEMA = buildOptionSchema(UNITS);
+	const REAL_UNITS = new Set<string>(UNITS.map((u) => u.id));
+	const inline = (units: string) =>
+		resolveConfig(null, { units, yes: true }, REAL_UNITS, REAL_SCHEMA);
+
+	it('matches each value to the option whose choices include it', () => {
+		const config = inline('core-typescript:6:dom');
+		expect(config.units).toEqual(['core-typescript']);
+		expect(config.options).toEqual({ typescriptLine: '6', tsFlavor: 'dom' });
+	});
+
+	it('ignores the order the values come in', () => {
+		expect(inline('core-typescript:dom:6').options).toEqual({
+			typescriptLine: '6',
+			tsFlavor: 'dom',
+		});
+	});
+
+	it('sets only the option a single value names', () => {
+		expect(inline('core-typescript:6').options).toEqual({ typescriptLine: '6' });
+	});
+
+	it('leaves a single-option unit unchanged', () => {
+		expect(inline('core-oxlint:react').options).toEqual({ oxlintFlavor: 'react' });
+	});
+
+	it('rejects a value no option has, naming the unit, the value and every allowed value', () => {
+		expect(() => inline('core-typescript:8')).toThrow(/core-typescript/);
+		expect(() => inline('core-typescript:8')).toThrow(/"8"/);
+		expect(() => inline('core-typescript:8')).toThrow(/typescriptLine must be one of: 6, 7/);
+		expect(() => inline('core-typescript:8')).toThrow(/tsFlavor must be one of: dom, node/);
+	});
+
+	it('rejects two values for the same option', () => {
+		expect(() => inline('core-typescript:6:7')).toThrow(/typescriptLine.*given twice/);
+	});
+
+	it('keeps the "takes no options" error for a unit without options', () => {
+		expect(() => inline('core-editorconfig:x')).toThrow(/core-editorconfig takes no options/);
+	});
+
+	it('rejects a value two options share, naming both', () => {
+		const shared = buildOptionSchema([
+			{
+				id: 'core-typescript',
+				category: 'types',
+				label: 'TypeScript',
+				description: '',
+				files: [],
+				options: [
+					{ key: 'first', label: 'First', default: 'a', choices: [{ value: 'a', label: 'A' }] },
+					{ key: 'second', label: 'Second', default: 'a', choices: [{ value: 'a', label: 'A' }] },
+				],
+			},
+		]);
+		expect(() => resolveConfig(null, { units: 'core-typescript:a' }, KNOWN_UNITS, shared)).toThrow(
+			/first.*second/,
+		);
 	});
 });
 

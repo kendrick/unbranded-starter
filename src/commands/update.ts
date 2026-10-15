@@ -89,6 +89,10 @@ export function planUpdate(opts: {
 	// infer it on every run the same way init defaults one. That's stable because
 	// the inferred pin is what update writes back.
 	const selections: Record<string, string> = { ...state.options };
+	// Update never writes options, so a tracked core-typescript with no recorded
+	// tsFlavor is a pre-#117 install. It has always had the DOM libs, and replaying
+	// it as node would strip them from a browser project without anyone choosing to.
+	if (installedIds.has('core-typescript')) selections.tsFlavor ??= 'dom';
 	for (const { id } of state.units) {
 		for (const option of byId.get(id)?.options ?? []) {
 			if (!LINE_OPTIONS.includes(option.key)) continue;

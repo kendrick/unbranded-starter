@@ -39,5 +39,4 @@ schemas/validate.schema.json
 stylelint.config.mjs
 templates/gitattributes
 templates/tsconfig.json
-tsconfig.base.json
 vitest.config.ts

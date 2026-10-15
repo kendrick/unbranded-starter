@@ -9,7 +9,7 @@
 		"core-vitest",
 		"opt-ci-github"
 	],
-	"options": { "oxlintFlavor": "base" },
+	"options": { "oxlintFlavor": "base", "tsFlavor": "node" },
 	"pm": null,
 	"onConflict": "skip",
 	"postInstall": "none"

@@ -288,6 +288,7 @@ export async function runPlanJson(opts: {
 		{
 			targetDir: target.dir,
 			selected: selectedIds,
+			tracked: new Set(tracked.ids),
 			recorded: tracked.options,
 		},
 	);
@@ -503,6 +504,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 					// itself, so it can remember the replaced value and restore it when
 					// the user deselects whatever forced the bend.
 					selected: trackedIds,
+					tracked: trackedIds,
 					recorded: early.unsupported === undefined ? early.options : {},
 				}),
 				...presetFlavors,
@@ -561,6 +563,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	const optionSelections = await resolveUnitOptions(selectedUnits, seededOptions, !skipApply, {
 		targetDir: target.dir,
 		selected: selectedIds,
+		tracked: new Set(tracked.ids),
 		recorded: tracked.options,
 	});
 	const violation = couplingViolationMessage(optionSelections, selectedIds, selectedUnits);
@@ -843,6 +846,9 @@ interface OptionContext {
 	// so a coupling sees an installed core-eslint. The picker seed passes tracked
 	// units alone, because the picker bends against its own selection.
 	selected: ReadonlySet<string>;
+	// Units the state file already tracks. A tracked core-typescript with no
+	// recorded tsFlavor is a pre-#117 install, which has always had the DOM libs.
+	tracked: ReadonlySet<string>;
 	// The state file's options, so augmenting a project keeps its recorded line.
 	recorded: Record<string, string>;
 }
@@ -857,9 +863,21 @@ interface OptionContext {
 function optionDefault(option: UnitOption, ctx: OptionContext): string {
 	if (option.key === 'eslintFlavor' || option.key === 'oxlintFlavor')
 		return detectEslintFlavor(targetDependencyNames(ctx.targetDir));
+	if (option.key === 'tsFlavor') return tsFlavorDefault(option, ctx);
 	return LINE_OPTIONS.includes(option.key)
 		? resolveLine(option, ctx.recorded[option.key], declaredSpecs(ctx.targetDir), ctx.selected)
 		: constrain(option.key, option.default, ctx.selected);
+}
+
+// Narrowing to node is for new scaffolds and explicit choices. A re-run must
+// never quietly drop DOM from a project that had it, so an install from before
+// tsFlavor existed keeps dom, and so does a project that already pulls React.
+function tsFlavorDefault(option: UnitOption, ctx: OptionContext): string {
+	const recorded = ctx.recorded[option.key];
+	if (recorded !== undefined && option.choices.some((c) => c.value === recorded)) return recorded;
+	if (ctx.tracked.has('core-typescript')) return 'dom';
+	const sniffed = detectEslintFlavor(targetDependencyNames(ctx.targetDir));
+	return sniffed === 'react' || sniffed === 'next' ? 'dom' : 'node';
 }
 
 function targetDependencyNames(targetDir: string): string[] {

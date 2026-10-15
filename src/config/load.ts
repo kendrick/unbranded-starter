@@ -1,5 +1,6 @@
 import type { Pm } from '../detect/pm';
 import type { OptionSchema } from '../manifest/options';
+import type { UnitOption } from '../manifest/types';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
@@ -121,11 +122,12 @@ export function resolveConfig(
 	schema?: OptionSchema,
 	opts: { unitsMode?: 'override' | 'additive'; unitsDir?: string } = {},
 ): Config {
-	// Inline --units accepts an `id:value` suffix (e.g. core-eslint:react) that
-	// picks a unit option inline. The id feeds the units array; the suffix, mapped
-	// to the unit's option key via the schema, feeds the options map (inline
-	// winning over any recipe options, mirroring how every inline flag beats the
-	// recipe). Options given this way get validated by validate() below.
+	// Inline --units accepts `id:value[:value...]` (e.g. core-typescript:6:dom) to
+	// pick unit options inline. The id feeds the units array; each value lands on
+	// the one option whose choices include it, so value order doesn't matter and a
+	// unit that grows a second option keeps its old one-value tokens working.
+	// Inline wins over recipe options, as every inline flag beats the recipe.
+	// Local unit ids use `/`, never `:`, so splitting on `:` can't cut an id.
 	const inlineOptions: Record<string, string> = {};
 	let units: string[] | undefined;
 	if (inline.units !== undefined) {
@@ -133,19 +135,16 @@ export function resolveConfig(
 		for (const raw of inline.units.split(',')) {
 			const token = raw.trim();
 			if (!token) continue;
-			const colon = token.indexOf(':');
-			if (colon === -1) {
-				units.push(token);
-				continue;
-			}
-			const id = token.slice(0, colon).trim();
-			const value = token.slice(colon + 1).trim();
+			const [head = '', ...rest] = token.split(':');
+			const id = head.trim();
 			units.push(id);
-			if (schema) {
-				const option = schema.byUnit.get(id);
-				if (!option) throw new Error(`--units: ${id} takes no options, but ":${value}" was given.`);
-				inlineOptions[option.key] = value;
+			if (rest.length === 0 || !schema) continue;
+			const values = rest.map((v) => v.trim());
+			const options = schema.byUnit.get(id);
+			if (!options?.length) {
+				throw new Error(`--units: ${id} takes no options, but ":${values.join(':')}" was given.`);
 			}
+			Object.assign(inlineOptions, matchInlineValues(id, values, options));
 		}
 	} else {
 		units = fileConfig?.units;
@@ -177,6 +176,45 @@ export function resolveConfig(
 		knownUnits,
 		schema,
 	);
+}
+
+// Maps one token's values onto the unit's options. Refuses anything it would
+// otherwise have to guess at: a value no option has, a value two options share,
+// or two values for one option.
+function matchInlineValues(
+	id: string,
+	values: string[],
+	options: UnitOption[],
+): Record<string, string> {
+	const picked: Record<string, string> = {};
+	for (const value of values) {
+		const matches = options.filter((o) => o.choices.some((c) => c.value === value));
+		if (matches.length === 0) {
+			const allowed = options
+				.map(
+					(o) =>
+						`${o.key} must be one of: ${o.choices
+							.map((c) => c.value)
+							.sort()
+							.join(', ')}`,
+				)
+				.join('; ');
+			throw new Error(`--units: ${id} has no option value "${value}". ${allowed}.`);
+		}
+		if (matches.length > 1) {
+			throw new Error(
+				`--units: "${value}" is ambiguous for ${id}; it could be ${matches.map((o) => o.key).join(' or ')}.`,
+			);
+		}
+		const [option] = matches as [UnitOption];
+		if (option.key in picked) {
+			throw new Error(
+				`--units: ${id} has ${option.key} given twice ("${picked[option.key]}" and "${value}").`,
+			);
+		}
+		picked[option.key] = value;
+	}
+	return picked;
 }
 
 export function validate(

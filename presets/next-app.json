@@ -16,7 +16,7 @@
 		"opt-husky",
 		"opt-ci-github"
 	],
-	"options": { "oxlintFlavor": "next" },
+	"options": { "oxlintFlavor": "next", "tsFlavor": "dom" },
 	"pm": null,
 	"onConflict": "skip",
 	"postInstall": "none"

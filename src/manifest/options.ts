@@ -1,20 +1,22 @@
 import type { AnyUnit, UnitOption } from './types';
 
-// The option surface flattened for the config layer: which option a unit exposes
-// (for the `id:value` inline syntax) and the allowed values per option key (for
+// The option surface flattened for the config layer: which options a unit exposes,
+// in declaration order (for the `id:value:value` inline syntax) and the allowed values per option key (for
 // validating a recipe's `options` map). Built once from the manifest and passed
 // into loadConfig/resolveConfig so config validation stays manifest-agnostic.
 export interface OptionSchema {
-	byUnit: Map<string, UnitOption>;
+	byUnit: Map<string, UnitOption[]>;
 	values: Map<string, Set<string>>;
 }
 
 export function buildOptionSchema(units: AnyUnit[]): OptionSchema {
-	const byUnit = new Map<string, UnitOption>();
+	const byUnit = new Map<string, UnitOption[]>();
 	const values = new Map<string, Set<string>>();
 	for (const unit of units) {
 		for (const option of unit.options ?? []) {
-			byUnit.set(unit.id, option);
+			const list = byUnit.get(unit.id);
+			if (list) list.push(option);
+			else byUnit.set(unit.id, [option]);
 			values.set(option.key, new Set(option.choices.map((c) => c.value)));
 		}
 	}
