@@ -27,11 +27,11 @@
 
 	// JSON, JSONC, Markdown, MDX, and YAML: oxc.oxc-vscode runs oxfmt, so a save
 	// writes what `oxfmt --check` in `pnpm lint` accepts. These repeat the
-	// default above because a user's own `[json]`, `[markdown]`, or `[yaml]` setting
-	// outranks a workspace default. VS Code's built-in JSON formatter
-	// expands objects and arrays that oxfmt keeps inline, so a save with it
-	// can fail lint. `.oxfmtrc.json` ignores `.claude/**`, so saves there may
-	// not format, and lint skips those files too.
+	// default above because a user's own `[json]`, `[markdown]`, or `[yaml]`
+	// setting outranks a workspace default. VS Code's built-in JSON formatter
+	// expands objects and arrays that oxfmt keeps inline, so a save with it can
+	// fail lint. `.oxfmtrc.json` ignores `.claude/**`, so saves there may not
+	// format, and lint skips those files too.
 	"[json]": {
 		"editor.defaultFormatter": "oxc.oxc-vscode"
 	},
