@@ -42,6 +42,30 @@ describe('buildCatalog', () => {
 		expect(eslint?.implies).toEqual(['core-typescript']);
 	});
 
+	it("surfaces opt-ci-github's lint slot as impliesOneOf", () => {
+		const catalog = buildCatalog();
+		const ci = catalog.units.find((u) => u.id === 'opt-ci-github');
+		expect(ci?.impliesOneOf).toEqual({
+			anyOf: ['core-eslint', 'core-oxlint'],
+			fallback: 'core-oxlint',
+		});
+	});
+
+	it('gives a unit with implies and no slot entry no impliesOneOf field', () => {
+		const catalog = buildCatalog();
+		const eslint = catalog.units.find((u) => u.id === 'core-eslint');
+		expect(eslint?.implies).toEqual(['core-typescript']);
+		expect(eslint).not.toHaveProperty('impliesOneOf');
+	});
+
+	it('reads impliesOneOf from the slot table it is given, so an empty table emits none', () => {
+		const catalog = buildCatalog(UNITS, undefined, []);
+		const ci = catalog.units.find((u) => u.id === 'opt-ci-github');
+		expect(ci).toBeDefined();
+		expect(ci).not.toHaveProperty('impliesOneOf');
+		expect(catalog.units.find((u) => u.id === 'core-eslint')).not.toHaveProperty('impliesOneOf');
+	});
+
 	it('surfaces unit options (flavors) without leaking their internal files/deps', () => {
 		const catalog = buildCatalog();
 		const eslint = catalog.units.find((u) => u.id === 'core-eslint');
@@ -128,6 +152,23 @@ describe('formatCatalog', () => {
 		);
 		// A built-in's line is untouched — no bracket marker anywhere on it.
 		expect(lines.find((l) => l.includes('core-editorconfig'))).not.toContain('[local:');
+	});
+
+	it("prints opt-ci-github's lint slot on its own line", () => {
+		const line = formatCatalog()
+			.split('\n')
+			.find((l) => l.includes('opt-ci-github'));
+		expect(line).toMatch(/one of core-eslint, core-oxlint, default core-oxlint/);
+		expect(line).toMatch(/implies → core-vitest, core-node-version; one of/);
+	});
+
+	it('prints no slot when given an empty slot table', () => {
+		const line = formatCatalog(UNITS, [])
+			.split('\n')
+			.find((l) => l.includes('opt-ci-github'));
+		expect(line).toBeDefined();
+		expect(line).not.toContain('one of');
+		expect(line).toMatch(/\(implies → core-vitest, core-node-version\)$/);
 	});
 
 	it('keeps built-ins-only output byte-for-byte unchanged by the local-unit marker code path', () => {

@@ -2,6 +2,7 @@ import type {
 	AnyUnit,
 	Category,
 	FileOp,
+	ImpliesOneOf,
 	PostInstall,
 	Unit,
 	UnitOption,
@@ -10,7 +11,7 @@ import type {
 import { loadPreset, presetNames } from '../config/presets';
 import { loadCatalog } from '../manifest/catalog';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '../manifest/categories';
-import { UNITS } from '../manifest/index';
+import { IMPLIES_ONE_OF, UNITS } from '../manifest/index';
 import { resolveSelection } from '../manifest/resolve';
 import { parseUnitRef } from '../manifest/unit-ref';
 
@@ -56,6 +57,7 @@ export interface CatalogUnit {
 	files: CatalogFile[];
 	options?: CatalogOption[];
 	implies?: string[];
+	impliesOneOf?: { anyOf: string[]; fallback: string };
 	excludes?: string[];
 	requires?: string[];
 	postInstall?: PostInstall[];
@@ -116,7 +118,7 @@ function toCatalogOption(option: UnitOption): CatalogOption {
 // deliberate: a new internal field on Unit can't silently leak into the JSON.
 // Optional keys are emitted only when present, which keeps each entry as terse
 // as the manifest authored it.
-function toCatalogUnit(unit: AnyUnit, source?: UnitSource): CatalogUnit {
+function toCatalogUnit(unit: AnyUnit, slot?: ImpliesOneOf, source?: UnitSource): CatalogUnit {
 	return {
 		id: unit.id,
 		category: unit.category,
@@ -127,6 +129,9 @@ function toCatalogUnit(unit: AnyUnit, source?: UnitSource): CatalogUnit {
 		files: unit.files.map(toCatalogFile),
 		...(unit.options ? { options: unit.options.map(toCatalogOption) } : {}),
 		...(unit.implies ? { implies: unit.implies } : {}),
+		// No `unit` key: the entry already is that unit, and the schema's
+		// additionalProperties: false would reject it.
+		...(slot ? { impliesOneOf: { anyOf: [...slot.anyOf], fallback: slot.fallback } } : {}),
 		...(unit.excludes ? { excludes: unit.excludes } : {}),
 		...(unit.requires ? { requires: unit.requires } : {}),
 		...(unit.postInstall ? { postInstall: unit.postInstall } : {}),
@@ -140,22 +145,33 @@ function toCatalogUnit(unit: AnyUnit, source?: UnitSource): CatalogUnit {
 // `sources` is optional and separate from `units` (rather than folded into
 // AnyUnit) because a unit's provenance is catalog metadata, not something a
 // unit schema — built-in or authored — is allowed to carry; see catalog.ts.
+// `slots` defaults to the real IMPLIES_ONE_OF, the same seam resolveSelection
+// uses, so a test can pass an empty table and prove the field comes from the
+// table rather than from somewhere on the unit. It also feeds the preset
+// expansion, so an emptied table gives one consistent catalog.
 export function buildCatalog(
 	units: AnyUnit[] = UNITS,
 	sources?: ReadonlyMap<string, UnitSource>,
+	slots: readonly ImpliesOneOf[] = IMPLIES_ONE_OF,
 ): Catalog {
 	return {
 		schema: CATALOG_SCHEMA,
-		units: orderUnits(units).map((u) => toCatalogUnit(u, sources?.get(u.id))),
-		presets: buildCatalogPresets(units),
+		units: orderUnits(units).map((u) => toCatalogUnit(u, slotFor(u.id, slots), sources?.get(u.id))),
+		presets: buildCatalogPresets(units, slots),
 	};
 }
 
-function buildCatalogPresets(units: AnyUnit[]): CatalogPreset[] {
+// IMPLIES_ONE_OF holds one entry per unit today; a second entry for the same
+// unit would be ignored here until the catalog grows a list shape for it.
+function slotFor(id: string, slots: readonly ImpliesOneOf[]): ImpliesOneOf | undefined {
+	return slots.find((s) => s.unit === id);
+}
+
+function buildCatalogPresets(units: AnyUnit[], slots: readonly ImpliesOneOf[]): CatalogPreset[] {
 	const known = new Set(units.map((u) => u.id));
 	return presetNames().map((name) => {
 		const preset = loadPreset(name, known);
-		const resolution = resolveSelection(preset.config.units, units);
+		const resolution = resolveSelection(preset.config.units, units, slots);
 		return {
 			name,
 			description: preset.description,
@@ -165,7 +181,10 @@ function buildCatalogPresets(units: AnyUnit[]): CatalogPreset[] {
 	});
 }
 
-export function formatCatalog(units: AnyUnit[] = UNITS): string {
+export function formatCatalog(
+	units: AnyUnit[] = UNITS,
+	slots: readonly ImpliesOneOf[] = IMPLIES_ONE_OF,
+): string {
 	const ordered = orderUnits(units);
 	const idWidth = Math.max(...ordered.map((u) => u.id.length));
 
@@ -176,7 +195,12 @@ export function formatCatalog(units: AnyUnit[] = UNITS): string {
 
 		lines.push(CATEGORY_LABELS[category]);
 		for (const unit of inCategory) {
-			const implies = unit.implies?.length ? `  (implies → ${unit.implies.join(', ')})` : '';
+			const slot = slotFor(unit.id, slots);
+			const relations = [
+				...(unit.implies?.length ? [`implies → ${unit.implies.join(', ')}`] : []),
+				...(slot ? [`one of ${slot.anyOf.join(', ')}, default ${slot.fallback}`] : []),
+			];
+			const implies = relations.length ? `  (${relations.join('; ')})` : '';
 			// A local unit's namespace is already baked into its own id (my-units/banner),
 			// so it reads straight off parseUnitRef with no sources map to thread through —
 			// this function keeps its UNITS-only default and doctor's buildCatalog() call
@@ -199,7 +223,7 @@ export function formatCatalog(units: AnyUnit[] = UNITS): string {
 	}
 
 	lines.push('Presets (start points for --preset; --units adds to them)');
-	for (const preset of buildCatalogPresets(ordered)) {
+	for (const preset of buildCatalogPresets(ordered, slots)) {
 		lines.push(`  ${preset.name.padEnd(idWidth)}  ${preset.description}`);
 		lines.push(`  ${' '.repeat(idWidth)}    → ${preset.units.join(', ')}`);
 	}
