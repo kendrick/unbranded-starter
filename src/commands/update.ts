@@ -13,7 +13,7 @@ import { detectIndent } from '../install/run';
 import { loadCatalog, unitsDirsFor } from '../manifest/catalog';
 import { LINE_OPTIONS } from '../manifest/index';
 import { applyLintStaged } from '../manifest/lint-staged';
-import { resolveLine } from '../manifest/option-lines';
+import { legacyTsFlavor, resolveLine } from '../manifest/option-lines';
 import { applyUnitOptions } from '../manifest/options';
 import {
 	hashBuffer,
@@ -89,10 +89,10 @@ export function planUpdate(opts: {
 	// infer it on every run the same way init defaults one. That's stable because
 	// the inferred pin is what update writes back.
 	const selections: Record<string, string> = { ...state.options };
-	// Update never writes options, so a tracked core-typescript with no recorded
-	// tsFlavor is a pre-#117 install. It has always had the DOM libs, and replaying
-	// it as node would strip them from a browser project without anyone choosing to.
-	if (installedIds.has('core-typescript')) selections.tsFlavor ??= 'dom';
+	// Update never writes options, so every tracked install with no recorded
+	// tsFlavor is a pre-#117 one.
+	const legacyFlavor = legacyTsFlavor(installedIds);
+	if (legacyFlavor) selections.tsFlavor ??= legacyFlavor;
 	for (const { id } of state.units) {
 		for (const option of byId.get(id)?.options ?? []) {
 			if (!LINE_OPTIONS.includes(option.key)) continue;

@@ -132,7 +132,19 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main')(
 				[join(tmp, 'node_modules', 'typescript', 'bin', 'tsc'), '--noEmit', '--pretty', 'false'],
 				{ cwd: tmp, encoding: 'utf-8' },
 			);
-			return `${tsc.status === 0 ? 'EXIT0' : 'EXITNONZERO'}\n${tsc.stdout}\n${tsc.stderr}`;
+			// A spawn error or a node-level crash (missing module) leaves tsc.status null or
+			// 1 with no `error TSxxxx` line, which a path filter alone would read as clean.
+			const spawnError = tsc.error ? `SPAWNERROR ${tsc.error.message}\n` : '';
+			return `${spawnError}${tsc.status === 0 ? 'EXIT0' : 'EXITNONZERO'}\n${tsc.stdout}\n${tsc.stderr}`;
+		}
+
+		// Proves the compiler actually checked the scaffold: it exited 0, or it reported
+		// at least one diagnostic, and none of them is a config-level TS5xxx/TS6xxx error
+		// (bad tsconfig, unknown option), which prints no file path.
+		function expectTscRan(out: string): void {
+			expect(out, out).not.toContain('SPAWNERROR');
+			expect(out, out).not.toMatch(/error TS[56]\d{3}/);
+			expect(out, out).toMatch(/EXIT0|error TS\d{4}/);
 		}
 
 		it('the cli preset (node flavor) fails tsc on a file referencing document', () => {
@@ -145,6 +157,7 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main')(
 			// Filtered by path: the rest of a next-app scaffold may not typecheck before its
 			// own install steps, but nothing may be reported against src/index.ts.
 			const out = scaffoldPreset('next-app');
+			expectTscRan(out);
 			expect(out, out).not.toMatch(/src[\\/]index\.ts/);
 		});
 	},

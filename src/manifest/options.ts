@@ -1,9 +1,10 @@
 import type { AnyUnit, UnitOption } from './types';
 
 // The option surface flattened for the config layer: which options a unit exposes,
-// in declaration order (for the `id:value:value` inline syntax) and the allowed values per option key (for
-// validating a recipe's `options` map). Built once from the manifest and passed
-// into loadConfig/resolveConfig so config validation stays manifest-agnostic.
+// in declaration order (for the `id:value:value` inline syntax) and the allowed
+// values per option key (for validating a recipe's `options` map). Built once from
+// the manifest and passed into loadConfig/resolveConfig so config validation stays
+// manifest-agnostic.
 export interface OptionSchema {
 	byUnit: Map<string, UnitOption[]>;
 	values: Map<string, Set<string>>;

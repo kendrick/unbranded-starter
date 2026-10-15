@@ -34,6 +34,7 @@ import {
 	constrain,
 	findCouplingViolation,
 	heldPins,
+	legacyTsFlavor,
 	resolveLine,
 	specsToWrite,
 } from '../manifest/option-lines';
@@ -875,7 +876,8 @@ function optionDefault(option: UnitOption, ctx: OptionContext): string {
 function tsFlavorDefault(option: UnitOption, ctx: OptionContext): string {
 	const recorded = ctx.recorded[option.key];
 	if (recorded !== undefined && option.choices.some((c) => c.value === recorded)) return recorded;
-	if (ctx.tracked.has('core-typescript')) return 'dom';
+	const legacy = legacyTsFlavor(ctx.tracked);
+	if (legacy) return legacy;
 	const sniffed = detectEslintFlavor(targetDependencyNames(ctx.targetDir));
 	return sniffed === 'react' || sniffed === 'next' ? 'dom' : 'node';
 }

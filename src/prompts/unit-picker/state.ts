@@ -49,7 +49,6 @@ export type PickerEvent =
 	| { type: 'clearFilter' }
 	| { type: 'toggle' }
 	| { type: 'toggleExpand' }
-	// optionIndex picks which of the row's options cycles; absent means the first.
 	| { type: 'cycleFlavor'; delta: number; optionIndex?: number };
 
 export type PickerRow =
@@ -248,8 +247,8 @@ export function pickerSummary(state: PickerState): { units: number; files: numbe
 	};
 }
 
-// Every option's current value, joined for the row tag and the detail line. Undefined
-// when the unit has no options, so the renderer shows nothing for it.
+// Undefined, not an empty string, when the unit has no options, so the renderer can
+// tell "no tag" from a blank one.
 function flavorTag(opt: PickerOption, flavors: Record<string, string>): string | undefined {
 	if (!opt.options?.length) return undefined;
 	return opt.options.map((o) => flavors[o.key] ?? o.default).join(' · ');

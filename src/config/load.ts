@@ -178,9 +178,8 @@ export function resolveConfig(
 	);
 }
 
-// Maps one token's values onto the unit's options. Refuses anything it would
-// otherwise have to guess at: a value no option has, a value two options share,
-// or two values for one option.
+// Refuses anything it would otherwise have to guess at: a value no option has, a
+// value two options share, or two values for one option.
 function matchInlineValues(
 	id: string,
 	values: string[],

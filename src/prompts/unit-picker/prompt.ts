@@ -19,8 +19,8 @@ export type PickerIntent =
 // The base emits 'key' with the char argument lowercased, so a printable filter char
 // is read from key.sequence instead. Left/right always translate to cycleFlavor — the
 // reducer no-ops on rows without options, so there's no need to check here. Shift
-// aims the same arrows at the row's second option. Space is a
-// toggle, never a filter char (labels rarely need a literal space to match).
+// aims the same arrows at the row's second option. Space is a toggle, never a
+// filter char (labels rarely need a literal space to match).
 export function translateKey(
 	_char: string | undefined,
 	key: Pick<Key, 'name' | 'sequence' | 'shift'>,

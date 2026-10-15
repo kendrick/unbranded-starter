@@ -17,7 +17,8 @@ permissions:
 # file's tests stay together), so instead each heavy install runs in its own parallel
 # job. `e2e-main` runs everything else with the heavy specs skipped, `e2e-flavors`
 # fans the three flavors out, `e2e-oxlint-flavors` does the same for oxlint's,
-# `e2e-scaffold` runs the full-project lint, `e2e-lint-staged` commits through the
+# `e2e-scaffold` runs the full-project lint, `e2e-ts-flavors` typechecks a DOM
+# reference in a cli and a next-app scaffold, `e2e-lint-staged` commits through the
 # generated pre-commit hook, `checks` carries the fast grid, and
 # `launcher-smoke` is the one-off publish check. Wall-clock
 # is now the slowest single install, not the sum. Only the launcher still upgrades npm
@@ -171,6 +172,29 @@ jobs:
         run: pnpm build
       - name: E2E tests (fresh-scaffold full lint)
         run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/scaffold-lint.spec.ts
+
+  e2e-ts-flavors:
+    name: e2e ts flavors (${{ matrix.os }})
+    # Its own job because the real-install half is skipped under UB_E2E_LEG=main; without
+    # this the cli/next-app tsc cases of #117 never run in CI.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: E2E tests (ts flavors)
+        run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/ts-flavors.spec.ts
 
   e2e-lint-staged:
     name: e2e lint-staged commit

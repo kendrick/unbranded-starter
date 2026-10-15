@@ -7,6 +7,7 @@ import {
 	findCouplingViolation,
 	heldPins,
 	inferLineChoice,
+	legacyTsFlavor,
 	lineDefault,
 	majorOf,
 	resolveLine,
@@ -241,5 +242,16 @@ describe('specsToWrite', () => {
 		expect(specsToWrite([ts], held, true).map((u) => u.devDependencies)).toEqual([
 			{ typescript: '^6' },
 		]);
+	});
+});
+
+describe('legacyTsFlavor', () => {
+	it('is dom when core-typescript is tracked', () => {
+		expect(legacyTsFlavor(new Set(['core-typescript', 'core-eslint']))).toBe('dom');
+	});
+
+	it('is undefined when core-typescript is not tracked', () => {
+		expect(legacyTsFlavor(new Set(['core-eslint']))).toBeUndefined();
+		expect(legacyTsFlavor(new Set())).toBeUndefined();
 	});
 });
