@@ -105,7 +105,8 @@ export function resolveLine(
 
 // A tracked core-typescript with no recorded tsFlavor predates #117 and has always
 // had the DOM libs, so narrowing it to node would strip them without anyone choosing
-// to. init and update both call this so the two can't drift on which installs count.
+// to. Callers consult this only when no tsFlavor is recorded. init and update both
+// call it so the two can't drift on which installs count.
 export function legacyTsFlavor(tracked: ReadonlySet<string>): string | undefined {
 	return tracked.has('core-typescript') ? 'dom' : undefined;
 }

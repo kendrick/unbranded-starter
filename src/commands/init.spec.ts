@@ -685,7 +685,7 @@ describe('runInit tsFlavor default (#117)', () => {
 		expect(await plannedLibLine()).toBe('"lib": ["ES2022", "DOM", "DOM.Iterable"],');
 	});
 
-	// That install predates #117 and has always had the DOM libs.
+	// Such an install predates #117 and has always had the DOM libs.
 	it('keeps the DOM libs for a tracked core-typescript with no recorded tsFlavor', async () => {
 		writePkg();
 		trackCoreTypescript();

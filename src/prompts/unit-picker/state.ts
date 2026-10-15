@@ -210,9 +210,8 @@ export function reducePicker(state: PickerState, event: PickerEvent): PickerStat
 			return { ...state, expanded: state.expanded === opt.value ? null : opt.value };
 		}
 		case 'cycleFlavor': {
-			// An index past the row's last option falls through to a no-op, so units with
-			// three or more options can't break the reducer even though the picker only
-			// binds the first two.
+			// Shifted arrows send optionIndex 1 to every row, so on a one-option row the
+			// index runs past the last option and the event falls through to a no-op.
 			const option = filteredOptions(state)[state.cursor]?.options?.[event.optionIndex ?? 0];
 			if (!option) return state;
 			const values = allowedValues(option, effectiveSet(state));
@@ -247,8 +246,8 @@ export function pickerSummary(state: PickerState): { units: number; files: numbe
 	};
 }
 
-// Undefined, not an empty string, when the unit has no options, so the renderer can
-// tell "no tag" from a blank one.
+// Undefined when the unit has no options, so the row's optional flavor stays unset
+// and the renderer draws no tag for it.
 function flavorTag(opt: PickerOption, flavors: Record<string, string>): string | undefined {
 	if (!opt.options?.length) return undefined;
 	return opt.options.map((o) => flavors[o.key] ?? o.default).join(' · ');

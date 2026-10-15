@@ -38,7 +38,7 @@ describe('tsFlavor inline selection (#117)', () => {
 	});
 
 	// A dry run lists a created file's path but not its content, so the tsconfig half is
-	// read off a real write with no install (pm null); the plan half off the dry-run JSON.
+	// read off a real write with no install (pm null); the plan half reads the dry-run JSON.
 	function scaffolded(units: string): { typescript?: string; base: string } {
 		const json = dryRun(units, tmp, ['--json']);
 		expect(json.status, json.stderr).toBe(0);
@@ -138,7 +138,7 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main')(
 			return `${spawnError}${tsc.status === 0 ? 'EXIT0' : 'EXITNONZERO'}\n${tsc.stdout}\n${tsc.stderr}`;
 		}
 
-		// Proves the compiler actually checked the scaffold: it exited 0, or it reported
+		// Proves the compiler checked the scaffold: it exited 0, or it reported
 		// at least one diagnostic, and none of them is a config-level TS5xxx/TS6xxx error
 		// (bad tsconfig, unknown option), which prints no file path.
 		function expectTscRan(out: string): void {
