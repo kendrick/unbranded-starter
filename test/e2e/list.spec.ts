@@ -76,7 +76,6 @@ describe('unbranded list', () => {
 		expect(tsLine?.default).toBe('7');
 		expect(tsLine?.choices.map((c) => c.value)).toEqual(['7', '6']);
 
-		// #175: opt-ci-github's lint slot rides along as impliesOneOf.
 		const ci = parsed.units.find((u) => u.id === 'opt-ci-github');
 		expect(ci?.impliesOneOf).toEqual({
 			anyOf: ['core-eslint', 'core-oxlint'],

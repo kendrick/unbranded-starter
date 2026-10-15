@@ -57,7 +57,7 @@ export interface CatalogUnit {
 	files: CatalogFile[];
 	options?: CatalogOption[];
 	implies?: string[];
-	impliesOneOf?: { anyOf: string[]; fallback: string };
+	impliesOneOf?: Omit<ImpliesOneOf, 'unit'>;
 	excludes?: string[];
 	requires?: string[];
 	postInstall?: PostInstall[];
@@ -118,7 +118,7 @@ function toCatalogOption(option: UnitOption): CatalogOption {
 // deliberate: a new internal field on Unit can't silently leak into the JSON.
 // Optional keys are emitted only when present, which keeps each entry as terse
 // as the manifest authored it.
-function toCatalogUnit(unit: AnyUnit, slot?: ImpliesOneOf, source?: UnitSource): CatalogUnit {
+function toCatalogUnit(unit: AnyUnit, source?: UnitSource, slot?: ImpliesOneOf): CatalogUnit {
 	return {
 		id: unit.id,
 		category: unit.category,
@@ -156,7 +156,7 @@ export function buildCatalog(
 ): Catalog {
 	return {
 		schema: CATALOG_SCHEMA,
-		units: orderUnits(units).map((u) => toCatalogUnit(u, slotFor(u.id, slots), sources?.get(u.id))),
+		units: orderUnits(units).map((u) => toCatalogUnit(u, sources?.get(u.id), slotFor(u.id, slots))),
 		presets: buildCatalogPresets(units, slots),
 	};
 }
@@ -200,7 +200,7 @@ export function formatCatalog(
 				...(unit.implies?.length ? [`implies → ${unit.implies.join(', ')}`] : []),
 				...(slot ? [`one of ${slot.anyOf.join(', ')}, default ${slot.fallback}`] : []),
 			];
-			const implies = relations.length ? `  (${relations.join('; ')})` : '';
+			const relationSuffix = relations.length ? `  (${relations.join('; ')})` : '';
 			// A local unit's namespace is already baked into its own id (my-units/banner),
 			// so it reads straight off parseUnitRef with no sources map to thread through —
 			// this function keeps its UNITS-only default and doctor's buildCatalog() call
@@ -208,7 +208,7 @@ export function formatCatalog(
 			const namespace = parseUnitRef(unit.id).namespace;
 			const local = namespace !== undefined ? `  [local: ${namespace}]` : '';
 			lines.push(
-				`  ${unit.id.padEnd(idWidth)}  ${unit.label} — ${unit.description}${implies}${local}`,
+				`  ${unit.id.padEnd(idWidth)}  ${unit.label} — ${unit.description}${relationSuffix}${local}`,
 			);
 			// A unit's options (a lint flavor, the TS line) get their own indented line so
 			// the picker's choices are visible from `list` without running the CLI.
