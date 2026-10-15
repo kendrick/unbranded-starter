@@ -84,9 +84,15 @@ function optionSpans(
 	return spans;
 }
 
-function detailLines(option: PickerOption, theme: PickerTheme, width: number): string[] {
+function detailLines(
+	option: PickerOption,
+	flavor: string | undefined,
+	theme: PickerTheme,
+	width: number,
+): string[] {
 	const d = option.detail;
 	const parts: string[] = [];
+	if (flavor) parts.push(`options: ${flavor}`);
 	if (d.optionNote) parts.push(d.optionNote);
 	if (d.files.length) parts.push(`files: ${d.files.map((f) => f.dest).join(', ')}`);
 	const deps = [...Object.keys(d.dependencies), ...Object.keys(d.devDependencies)];
@@ -107,7 +113,7 @@ function renderRow(row: PickerRow, view: PickerView, labelById: Map<string, stri
 			),
 		];
 	if (row.kind === 'option') return [renderLine(optionSpans(row, theme, labelById), width)];
-	return detailLines(row.option, theme, width);
+	return detailLines(row.option, row.flavor, theme, width);
 }
 
 // Keep the active row on screen when the list is taller than maxRows. Grows a window
@@ -158,6 +164,9 @@ function hints(state: PickerState): string[] {
 	const active = filteredOptions(state)[state.cursor];
 	const parts = ['↑↓ move', 'space select', 'tab details'];
 	if (active?.options?.length) parts.push('←→ flavor');
+	// Only a two-option row has something for Shift to reach; a one-option row would
+	// advertise a key that does nothing.
+	if (active?.options?.length === 2) parts.push(`⇧←→ ${active.options[1]?.label}`);
 	parts.push(state.filter ? 'esc clear' : 'type to filter');
 	parts.push('↵ done');
 	return parts;

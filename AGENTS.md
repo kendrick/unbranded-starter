@@ -29,7 +29,7 @@ No command below needs a TTY. Anything interactive has a flag that answers it.
 
 ### Recipes
 
-`--config <file>` drives a full run from JSON—schema in `schemas/recipe.schema.json`. Required: `units`, `pm` (`null` skips the install), `onConflict` (files and dependency version collisions alike), `postInstall`. Optional: `options`, `versions`, `projectName` (new-project mode), `git`, `force`. Unknown extra keys are tolerated. Inline flags override the matching recipe field per field, and `--units` accepts an `id:value` suffix for unit options (`core-oxlint:react`, `core-typescript:6`).
+`--config <file>` drives a full run from JSON—schema in `schemas/recipe.schema.json`. Required: `units`, `pm` (`null` skips the install), `onConflict` (files and dependency version collisions alike), `postInstall`. Optional: `options`, `versions`, `projectName` (new-project mode), `git`, `force`. Unknown extra keys are tolerated. Inline flags override the matching recipe field per field, and `--units` accepts `:value` suffixes for unit options (`core-oxlint:react`, `core-typescript:6`, `core-typescript:6:dom`). Each value goes to the option whose choices include it, so `core-typescript:dom:6` means the same thing. The parser exits 1 on a value no option of that unit has, a value two of its options share, or two values for one option.
 
 ### JSON Envelopes
 

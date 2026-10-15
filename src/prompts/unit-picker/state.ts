@@ -49,7 +49,8 @@ export type PickerEvent =
 	| { type: 'clearFilter' }
 	| { type: 'toggle' }
 	| { type: 'toggleExpand' }
-	| { type: 'cycleFlavor'; delta: number };
+	// optionIndex picks which of the row's options cycles; absent means the first.
+	| { type: 'cycleFlavor'; delta: number; optionIndex?: number };
 
 export type PickerRow =
 	| { kind: 'header'; group: string; selected: number; total: number }
@@ -210,7 +211,10 @@ export function reducePicker(state: PickerState, event: PickerEvent): PickerStat
 			return { ...state, expanded: state.expanded === opt.value ? null : opt.value };
 		}
 		case 'cycleFlavor': {
-			const option = filteredOptions(state)[state.cursor]?.options?.[0];
+			// An index past the row's last option falls through to a no-op, so units with
+			// three or more options can't break the reducer even though the picker only
+			// binds the first two.
+			const option = filteredOptions(state)[state.cursor]?.options?.[event.optionIndex ?? 0];
 			if (!option) return state;
 			const values = allowedValues(option, effectiveSet(state));
 			const len = values.length;
@@ -244,6 +248,13 @@ export function pickerSummary(state: PickerState): { units: number; files: numbe
 	};
 }
 
+// Every option's current value, joined for the row tag and the detail line. Undefined
+// when the unit has no options, so the renderer shows nothing for it.
+function flavorTag(opt: PickerOption, flavors: Record<string, string>): string | undefined {
+	if (!opt.options?.length) return undefined;
+	return opt.options.map((o) => flavors[o.key] ?? o.default).join(' · ');
+}
+
 // Flattens the filtered options into display rows: a header per group (with its
 // selected/total count), each option, and the expanded row's detail block spliced in
 // right after it. Groups with no visible options never emit a header, so filtering
@@ -266,7 +277,7 @@ export function pickerRows(state: PickerState): PickerRow[] {
 			});
 		}
 
-		const flavor = opt.options?.[0] ? state.flavors[opt.options[0].key] : undefined;
+		const flavor = flavorTag(opt, state.flavors);
 		rows.push({
 			kind: 'option',
 			option: opt,

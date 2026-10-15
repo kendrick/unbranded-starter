@@ -99,6 +99,8 @@ A run looks roughly like this:
 └  Done.
 ```
 
+In the picker, a row with options shows each option's current value on its tag. ←/→ cycles the row's first option, and Shift+←/→ cycles its second, so on the TypeScript row ←/→ changes the compiler line and Shift+←/→ changes the lib types.
+
 ## What You Can Install
 
 Sixteen units, grouped by category. Selecting one can pull in others: either lint unit (oxlint + oxfmt or ESLint) implies TypeScript, PostCSS and shadcn/ui imply Tailwind, and the GitHub Actions unit implies the lint and test units its workflow runs. Auto-added units are tagged `(auto)` in the plan.
@@ -116,7 +118,7 @@ Sixteen units, grouped by category. Selecting one can pull in others: either lin
 
 **TypeScript**
 
-- **TypeScript**—the full strict suite plus `noUncheckedIndexedAccess` and the rest. The `typescriptLine` option picks the compiler line: `core-typescript:6` or `core-typescript:7`, default 7. Either lint unit works on 6.
+- **TypeScript**—the full strict suite plus `noUncheckedIndexedAccess` and the rest. The `typescriptLine` option picks the compiler line: `core-typescript:6` or `core-typescript:7`, default 7. Either lint unit works on 6. The `tsFlavor` option picks the lib types: `node`, the default, loads `ES2022` alone, so code that touches `document` fails typecheck, and `dom` adds `DOM` and `DOM.Iterable` for browser code. The node-lib and cli presets pick `node`, and next-app picks `dom`. To set both options inline, give both values in either order, as in `core-typescript:6:dom`. When a run names no flavor, it keeps the one `.unbranded.json` records. Without a recorded flavor, a project that already tracks `core-typescript` or depends on React or Next gets `dom`, and anything else gets `node`. Installs from before 3.0 had the DOM libs, and `update` and later runs keep them until you choose `node`, for example with `--units core-typescript:node`.
 
 **Styles**
 
@@ -158,8 +160,8 @@ Run `unbranded list` for the same catalog in your terminal, or `unbranded list -
 
 Three shipped recipes bundle the common answers, and the interactive flow offers them as a starting point before the picker:
 
-- **node-lib**—a typed, tested, linted Node library: strict TypeScript, oxlint and oxfmt (base flavor), Vitest, pre-commit hooks, CI, and the editor/git hygiene units.
-- **next-app**—everything node-lib has, plus the front-end stack: Tailwind v4, PostCSS, Stylelint, shadcn/ui, Playwright with axe, and a shared VS Code workspace. oxlint runs the next flavor.
+- **node-lib**—a typed, tested, linted Node library: strict TypeScript without the DOM libs, oxlint and oxfmt (base flavor), Vitest, pre-commit hooks, CI, and the editor/git hygiene units.
+- **next-app**—everything node-lib has, plus the front-end stack: Tailwind v4, PostCSS, Stylelint, shadcn/ui, Playwright with axe, and a shared VS Code workspace. oxlint runs the next flavor, and TypeScript loads the DOM libs.
 - **cli**—node-lib without the git hooks, for command-line tools. After scaffolding, point your bundler at a bin entry and add a shebang; the shipped tsconfig works as-is for a single-entry CLI.
 
 `--preset <name>` behaves like `--config` pointed at the bundled file, with one twist: `--units` _adds_ to a preset instead of replacing its list, because a preset is a starting point. Presets default to the safe run (no install, no overwrites, your existing dependency specs kept); pass `--pm` to install and `--on-conflict overwrite` to clobber. The files live in [presets/](presets/) as plain recipe JSON, so they double as documentation.
