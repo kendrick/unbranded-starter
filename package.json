@@ -66,6 +66,7 @@
 		"test:all": "pnpm test && pnpm test:e2e",
 		"typecheck": "tsc --noEmit",
 		"lint": "oxlint && oxfmt --check",
+		"lint:tracked": "node scripts/lint-tracked.mjs",
 		"lint:fix": "oxlint --fix",
 		"lint:css": "stylelint \"**/*.css\" --allow-empty-input",
 		"lint:css:fix": "stylelint \"**/*.css\" --fix --allow-empty-input",
@@ -103,7 +104,7 @@
 	},
 	"simple-git-hooks": {
 		"pre-commit": "pnpm lint-staged",
-		"pre-push": "CI=true pnpm lint"
+		"pre-push": "CI=true pnpm lint:tracked"
 	},
 	"lint-staged": {
 		"*.{js,mjs,cjs,ts,mts,cts}": [
