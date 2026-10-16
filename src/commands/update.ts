@@ -16,10 +16,11 @@ import { applyLintStaged } from '../manifest/lint-staged';
 import { legacyTsFlavor, resolveLine } from '../manifest/option-lines';
 import { applyUnitOptions } from '../manifest/options';
 import {
+	baselinePath,
 	hashBuffer,
+	legacyBaselinePath,
 	readStateFile,
 	refreshTrackedFiles,
-	SIDECAR_DIR,
 	unsupportedStateMessage,
 } from '../state/state';
 import { cancelAndExit } from '../util/cancel';
@@ -174,8 +175,12 @@ export function planUpdate(opts: {
 		const mineBuf = readFileSync(abs);
 		const mine = mineBuf.toString('utf-8');
 		const theirs = entry.content;
-		const baselinePath = join(targetDir, SIDECAR_DIR, 'baseline', rel);
-		let base = existsSync(baselinePath) ? readFileSync(baselinePath, 'utf-8') : undefined;
+		// Pre-#182 scaffolds stored the copy under its own name; fall back to it
+		// until the next update's syncSidecar renames it to `.base`.
+		const baseFile = [baselinePath(targetDir, rel), legacyBaselinePath(targetDir, rel)].find((p) =>
+			existsSync(p),
+		);
+		let base = baseFile === undefined ? undefined : readFileSync(baseFile, 'utf-8');
 		// No baseline, but the recorded hash proves the disk bytes are exactly
 		// what we wrote — so the disk IS the base, and the merge stays exact.
 		if (base === undefined && hashBuffer(mineBuf) === state.files[rel]) base = mine;

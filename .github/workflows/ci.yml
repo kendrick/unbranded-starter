@@ -17,7 +17,8 @@ permissions:
 # file's tests stay together), so instead each heavy install runs in its own parallel
 # job. `e2e-main` runs everything else with the heavy specs skipped, `e2e-flavors`
 # fans the three flavors out, `e2e-oxlint-flavors` does the same for oxlint's,
-# `e2e-scaffold` runs the full-project lint, `e2e-ts-flavors` typechecks a DOM
+# `e2e-scaffold` runs the full-project lint, `e2e-sidecar-baseline` proves format and
+# lint ignore `.unbranded/baseline/`, `e2e-ts-flavors` typechecks a DOM
 # reference in a cli and a next-app scaffold, `e2e-lint-staged` commits through the
 # generated pre-commit hook, `checks` carries the fast grid, and
 # `launcher-smoke` is the one-off publish check. Wall-clock
@@ -172,6 +173,29 @@ jobs:
         run: pnpm build
       - name: E2E tests (fresh-scaffold full lint)
         run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/scaffold-lint.spec.ts
+
+  e2e-sidecar-baseline:
+    name: e2e sidecar baseline (${{ matrix.os }})
+    # Its own job because the real-install spec is skipped under UB_E2E_LEG=main; without
+    # this the #182 check that pnpm format and pnpm lint leave .unbranded/ alone never runs.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: E2E tests (baseline sidecar vs format and lint)
+        run: pnpm vitest run --config vitest.e2e.config.ts test/e2e/sidecar-baseline.spec.ts
 
   e2e-ts-flavors:
     name: e2e ts flavors (${{ matrix.os }})

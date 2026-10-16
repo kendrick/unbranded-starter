@@ -1,11 +1,17 @@
 import type { Unit, UnitId } from '../manifest/types';
 import type { StateFile } from '../state/state';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildTsconfigBase } from '../manifest/tsconfig-base';
-import { builtinUnits, hashBuffer, STATE_SCHEMA } from '../state/state';
+import {
+	baselinePath,
+	builtinUnits,
+	hashBuffer,
+	legacyBaselinePath,
+	STATE_SCHEMA,
+} from '../state/state';
 import { planUpdate, runUpdate } from './update';
 
 function unit(id: UnitId, extras: Partial<Unit> = {}): Unit {
@@ -47,9 +53,9 @@ describe('planUpdate', () => {
 		};
 	}
 
-	function writeBaseline(content: string): void {
+	function writeBaseline(content: string, path = baselinePath(tmp, 'config.txt')): void {
 		mkdirSync(join(tmp, '.unbranded', 'baseline'), { recursive: true });
-		writeFileSync(join(tmp, '.unbranded', 'baseline', 'config.txt'), content);
+		writeFileSync(path, content);
 	}
 
 	it('marks an untouched file as a clean-update carrying the new template', () => {
@@ -59,6 +65,22 @@ describe('planUpdate', () => {
 		expect(files).toEqual([
 			{ rel: 'config.txt', status: 'clean-update', proposed: NEW, theirs: NEW, existing: OLD },
 		]);
+	});
+
+	it('merges against a baseline stored only at the legacy, unsuffixed name', () => {
+		// Pre-#182 scaffolds have no `.base` copy. Seeding only the legacy name
+		// proves the fallback read, since the hash fallback can't stand in here.
+		writeFileSync(join(tmp, 'config.txt'), `${OLD}user line\n`);
+		writeBaseline(OLD, legacyBaselinePath(tmp, 'config.txt'));
+		expect(existsSync(baselinePath(tmp, 'config.txt'))).toBe(false);
+		const { files } = planUpdate({
+			targetDir: tmp,
+			state: state({ files: { 'config.txt': h('not the disk bytes') } }),
+			units: catalog,
+			pkgRoot: tmp,
+		});
+		expect(files[0]?.status).toBe('merged');
+		expect(files[0]?.proposed).toBe(`${NEW}user line\n`);
 	});
 
 	it('is up-to-date when the template never moved, whatever the user did', () => {

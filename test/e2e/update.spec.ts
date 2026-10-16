@@ -44,7 +44,7 @@ function scaffold(tmp: string): void {
 // Rewind history: the scaffold "wrote" OLD, and the user's disk holds `disk`.
 function drift(tmp: string, disk: string): void {
 	writeFileSync(join(tmp, '.editorconfig'), disk);
-	writeFileSync(join(tmp, '.unbranded', 'baseline', '.editorconfig'), OLD);
+	writeFileSync(join(tmp, '.unbranded', 'baseline', '.editorconfig.base'), OLD);
 	const statePath = join(tmp, '.unbranded.json');
 	const state = JSON.parse(readFileSync(statePath, 'utf-8')) as { files: Record<string, string> };
 	state.files['.editorconfig'] = hashBuffer(Buffer.from(OLD));
@@ -56,7 +56,7 @@ function run(args: string[], cwd: string): ReturnType<typeof spawnSync<string>> 
 }
 
 function baseline(tmp: string): string {
-	return readFileSync(join(tmp, '.unbranded', 'baseline', '.editorconfig'), 'utf-8');
+	return readFileSync(join(tmp, '.unbranded', 'baseline', '.editorconfig.base'), 'utf-8');
 }
 
 describe('unbranded update', () => {

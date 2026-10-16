@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { STATE_SCHEMA } from '../../src/state/state';
 import { PKG_ROOT } from '../../src/util/paths';
 
 const CLI = join(PKG_ROOT, 'dist/cli.js');
@@ -60,7 +61,7 @@ describe('state schema v2 (attribution, modes, baseline sidecar)', () => {
 		expect(result.status, `stdout: ${result.stdout}\nstderr: ${result.stderr}`).toBe(0);
 
 		const state = readState(tmp);
-		expect(state.schema).toBe(3);
+		expect(state.schema).toBe(STATE_SCHEMA);
 
 		// Attribution names the writing unit for every kind of write: copy-loop
 		// files and the two computed-after-the-loop ones.
@@ -76,11 +77,13 @@ describe('state schema v2 (attribution, modes, baseline sidecar)', () => {
 
 		// Baselines: byte-exact copies for copy-mode files only. Structured and
 		// computed files refresh structurally, so a text baseline would mislead.
-		expect(readFileSync(join(tmp, '.unbranded', 'baseline', '.editorconfig'), 'utf-8')).toBe(
+		expect(readFileSync(join(tmp, '.unbranded', 'baseline', '.editorconfig.base'), 'utf-8')).toBe(
 			readFileSync(join(tmp, '.editorconfig'), 'utf-8'),
 		);
-		expect(existsSync(join(tmp, '.unbranded', 'baseline', '.vscode', 'settings.json'))).toBe(false);
-		expect(existsSync(join(tmp, '.unbranded', 'baseline', '.nvmrc'))).toBe(false);
+		expect(existsSync(join(tmp, '.unbranded', 'baseline', '.vscode', 'settings.json.base'))).toBe(
+			false,
+		);
+		expect(existsSync(join(tmp, '.unbranded', 'baseline', '.nvmrc.base'))).toBe(false);
 
 		// The sidecar explains itself; a user who stumbles on it learns to commit it.
 		const readme = readFileSync(join(tmp, '.unbranded', 'README.md'), 'utf-8');
@@ -101,8 +104,8 @@ describe('state schema v2 (attribution, modes, baseline sidecar)', () => {
 		expect(state.units.map((u) => u.id)).toContain('core-gitattributes');
 		expect(state.attribution?.['.editorconfig']).toBe('core-editorconfig');
 		expect(state.attribution?.['.gitattributes']).toBe('core-gitattributes');
-		expect(existsSync(join(tmp, '.unbranded', 'baseline', '.editorconfig'))).toBe(true);
-		expect(existsSync(join(tmp, '.unbranded', 'baseline', '.gitattributes'))).toBe(true);
+		expect(existsSync(join(tmp, '.unbranded', 'baseline', '.editorconfig.base'))).toBe(true);
+		expect(existsSync(join(tmp, '.unbranded', 'baseline', '.gitattributes.base'))).toBe(true);
 	});
 });
 
