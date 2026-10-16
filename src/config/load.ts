@@ -95,6 +95,14 @@ export function assertValidPm(pm: unknown): asserts pm is Pm | null {
 	}
 }
 
+// argv carries only strings, so `--pm null` arrives as "null". It means what a
+// recipe's `pm: null` means: write files, skip the install.
+export function parsePmFlag(raw: string): Pm | null {
+	const pm = raw === 'null' ? null : raw;
+	assertValidPm(pm);
+	return pm;
+}
+
 // Inline CLI flags mirror the recipe fields one-for-one, kept as the raw strings
 // argv hands us. `yes` isn't a recipe field; it only gates whether the caller
 // skips the Apply confirm.
@@ -158,7 +166,8 @@ export function resolveConfig(
 	return validate(
 		{
 			units,
-			pm: inline.pm ?? fileConfig?.pm ?? null,
+			// `!== undefined`, not `??`: a `--pm null` flag must still beat the recipe's pm.
+			pm: inline.pm !== undefined ? parsePmFlag(inline.pm) : (fileConfig?.pm ?? null),
 			onConflict: inline.onConflict ?? fileConfig?.onConflict ?? 'overwrite',
 			postInstall: inline.postInstall ?? fileConfig?.postInstall ?? 'none',
 			versions: fileConfig?.versions ?? 'pinned',

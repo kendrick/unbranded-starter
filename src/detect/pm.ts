@@ -152,7 +152,13 @@ export function inspectPm(
 export interface DetectPmOpts {
 	override?: Pm | null;
 	mode?: TargetMode;
+	// A recipe, preset, `--units`, or `--yes` run must never prompt: CI with no
+	// signal would otherwise sit on a picker, or exit 0 having installed nothing.
+	nonInteractive?: boolean;
 }
+
+export const NO_PM_MESSAGE =
+	'No package manager detected: no lockfile, no `packageManager` field in package.json, and no npm_config_user_agent. Pass `--pm <pnpm|npm|yarn|bun>`, or `--pm null` to write files and skip the install.';
 
 // Async wrapper: resolves to the PM we should use, or null when there is no
 // package.json (caller writes files only and prints next-steps instructions).
@@ -178,6 +184,7 @@ export async function detectPm(
 			);
 
 		case 'needs-prompt': {
+			if (opts.nonInteractive) throw new Error(NO_PM_MESSAGE);
 			const choice = await select<Pm>({
 				message: 'Which package manager?',
 				options: [
