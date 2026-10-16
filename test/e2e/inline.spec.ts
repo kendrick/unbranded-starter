@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -124,5 +124,59 @@ describe('cli inline flags (non-interactive)', () => {
 		expect(result.stdout).toContain('--on-conflict');
 		expect(result.stdout).toContain('--post-install');
 		expect(result.stdout).toMatch(/recipe field/i);
+	});
+});
+
+describe('no package-manager signal', () => {
+	let tmp: string;
+	const PKG_JSON = JSON.stringify({ name: 'p', version: '0.0.0' });
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-nopm-'));
+		writeFileSync(join(tmp, 'package.json'), PKG_JSON);
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	// A fresh dir has no lockfile or packageManager field; dropping the user agent
+	// removes the last signal, and closed stdin turns a stray prompt into a failure.
+	function run(args: string[]) {
+		const env = { ...process.env };
+		delete env.npm_config_user_agent;
+		return spawnSync('node', [CLI, ...args], { cwd: tmp, encoding: 'utf-8', env, input: '' });
+	}
+
+	it('refuses --yes without writing anything when no signal resolves a pm', () => {
+		const result = run(['--units', 'core-tailwind', '--yes']);
+
+		expect(result.status).not.toBe(0);
+		expect(result.stdout + result.stderr).toMatch(/--pm/);
+		expect(readdirSync(tmp)).toEqual(['package.json']);
+		expect(readFileSync(join(tmp, 'package.json'), 'utf-8')).toBe(PKG_JSON);
+	});
+
+	it('fails --dry-run --json with the message on stderr and nothing on stdout', () => {
+		const result = run(['--dry-run', '--json', '--units', 'core-tailwind']);
+
+		expect(result.status).toBe(1);
+		expect(result.stdout).toBe('');
+		expect(result.stderr).toMatch(/--pm/);
+	});
+
+	it('accepts --pm null: writes files and skips the install', () => {
+		const result = run(['--units', 'core-tailwind', '--pm', 'null', '--yes']);
+
+		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
+		expect(result.stdout + result.stderr).toContain('install will be skipped');
+		expect(existsSync(join(tmp, '.unbranded.json'))).toBe(true);
+	});
+
+	it('still lets an explicit --pm win (control)', () => {
+		const result = run(['--units', 'core-tailwind', '--pm', 'pnpm', '--dry-run', '--json']);
+
+		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
+		expect(() => JSON.parse(result.stdout)).not.toThrow();
 	});
 });
