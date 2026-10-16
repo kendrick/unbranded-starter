@@ -14,6 +14,7 @@ interface Catalog {
 		label: string;
 		files: { dest: string }[];
 		excludes?: string[];
+		impliesOneOf?: { anyOf: string[]; fallback: string };
 		options?: { key: string; default: string; choices: { value: string }[] }[];
 	}[];
 }
@@ -36,6 +37,9 @@ describe('unbranded list', () => {
 		expect(result.stdout).toContain('Foundation');
 		expect(result.stdout).toContain('core-eslint');
 		expect(result.stdout).toMatch(/implies → core-typescript/);
+		// #175: the lint unit opt-ci-github adds comes from a slot, not `implies`.
+		const ciLine = result.stdout.split('\n').find((l) => l.includes('opt-ci-github'));
+		expect(ciLine).toContain('one of core-eslint, core-oxlint, default core-oxlint');
 	});
 
 	it('emits stable, versioned JSON with --json and never leaks internal src paths', () => {
@@ -71,6 +75,12 @@ describe('unbranded list', () => {
 		const tsLine = ts?.options?.find((o) => o.key === 'typescriptLine');
 		expect(tsLine?.default).toBe('7');
 		expect(tsLine?.choices.map((c) => c.value)).toEqual(['7', '6']);
+
+		const ci = parsed.units.find((u) => u.id === 'opt-ci-github');
+		expect(ci?.impliesOneOf).toEqual({
+			anyOf: ['core-eslint', 'core-oxlint'],
+			fallback: 'core-oxlint',
+		});
 
 		// Byte-for-byte determinism is the whole point of the versioned envelope.
 		const again = spawnSync('node', [CLI, 'list', '--json'], { cwd: tmp, encoding: 'utf-8' });
