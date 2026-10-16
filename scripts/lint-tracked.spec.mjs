@@ -102,6 +102,14 @@ describe('lintTracked', () => {
 		expect(stdout + stderr).not.toContain('notes.md');
 	});
 
+	it('passes in a repo with no tracked files', () => {
+		// Nothing is added, so `.oxfmtrc.json` stays untracked. The early
+		// return keeps an empty list from reaching the tools, which could read an
+		// empty argv as "lint everything".
+		expect(trackedFiles(dir)).toEqual([]);
+		expect(lintTracked(dir)).toBe(0);
+	});
+
 	it('passes when every tracked file is unsupported', () => {
 		writeFileSync(join(dir, 'LICENSE'), 'MIT\n');
 		git('add', 'LICENSE');
