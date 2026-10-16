@@ -12,7 +12,6 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import process from 'node:process';
-import { pathToFileURL } from 'node:url';
 
 // Index entries, minus any deleted from disk: a path that no longer exists
 // would reach the tools as an error rather than a skip.
@@ -59,7 +58,10 @@ export function lintTracked(cwd = process.cwd()) {
 	return 0;
 }
 
-// Import-safe: the spec pulls the functions without running the tools.
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+// Import-safe: the spec pulls the functions without running the tools. Matches
+// on the filename, not a URL compare: node resolves import.meta.url to the
+// realpath but leaves argv[1] as typed, so a symlinked path (macOS /tmp ->
+// /private/tmp) made the compare miss and the hook silently lint nothing.
+if (process.argv[1]?.endsWith('lint-tracked.mjs')) {
 	process.exit(lintTracked());
 }

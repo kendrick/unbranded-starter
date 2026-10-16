@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -102,12 +102,41 @@ describe('lintTracked', () => {
 		expect(stdout + stderr).not.toContain('notes.md');
 	});
 
-	it('passes in a repo with no tracked files', () => {
-		// Nothing is added, so `.oxfmtrc.json` stays untracked. The early
-		// return keeps an empty list from reaching the tools, which could read an
-		// empty argv as "lint everything".
+	it('passes in a repo with no tracked files without running either tool', () => {
+		// Nothing is added, so `.oxfmtrc.json` stays untracked. The early return
+		// keeps an empty list from reaching the tools; oxfmt exits 0 on an empty
+		// argv, so only its output (a "No files found" notice) shows it ran.
 		expect(trackedFiles(dir)).toEqual([]);
 		expect(lintTracked(dir)).toBe(0);
+		const script = join(import.meta.dirname, 'lint-tracked.mjs');
+		const { status, stdout, stderr } = spawnSync(process.execPath, [script], {
+			cwd: dir,
+			encoding: 'utf8',
+		});
+		expect(status).toBe(0);
+		expect(stdout + stderr).toBe('');
+	});
+
+	it('still lints when the script is run through a symlinked path', () => {
+		// node resolves import.meta.url to the realpath but leaves argv[1] as
+		// typed, so a URL compare in the entry guard turned this into a no-op.
+		writeFileSync(join(dir, 'a.md'), 'a\n');
+		writeFileSync(join(dir, 'notes.md'), UNFORMATTED);
+		commitAll();
+		const linkDir = mkdtempSync(join(tmpdir(), 'lint-tracked-link-'));
+		try {
+			const link = join(linkDir, 'scripts');
+			symlinkSync(import.meta.dirname, link);
+			const { status, stdout, stderr } = spawnSync(
+				process.execPath,
+				[join(link, 'lint-tracked.mjs')],
+				{ cwd: dir, encoding: 'utf8' },
+			);
+			expect(status).not.toBe(0);
+			expect(stdout + stderr).toContain('notes.md');
+		} finally {
+			rmSync(linkDir, { recursive: true, force: true });
+		}
 	});
 
 	it('passes when every tracked file is unsupported', () => {
