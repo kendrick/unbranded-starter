@@ -253,10 +253,12 @@ describe('writeStateFile / readStateFile', () => {
 
 		// The baseline is the future merge base for `unbranded update`: identical
 		// bytes, so base-vs-mine and base-vs-theirs comparisons are exact.
-		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'a.txt'), 'utf-8')).toBe('alpha\n');
+		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'a.txt.base'), 'utf-8')).toBe(
+			'alpha\n',
+		);
 		// Structured and computed files update structurally, not by text merge.
-		expect(existsSync(join(tmp, '.unbranded', 'baseline', 'settings.json'))).toBe(false);
-		expect(existsSync(join(tmp, '.unbranded', 'baseline', '.nvmrc'))).toBe(false);
+		expect(existsSync(join(tmp, '.unbranded', 'baseline', 'settings.json.base'))).toBe(false);
+		expect(existsSync(join(tmp, '.unbranded', 'baseline', '.nvmrc.base'))).toBe(false);
 	});
 
 	it('explains the sidecar with a README that tells users to commit it', () => {
@@ -295,8 +297,12 @@ describe('writeStateFile / readStateFile', () => {
 			units: builtinUnits(['core-eslint']),
 			writes: [write('b.txt')],
 		});
-		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'a.txt'), 'utf-8')).toBe('alpha\n');
-		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'b.txt'), 'utf-8')).toBe('bravo\n');
+		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'a.txt.base'), 'utf-8')).toBe(
+			'alpha\n',
+		);
+		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'b.txt.base'), 'utf-8')).toBe(
+			'bravo\n',
+		);
 	});
 
 	it('omits the doctor block on a fresh scaffold — no empty config nobody asked for', () => {
@@ -454,6 +460,80 @@ describe('writeStateFile / readStateFile', () => {
 		expect(readStateFile(tmp).kind).toBe('none');
 	});
 
+	it('stores each copy-mode baseline under a `.base` suffix, never its real name', () => {
+		// Under its real name a baseline `.oxfmtrc.json` or `tsconfig.json` is live
+		// config to any tool walking the tree (#182).
+		writeFileSync(join(tmp, 'tsconfig.json'), '{"compilerOptions":{}}\n');
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-typescript']),
+			writes: [write('tsconfig.json', 'core-typescript')],
+		});
+
+		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'tsconfig.json.base'), 'utf-8')).toBe(
+			'{"compilerOptions":{}}\n',
+		);
+		expect(existsSync(join(tmp, '.unbranded', 'baseline', 'tsconfig.json'))).toBe(false);
+	});
+
+	it('moves a legacy-named baseline to its `.base` name instead of pruning it', () => {
+		// A pre-#182 sidecar: tsconfig.json is tracked and its baseline sits under the
+		// real name. A run that doesn't rewrite tsconfig.json must keep that merge base.
+		writeFileSync(join(tmp, 'tsconfig.json'), 'user drift\n');
+		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
+		writeFileSync(
+			join(tmp, STATE_FILENAME),
+			`${JSON.stringify(
+				{
+					_tool: 'x',
+					schema: 3,
+					version: '2.0.0',
+					units: [{ id: 'core-typescript', source: { kind: 'builtin' } }],
+					files: { 'tsconfig.json': 'deadbeef' },
+					attribution: { 'tsconfig.json': 'core-typescript' },
+					modes: { 'tsconfig.json': 'copy' },
+				},
+				null,
+				'\t',
+			)}\n`,
+		);
+		mkdirSync(join(tmp, '.unbranded', 'baseline'), { recursive: true });
+		writeFileSync(join(tmp, '.unbranded', 'baseline', 'tsconfig.json'), 'legacy base\n');
+
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('a.txt')],
+		});
+
+		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'tsconfig.json.base'), 'utf-8')).toBe(
+			'legacy base\n',
+		);
+		expect(existsSync(join(tmp, '.unbranded', 'baseline', 'tsconfig.json'))).toBe(false);
+	});
+
+	it('writes schema 4, reads a schema-4 file, and refuses schema 5', () => {
+		// 4 is the `.base` sidecar layout. A schema-3 reader would prune every `.base`
+		// copy as a stray, so it has to refuse the project instead.
+		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('a.txt')],
+		});
+		const written = JSON.parse(readFileSync(join(tmp, STATE_FILENAME), 'utf-8')) as StateFile;
+		expect(written.schema).toBe(4);
+		expect(readStateFile(tmp).kind).toBe('ok');
+
+		writeFileSync(
+			join(tmp, STATE_FILENAME),
+			`${JSON.stringify({ ...written, schema: 5 }, null, '\t')}\n`,
+		);
+		const read = readStateFile(tmp);
+		expect(read.kind).toBe('unsupported');
+		expect(read.kind === 'unsupported' && read.schema).toBe(5);
+	});
+
 	it('stamps the running CLI version so diffs know which template shipped', () => {
 		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
 		writeStateFile({
@@ -507,8 +587,8 @@ describe('applyRemovalToState', () => {
 		expect(state?.attribution).toEqual({ 'b.txt': 'core-typescript' });
 		expect(state?.modes).toEqual({ 'b.txt': 'copy' });
 		expect(state?.options).toBeUndefined();
-		expect(existsSync(join(tmp, '.unbranded', 'baseline', 'a.txt'))).toBe(false);
-		expect(existsSync(join(tmp, '.unbranded', 'baseline', 'b.txt'))).toBe(true);
+		expect(existsSync(join(tmp, '.unbranded', 'baseline', 'a.txt.base'))).toBe(false);
+		expect(existsSync(join(tmp, '.unbranded', 'baseline', 'b.txt.base'))).toBe(true);
 	});
 
 	it('preserves doctor.ignore and option keys it was not told to drop', () => {
@@ -581,7 +661,7 @@ describe('refreshTrackedFiles', () => {
 
 		const state = readOk(tmp);
 		expect(state?.files['a.txt']).toBe('newhash');
-		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'a.txt'), 'utf-8')).toBe(
+		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'a.txt.base'), 'utf-8')).toBe(
 			'template v2\n',
 		);
 		// Attribution and units survive untouched.
@@ -600,7 +680,26 @@ describe('refreshTrackedFiles', () => {
 		refreshTrackedFiles({ targetDir: tmp, entries: { 'a.txt': { hash: 'newhash' } } });
 
 		expect(readOk(tmp)?.files['a.txt']).toBe('newhash');
-		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'a.txt'), 'utf-8')).toBe('v1\n');
+		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'a.txt.base'), 'utf-8')).toBe('v1\n');
+	});
+
+	it('writes a refreshed baseline under its `.base` name', () => {
+		writeFileSync(join(tmp, 'tsconfig.json'), 'v1\n');
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-typescript']),
+			writes: [{ dest: join(tmp, 'tsconfig.json'), unit: 'core-typescript', mode: 'copy' }],
+		});
+
+		refreshTrackedFiles({
+			targetDir: tmp,
+			entries: { 'tsconfig.json': { hash: 'newhash', baseline: 'template v2\n' } },
+		});
+
+		expect(readFileSync(join(tmp, '.unbranded', 'baseline', 'tsconfig.json.base'), 'utf-8')).toBe(
+			'template v2\n',
+		);
+		expect(existsSync(join(tmp, '.unbranded', 'baseline', 'tsconfig.json'))).toBe(false);
 	});
 
 	it('is a no-op without a state file', () => {

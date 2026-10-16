@@ -5,6 +5,7 @@ import {
 	mkdirSync,
 	readdirSync,
 	readFileSync,
+	renameSync,
 	rmdirSync,
 	rmSync,
 	statSync,
@@ -19,7 +20,10 @@ import { PKG_ROOT } from '../util/paths';
 // is the first bump that isn't additive: `units` changes from bare id strings to
 // {id, source} entries, and an older reader handed a namespaced id would drop it as
 // unknown rather than refuse. That's what readStateFile's version gate exists for.
-export const STATE_SCHEMA = 3;
+// Schema 4 keeps the envelope's shape and moves the sidecar's baseline copies to a
+// `.base` suffix (#182). A schema-3 reader's syncSidecar would prune every `.base`
+// file as a stray, so that reader has to refuse the project.
+export const STATE_SCHEMA = 4;
 
 // Lives at the project root, one level of visibility above node_modules. The
 // leading dot keeps it out of the way while staying obviously ours.
@@ -29,6 +33,24 @@ export const STATE_FILENAME = '.unbranded.json';
 // files (the merge base for `unbranded update`) plus a README that tells a human
 // what the directory is and why it should be committed.
 export const SIDECAR_DIR = '.unbranded';
+
+// Copies keep a `.base` suffix so tools that walk the tree never take one for live
+// config. Under its real name, `.unbranded/baseline/.oxfmtrc.json` is the nearest
+// oxfmt config for every file beside it, and its `.unbranded/**` ignore resolves
+// against the baseline directory, where it matches nothing (#182). A suffix that
+// keeps a known extension (`.base.json`) would put the copies back in front of
+// formatters, so the suffix goes after the whole name.
+export const BASELINE_SUFFIX = '.base';
+
+export function baselinePath(targetDir: string, rel: string): string {
+	return join(targetDir, SIDECAR_DIR, 'baseline', `${rel}${BASELINE_SUFFIX}`);
+}
+
+// Pre-#182 sidecars stored copies under their real names. Read-only fallback;
+// syncSidecar moves them to the suffixed name on the next write.
+export function legacyBaselinePath(targetDir: string, rel: string): string {
+	return join(targetDir, SIDECAR_DIR, 'baseline', rel);
+}
 
 // A self-describing breadcrumb. This file lands in every scaffolded repo, so an
 // agent or person who stumbles on it should learn what wrote it and which
@@ -251,7 +273,7 @@ export function refreshTrackedFiles(opts: {
 	for (const [rel, entry] of Object.entries(opts.entries)) {
 		files[rel] = entry.hash;
 		if (entry.baseline !== undefined) {
-			const dest = join(opts.targetDir, SIDECAR_DIR, 'baseline', rel);
+			const dest = baselinePath(opts.targetDir, rel);
 			mkdirSync(dirname(dest), { recursive: true });
 			writeFileSync(dest, entry.baseline);
 		}
@@ -333,9 +355,9 @@ function normalizeSource(raw: unknown): UnitSource {
 
 	const s = raw as { kind?: unknown; path?: unknown; name?: unknown; version?: unknown };
 	if (s.kind === 'dir' && typeof s.path === 'string') return { kind: 'dir', path: s.path };
-	// Packs ship in a later release and deliberately reuse schema 3, so a pack entry
-	// arrives without a version bump to announce it. Reading it here is what makes
-	// that promise good.
+	// Packs ship in a later release and deliberately bring no schema bump of their own
+	// (4 belongs to the sidecar layout), so a pack entry arrives unannounced. Reading
+	// it here is what makes that promise good.
 	if (s.kind === 'pack' && typeof s.name === 'string' && typeof s.version === 'string')
 		return { kind: 'pack', name: s.name, version: s.version };
 	return { kind: 'builtin' };
@@ -368,7 +390,7 @@ function byId(a: StateUnit, b: StateUnit): number {
 
 const SIDECAR_README = `# The unbranded Sidecar
 
-[unbranded](https://github.com/kendrick/unbranded-starter) scaffolded some of this project's tooling config, and this directory is its working data. \`baseline/\` keeps a byte-exact copy of each managed file as unbranded last wrote it.
+[unbranded](https://github.com/kendrick/unbranded-starter) scaffolded some of this project's tooling config, and this directory is its working data. \`baseline/\` keeps a byte-exact copy of each managed file as unbranded last wrote it, named with a \`.base\` suffix so formatters, linters, and other tools that walk the tree don't read the copies as live config.
 
 ## Why It Should Be Committed
 
@@ -394,14 +416,26 @@ function syncSidecar(
 
 	for (const w of landed) {
 		if (w.mode !== 'copy') continue;
-		const dest = join(baselineDir, relative(targetDir, w.dest));
+		const dest = baselinePath(targetDir, relative(targetDir, w.dest));
 		mkdirSync(dirname(dest), { recursive: true });
 		writeFileSync(dest, readFileSync(w.dest));
 	}
 
 	// Tracked copy-mode files keep their baseline (a prior run's copy is still the
 	// honest base even when this run didn't rewrite the file); everything else goes.
-	const keep = new Set(Object.keys(files).filter((rel) => modes[rel] === 'copy'));
+	const kept = Object.keys(files).filter((rel) => modes[rel] === 'copy');
+
+	// A pre-#182 sidecar holds a kept file's copy under its real name. Move it before
+	// the prune, which recognizes only suffixed names and would otherwise delete the
+	// merge base of every tracked file this run didn't rewrite.
+	for (const rel of kept) {
+		const suffixed = baselinePath(targetDir, rel);
+		const legacy = legacyBaselinePath(targetDir, rel);
+		if (!existsSync(suffixed) && existsSync(legacy) && statSync(legacy).isFile())
+			renameSync(legacy, suffixed);
+	}
+
+	const keep = new Set(kept.map((rel) => `${rel}${BASELINE_SUFFIX}`));
 	if (existsSync(baselineDir)) {
 		const entries = (readdirSync(baselineDir, { recursive: true }) as string[]).map((e) =>
 			join(baselineDir, e),
