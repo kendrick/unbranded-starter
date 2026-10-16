@@ -784,4 +784,29 @@ describe('formatPlan', () => {
 		expect(out).toContain('• TypeScript (auto)');
 		expect(out).not.toContain('required by');
 	});
+
+	// "no package.json" is false on an existing project with `--pm null`, so the
+	// wording must follow freshProject, not just pm === null.
+	it('says "no package.json" for a null pm on a fresh project', () => {
+		const out = formatPlan([eslint], [], {}, null, false, true);
+		expect(out).toContain('no install (no package.json)');
+		expect(out).not.toContain('pm is null');
+	});
+
+	it('says "pm is null" for a null pm on an existing project', () => {
+		const out = formatPlan([eslint], [], {}, null, false, false);
+		expect(out).toContain('no install (pm is null)');
+		expect(out).not.toContain('no package.json');
+	});
+
+	it('defaults freshProject to false', () => {
+		const out = formatPlan([eslint], [], {}, null, false);
+		expect(out).toContain('no install (pm is null)');
+		expect(out).not.toContain('no package.json');
+	});
+
+	it('names the pm when one is set, fresh project or not', () => {
+		expect(formatPlan([eslint], [], {}, 'pnpm', false, true)).toContain('install via pnpm');
+		expect(formatPlan([eslint], [], {}, 'npm', false, false)).toContain('install via npm');
+	});
 });
