@@ -151,7 +151,7 @@ describe('no package-manager signal', () => {
 	it('refuses --yes without writing anything when no signal resolves a pm', () => {
 		const result = run(['--units', 'core-tailwind', '--yes']);
 
-		expect(result.status).not.toBe(0);
+		expect(result.status).toBe(1);
 		expect(result.stdout + result.stderr).toMatch(/--pm/);
 		expect(readdirSync(tmp)).toEqual(['package.json']);
 		expect(readFileSync(join(tmp, 'package.json'), 'utf-8')).toBe(PKG_JSON);

@@ -444,7 +444,9 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	log.info(
 		pm
 			? `Package manager: ${pm}`
-			: 'No package.json — files will be written; install will be skipped.',
+			: target.mode === 'new'
+				? 'No package.json — files will be written; install will be skipped.'
+				: 'Package manager: none — files will be written; install will be skipped.',
 	);
 
 	// Badge already-installed units, but only in an interactive augment run: a new
@@ -581,7 +583,10 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		applyLintStaged(applyUnitOptions(unit, optionSelections), selectedIds),
 	);
 
-	note(formatPlan(units, resolution.auto, resolution.requiredBy, pm, latest), 'Plan');
+	note(
+		formatPlan(units, resolution.auto, resolution.requiredBy, pm, latest, target.mode === 'new'),
+		'Plan',
+	);
 
 	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
 
@@ -914,6 +919,9 @@ export function formatPlan(
 	requiredBy: Record<string, string>,
 	pm: Pm | null,
 	latest: boolean,
+	// A null pm also comes from `--pm null` or a recipe's `pm: null` on a project
+	// that has a package.json, so "no package.json" is only true for a fresh target.
+	freshProject = false,
 ): string {
 	const lines: string[] = [];
 	const labelById = new Map(units.map((u) => [u.id, u.label]));
@@ -940,7 +948,11 @@ export function formatPlan(
 	);
 
 	lines.push('');
-	const installLine = pm ? `install via ${pm}` : 'no install (no package.json)';
+	const installLine = pm
+		? `install via ${pm}`
+		: freshProject
+			? 'no install (no package.json)'
+			: 'no install (pm is null)';
 	lines.push(
 		`${units.length} units · ${fileCount} files · ${depCount} deps (${latest ? 'latest' : 'pinned'}) · ${installLine}`,
 	);

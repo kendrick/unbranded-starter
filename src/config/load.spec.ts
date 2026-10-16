@@ -257,6 +257,14 @@ describe('resolveConfig (inline flags)', () => {
 		);
 		expect(resolveConfig(file, {}, KNOWN_UNITS).force).toBe(true);
 	});
+
+	it('lets `--pm null` beat a recipe pm in resolveConfig', () => {
+		const file = validate(
+			{ units: ['core-eslint'], pm: 'pnpm', onConflict: 'skip', postInstall: 'none' },
+			KNOWN_UNITS,
+		);
+		expect(resolveConfig(file, { pm: 'null' }, KNOWN_UNITS).pm).toBeNull();
+	});
 });
 
 describe('options (unit-option selections)', () => {
@@ -414,14 +422,6 @@ describe('parsePmFlag', () => {
 
 	it('rejects a near-miss with the recipe-style message', () => {
 		expect(() => parsePmFlag('nul')).toThrow(/config\.pm must be one of/);
-	});
-
-	it('lets `--pm null` beat a recipe pm in resolveConfig', () => {
-		const file = validate(
-			{ units: ['core-eslint'], pm: 'pnpm', onConflict: 'skip', postInstall: 'none' },
-			KNOWN_UNITS,
-		);
-		expect(resolveConfig(file, { pm: 'null' }, KNOWN_UNITS).pm).toBeNull();
 	});
 });
 

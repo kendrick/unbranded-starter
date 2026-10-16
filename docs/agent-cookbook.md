@@ -124,5 +124,5 @@ Two behaviors worth planning around. `update --yes` with a conflict and no `--st
 ## Ground Rules
 
 - Key off `schema` integers and exit codes, not output text. The human-facing strings will change without notice; the envelopes won't.
-- Pass `--pm` explicitly in automation. Detection is lockfile-based and can want a prompt in ambiguous repos.
+- Pass `--pm` explicitly in automation. Detection is lockfile-based, and a non-interactive run (`--yes`, `--units`, a recipe, or a preset) never prompts for a package manager: if nothing resolves one it exits 1 with a message naming `--pm`, before writing anything. Pass `--pm null` to write files and skip the install.
 - The CLI never writes on a read verb: `list`, `diff`, `doctor` (without `--fix`), `outdated`, and `--dry-run` are guaranteed inert.
