@@ -82,6 +82,26 @@ describe('lintTracked', () => {
 		expect(stdout + stderr).toContain('notes.md');
 	});
 
+	it('fails on an oxlint error and never reaches oxfmt', () => {
+		// `debugger;` is only a warning under oxlint's defaults, so the temp repo
+		// ships a config that makes it an error. Same real tools as the hook.
+		writeFileSync(join(dir, '.oxlintrc.json'), '{"rules":{"no-debugger":"error"}}\n');
+		writeFileSync(join(dir, 'bad.js'), 'debugger;\n');
+		writeFileSync(join(dir, 'notes.md'), UNFORMATTED);
+		commitAll();
+		expect(lintTracked(dir)).not.toBe(0);
+		// notes.md is also unformatted, so oxfmt output would mean the
+		// short-circuit broke and lint failures were being masked by the next step.
+		const script = join(import.meta.dirname, 'lint-tracked.mjs');
+		const { status, stdout, stderr } = spawnSync(process.execPath, [script], {
+			cwd: dir,
+			encoding: 'utf8',
+		});
+		expect(status).not.toBe(0);
+		expect(stdout + stderr).toContain('no-debugger');
+		expect(stdout + stderr).not.toContain('notes.md');
+	});
+
 	it('passes when every tracked file is unsupported', () => {
 		writeFileSync(join(dir, 'LICENSE'), 'MIT\n');
 		git('add', 'LICENSE');
