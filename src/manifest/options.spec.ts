@@ -1,6 +1,6 @@
 import type { Unit } from './types';
 import { describe, expect, it } from 'vitest';
-import { applyUnitOptions } from './options';
+import { applyUnitOptions, buildOptionSchema } from './options';
 
 // A fixture unit that mirrors how core-eslint declares a flavor: one option whose
 // choices carry the concrete files + devDeps to bake in. Kept local so this tests
@@ -86,5 +86,32 @@ describe('applyUnitOptions', () => {
 			{ src: '.editorconfig', dest: '.editorconfig' },
 			{ content: 'BASE\n', dest: 'eslint.config.mjs' },
 		]);
+	});
+});
+
+describe('buildOptionSchema', () => {
+	it('keeps every option a unit declares, in declaration order', () => {
+		const twoOptions: Unit = {
+			...flavored,
+			id: 'core-typescript',
+			options: [
+				...(flavored.options ?? []),
+				{
+					key: 'secondKey',
+					label: 'Second',
+					default: 'x',
+					choices: [
+						{ value: 'x', label: 'X' },
+						{ value: 'y', label: 'Y' },
+					],
+				},
+			],
+		};
+		const schema = buildOptionSchema([twoOptions]);
+		expect(schema.byUnit.get('core-typescript')?.map((o) => o.key)).toEqual([
+			'eslintFlavor',
+			'secondKey',
+		]);
+		expect(schema.values.get('secondKey')).toEqual(new Set(['x', 'y']));
 	});
 });

@@ -320,6 +320,52 @@ describe('typescriptLine coupling with the real manifest', () => {
 	});
 });
 
+describe('second option cycling', () => {
+	function cycleOn(s: PickerState, id: string, optionIndex: number) {
+		const idx = filteredOptions(s).findIndex((o) => o.value === id);
+		return reducePicker({ ...s, cursor: idx }, { type: 'cycleFlavor', delta: 1, optionIndex });
+	}
+
+	it('cycles tsFlavor and leaves typescriptLine at optionIndex 1', () => {
+		const s = createPickerState(REAL_UNITS, new Set());
+		expect(s.flavors.tsFlavor).toBe('node');
+		const next = cycleOn(s, 'core-typescript', 1);
+		expect(next.flavors.tsFlavor).toBe('dom');
+		expect(next.flavors.typescriptLine).toBe(s.flavors.typescriptLine);
+	});
+
+	it('cycles typescriptLine and leaves tsFlavor at optionIndex 0', () => {
+		const s = createPickerState(REAL_UNITS, new Set());
+		const next = cycleOn(s, 'core-typescript', 0);
+		expect(next.flavors.typescriptLine).toBe('6');
+		expect(next.flavors.tsFlavor).toBe('node');
+	});
+
+	it('keeps the coupling: core-eslint still rules 7 out of the first option', () => {
+		const s = createPickerState(
+			REAL_UNITS,
+			new Set(),
+			{ typescriptLine: '6' },
+			['core-typescript'],
+			new Set(['core-eslint']),
+		);
+		expect(cycleOn(s, 'core-typescript', 0).flavors.typescriptLine).toBe('6');
+	});
+
+	it('ignores an optionIndex past the last option', () => {
+		const s = createPickerState(REAL_UNITS, new Set());
+		expect(cycleOn(s, 'core-typescript', 2).flavors).toEqual(s.flavors);
+	});
+
+	it('carries every option value on the row', () => {
+		const s = createPickerState(REAL_UNITS, new Set());
+		const row = pickerRows(s).find(
+			(r) => r.kind === 'option' && r.option.value === 'core-typescript',
+		);
+		expect(row?.kind === 'option' && row.flavor).toBe('7 · node');
+	});
+});
+
 describe('typescriptLine coupling against tracked units', () => {
 	function cycleOn(s: PickerState, id: string, delta: number) {
 		const idx = filteredOptions(s).findIndex((o) => o.value === id);

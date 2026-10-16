@@ -44,7 +44,7 @@ Before you remove anything, write down which units the project has. Each entry i
    npx unbranded --units core-typescript:6,core-oxlint,opt-ci-github,opt-husky --pm pnpm --yes --dry-run --diff
    ```
 
-   Every `conflict` entry is a file you changed, and the diff shows what the run would replace. Run it for real once you've read them:
+   Every `conflict` entry is a file that differs from the current template, and the diff shows what the run would replace. Most are files you changed. `tsconfig.base.json` shows up even if you never edited it, because unbranded 3.0 rewrote it with new compiler flags. The new file keeps the DOM libs, because the project already tracks `core-typescript`. Run it for real once you've read them:
 
    ```bash
    npx unbranded --units core-typescript:6,core-oxlint,opt-ci-github,opt-husky --pm pnpm --yes
@@ -83,7 +83,7 @@ Run lint and typecheck:
 pnpm lint && pnpm typecheck
 ```
 
-Both exit 0. Then confirm the TypeScript line:
+Both exit 0 unless your code trips a stricter flag in the new `tsconfig.base.json`. `erasableSyntaxOnly` rejects enums, namespaces, and parameter properties, and `noImplicitOverride` requires the `override` keyword on overriding methods. Fix the code, or set the flag back to `false` in `tsconfig.json`. Then confirm the TypeScript line:
 
 ```bash
 grep '"typescript"' package.json

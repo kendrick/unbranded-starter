@@ -2,6 +2,7 @@ import type { Unit, UnitId } from '../../manifest/types';
 import type { PickerTheme, PickerView } from './render';
 import type { PickerState } from './state';
 import { describe, expect, it } from 'vitest';
+import { UNITS as REAL_UNITS } from '../../manifest';
 import { renderUnitPicker } from './render';
 import { createPickerState, reducePicker } from './state';
 
@@ -213,5 +214,35 @@ describe('renderUnitPicker', () => {
 		expect(renderUnitPicker(s, view({ promptState: 'submit' }))).toMatchInlineSnapshot(
 			`"? What do you want? d{TypeScript}"`,
 		);
+	});
+
+	describe('two-option rows', () => {
+		const wide = view({ width: 200, maxRows: 40 });
+		function onTypeScript(): PickerState {
+			let s = createPickerState(REAL_UNITS, new Set());
+			s = [...'core-typescript'].reduce(
+				(acc, char) => reducePicker(acc, { type: 'char', char }),
+				s,
+			);
+			return s;
+		}
+
+		it('shows every option value in the row tag and the hint only on that row', () => {
+			const out = renderUnitPicker(onTypeScript(), wide);
+			expect(out).toContain('TypeScript');
+			expect(out).toContain('d{ · 7 · node ▸}');
+			expect(out).toContain('⇧←→ TypeScript libs');
+		});
+
+		it('repeats the values in the expanded detail', () => {
+			const out = renderUnitPicker(reducePicker(onTypeScript(), { type: 'toggleExpand' }), wide);
+			expect(out).toContain('options: 7 · node');
+		});
+
+		it('leaves the shift hint off a one-option row', () => {
+			const out = renderUnitPicker(typeFilter(state(), 'esl'), view({ width: 200 }));
+			expect(out).toContain('←→ flavor');
+			expect(out).not.toContain('⇧←→');
+		});
 	});
 });

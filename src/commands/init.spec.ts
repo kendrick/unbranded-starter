@@ -532,11 +532,12 @@ describe('runInit records only options its units own (#193)', () => {
 	it('records the line for a selected core-typescript and nothing for the unselected lint units', async () => {
 		await pick(['core-typescript'], {
 			typescriptLine: '6',
+			tsFlavor: 'node',
 			eslintFlavor: 'next',
 			oxlintFlavor: 'next',
 		});
 
-		expect(recordedOptions()).toEqual({ typescriptLine: '6' });
+		expect(recordedOptions()).toEqual({ typescriptLine: '6', tsFlavor: 'node' });
 	});
 
 	it("leaves a later core-typescript run on the project's declared 6.x line", async () => {
@@ -606,20 +607,95 @@ describe('runInit records only options its units own (#193)', () => {
 	});
 
 	it("drops an untracked unit's picker value on a re-run", async () => {
-		await pick(['core-typescript'], { typescriptLine: '6' });
+		await pick(['core-typescript'], { typescriptLine: '6', tsFlavor: 'node' });
 		await pick(['core-editorconfig'], { typescriptLine: '6', eslintFlavor: 'next' });
 
-		expect(recordedOptions()).toEqual({ typescriptLine: '6' });
+		expect(recordedOptions()).toEqual({ typescriptLine: '6', tsFlavor: 'node' });
 	});
 
 	// A run that doesn't re-resolve core-typescript never rewrites its pin, so a
 	// new line recorded here would leave state on 7 with package.json still on 6,
 	// and the next update would follow the state (PR #194 review).
 	it('keeps the recorded line when a re-run does not re-resolve core-typescript', async () => {
-		await pick(['core-typescript'], { typescriptLine: '6' });
-		await pick(['core-editorconfig'], { typescriptLine: '7' });
+		await pick(['core-typescript'], { typescriptLine: '6', tsFlavor: 'node' });
+		await pick(['core-editorconfig'], { typescriptLine: '7', tsFlavor: 'dom' });
 
-		expect(recordedOptions()).toEqual({ typescriptLine: '6' });
+		expect(recordedOptions()).toEqual({ typescriptLine: '6', tsFlavor: 'node' });
+	});
+});
+
+// Asserted on the planned tsconfig.base.json's lib line, since the lib list is the
+// whole of what separates the two flavors (#117).
+describe('runInit tsFlavor default (#117)', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-tsflavor-'));
+		vi.mocked(writeAndInstall).mockResolvedValue({
+			wrote: true,
+			installed: true,
+			cancelled: false,
+			failed: false,
+			computedWrites: [],
+		});
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+		vi.mocked(writeAndInstall).mockReset();
+	});
+
+	function writePkg(extra: Record<string, unknown> = {}): void {
+		writeFileSync(
+			join(tmp, 'package.json'),
+			JSON.stringify({ name: 'x', version: '0.0.0', ...extra }),
+		);
+	}
+
+	function trackCoreTypescript(options?: Record<string, string>): void {
+		writeFileSync(
+			join(tmp, STATE_FILENAME),
+			JSON.stringify({
+				schema: 3,
+				units: [{ id: 'core-typescript', source: { kind: 'builtin' } }],
+				files: {},
+				...(options ? { options } : {}),
+			}),
+		);
+	}
+
+	async function plannedLibLine(): Promise<string | undefined> {
+		await runInit({ targetDir: tmp, inline: { units: 'core-typescript', yes: true, pm: 'pnpm' } });
+		const units = vi.mocked(writeAndInstall).mock.calls[0]?.[0].units ?? [];
+		const content =
+			units.flatMap((u) => u.files).find((f) => f.dest === 'tsconfig.base.json')?.content ?? '';
+		return content
+			.split('\n')
+			.find((line) => line.trim().startsWith('"lib"'))
+			?.trim();
+	}
+
+	it('plans the node libs for a fresh project with no React dependency', async () => {
+		writePkg();
+		expect(await plannedLibLine()).toBe('"lib": ["ES2022"],');
+	});
+
+	it('plans the DOM libs for a project with react in dependencies', async () => {
+		writePkg({ dependencies: { react: '^19.0.0' } });
+		expect(await plannedLibLine()).toBe('"lib": ["ES2022", "DOM", "DOM.Iterable"],');
+	});
+
+	// Such an install predates #117 and has always had the DOM libs.
+	it('keeps the DOM libs for a tracked core-typescript with no recorded tsFlavor', async () => {
+		writePkg();
+		trackCoreTypescript();
+		expect(await plannedLibLine()).toBe('"lib": ["ES2022", "DOM", "DOM.Iterable"],');
+	});
+
+	it('lets a recorded tsFlavor: node win over a React dependency', async () => {
+		writePkg({ dependencies: { react: '^19.0.0' } });
+		trackCoreTypescript({ tsFlavor: 'node' });
+		expect(await plannedLibLine()).toBe('"lib": ["ES2022"],');
 	});
 });
 

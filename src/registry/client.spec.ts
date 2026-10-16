@@ -6,7 +6,7 @@ import { DEFAULT_REGISTRY, fetchVersions } from './client';
 function fakeRegistry(
 	packages: Record<string, { latest: string; versions?: string[] }>,
 ): typeof fetch {
-	return vi.fn(async (input: RequestInfo | URL) => {
+	return vi.fn(async (input: Parameters<typeof fetch>[0]) => {
 		const url = String(input);
 		const name = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1));
 		const pkg = packages[name];
@@ -102,7 +102,7 @@ describe('fetchVersions', () => {
 	it('turns a hung request into a timeout error instead of hanging', async () => {
 		// A fetch that only settles when its signal aborts — the shape of a
 		// firewalled or blackholed registry.
-		const fetchImpl = (async (_url: RequestInfo | URL, init?: RequestInit) =>
+		const fetchImpl = (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) =>
 			new Promise((_resolve, reject) => {
 				init?.signal?.addEventListener('abort', () =>
 					reject(new DOMException('aborted', 'AbortError')),

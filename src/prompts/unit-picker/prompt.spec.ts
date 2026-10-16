@@ -28,11 +28,11 @@ describe('translateKey', () => {
 		});
 		expect(translateKey(undefined, { name: 'left', sequence: '\x1B[D' })).toEqual({
 			kind: 'event',
-			event: { type: 'cycleFlavor', delta: -1 },
+			event: { type: 'cycleFlavor', delta: -1, optionIndex: 0 },
 		});
 		expect(translateKey(undefined, { name: 'right', sequence: '\x1B[C' })).toEqual({
 			kind: 'event',
-			event: { type: 'cycleFlavor', delta: 1 },
+			event: { type: 'cycleFlavor', delta: 1, optionIndex: 0 },
 		});
 		expect(translateKey(' ', { name: 'space', sequence: ' ' })).toEqual({
 			kind: 'event',
@@ -49,6 +49,17 @@ describe('translateKey', () => {
 		expect(translateKey(undefined, { name: 'return', sequence: '\r' })).toEqual({ kind: 'submit' });
 		expect(translateKey(undefined, { name: 'escape', sequence: '\x1B' })).toEqual({
 			kind: 'escape',
+		});
+	});
+
+	it('aims shifted arrows at the second option', () => {
+		expect(translateKey(undefined, { name: 'right', sequence: '\x1B[1;2C', shift: true })).toEqual({
+			kind: 'event',
+			event: { type: 'cycleFlavor', delta: 1, optionIndex: 1 },
+		});
+		expect(translateKey(undefined, { name: 'left', sequence: '\x1B[1;2D', shift: true })).toEqual({
+			kind: 'event',
+			event: { type: 'cycleFlavor', delta: -1, optionIndex: 1 },
 		});
 	});
 

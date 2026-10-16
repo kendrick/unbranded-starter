@@ -49,7 +49,7 @@ export type PickerEvent =
 	| { type: 'clearFilter' }
 	| { type: 'toggle' }
 	| { type: 'toggleExpand' }
-	| { type: 'cycleFlavor'; delta: number };
+	| { type: 'cycleFlavor'; delta: number; optionIndex?: number };
 
 export type PickerRow =
 	| { kind: 'header'; group: string; selected: number; total: number }
@@ -210,7 +210,9 @@ export function reducePicker(state: PickerState, event: PickerEvent): PickerStat
 			return { ...state, expanded: state.expanded === opt.value ? null : opt.value };
 		}
 		case 'cycleFlavor': {
-			const option = filteredOptions(state)[state.cursor]?.options?.[0];
+			// Shifted arrows send optionIndex 1 to every row, so on a one-option row the
+			// index runs past the last option and the event falls through to a no-op.
+			const option = filteredOptions(state)[state.cursor]?.options?.[event.optionIndex ?? 0];
 			if (!option) return state;
 			const values = allowedValues(option, effectiveSet(state));
 			const len = values.length;
@@ -244,6 +246,13 @@ export function pickerSummary(state: PickerState): { units: number; files: numbe
 	};
 }
 
+// Undefined when the unit has no options, so the row's optional flavor stays unset
+// and the renderer draws no tag for it.
+function flavorTag(opt: PickerOption, flavors: Record<string, string>): string | undefined {
+	if (!opt.options?.length) return undefined;
+	return opt.options.map((o) => flavors[o.key] ?? o.default).join(' · ');
+}
+
 // Flattens the filtered options into display rows: a header per group (with its
 // selected/total count), each option, and the expanded row's detail block spliced in
 // right after it. Groups with no visible options never emit a header, so filtering
@@ -266,7 +275,7 @@ export function pickerRows(state: PickerState): PickerRow[] {
 			});
 		}
 
-		const flavor = opt.options?.[0] ? state.flavors[opt.options[0].key] : undefined;
+		const flavor = flavorTag(opt, state.flavors);
 		rows.push({
 			kind: 'option',
 			option: opt,

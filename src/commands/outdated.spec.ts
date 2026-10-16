@@ -158,7 +158,7 @@ describe('runOutdated', () => {
 		const pins = new Map<string, string[]>();
 		for (const p of collectManifestPins(UNITS))
 			pins.set(p.name, [...(pins.get(p.name) ?? []), p.pin]);
-		return async (input: RequestInfo | URL) => {
+		return async (input: Parameters<typeof fetch>[0]) => {
 			const url = String(input);
 			const name = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1));
 			const published = pins.get(name) ?? [];
