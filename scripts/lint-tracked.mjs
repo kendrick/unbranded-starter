@@ -24,7 +24,7 @@ export function trackedFiles(cwd) {
 		.filter((p) => existsSync(join(cwd, p)));
 }
 
-function toolEntry(pkg) {
+function binPath(pkg) {
 	const require = createRequire(import.meta.url);
 	const manifestPath = require.resolve(`${pkg}/package.json`);
 	const { bin } = JSON.parse(readFileSync(manifestPath, 'utf8'));
@@ -33,9 +33,10 @@ function toolEntry(pkg) {
 
 // Same order and short-circuit as `pnpm lint` (`oxlint && oxfmt --check`), so
 // the hook fails the way CI would. The tools get the whole list in one argv:
-// 302 paths is ~9 KB against Windows' 32,767-char CreateProcess ceiling, so
-// there's ~3x headroom before this would need batching. Spawning node on the
-// tool's entry point skips cmd.exe, whose 8,191-char limit is the tighter one.
+// the joined list has to stay under Windows' 32,767-char CreateProcess ceiling.
+// At ~30 chars a path that's roughly 1,000 files, and the repo sits at about a
+// third of that; batch the argv before it gets close. Spawning node on the
+// tool's bin script skips cmd.exe, whose 8,191-char limit is the tighter one.
 // `--no-error-on-unmatched-pattern` covers a list that's all ignored or
 // unsupported files (LICENSE, .sh), where both tools otherwise exit non-zero.
 export function lintTracked(cwd = process.cwd()) {
@@ -43,8 +44,8 @@ export function lintTracked(cwd = process.cwd()) {
 	if (files.length === 0) return 0;
 
 	const steps = [
-		[toolEntry('oxlint'), '--no-error-on-unmatched-pattern'],
-		[toolEntry('oxfmt'), '--check', '--no-error-on-unmatched-pattern'],
+		[binPath('oxlint'), '--no-error-on-unmatched-pattern'],
+		[binPath('oxfmt'), '--check', '--no-error-on-unmatched-pattern'],
 	];
 	for (const args of steps) {
 		const { status } = spawnSync(process.execPath, [...args, ...files], {

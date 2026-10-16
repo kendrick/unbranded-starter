@@ -1,11 +1,12 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { lintTracked, trackedFiles } from './lint-tracked.mjs';
 
-// Unformatted per oxfmt: bullet spacing and a run of blank lines.
+// Needs to trip `oxfmt --check` without tripping oxlint, so the failure is
+// unambiguously the formatter's.
 const UNFORMATTED = '*   a\n\n\n\nb\n';
 
 let dir;
@@ -30,6 +31,9 @@ const commitAll = () => {
 	git('commit', '-q', '-m', 'init');
 };
 
+// The tests below that stage with `git('add', <file>)` instead of `commitAll`
+// do it on purpose: it keeps the untracked `.oxfmtrc.json` out of the tracked
+// set, and that is part of what they cover.
 describe('trackedFiles', () => {
 	it('lists committed files and leaves out untracked ones', () => {
 		writeFileSync(join(dir, 'a.md'), 'a\n');
@@ -61,6 +65,21 @@ describe('lintTracked', () => {
 		writeFileSync(join(dir, 'notes.md'), UNFORMATTED);
 		commitAll();
 		expect(lintTracked(dir)).not.toBe(0);
+	});
+
+	it('names the committed unformatted file when the hook entry point fails', () => {
+		writeFileSync(join(dir, 'a.md'), 'a\n');
+		writeFileSync(join(dir, 'notes.md'), UNFORMATTED);
+		commitAll();
+		// The same invocation as the pre-push hook, so the output is what a
+		// developer would see.
+		const script = join(import.meta.dirname, 'lint-tracked.mjs');
+		const { status, stdout, stderr } = spawnSync(process.execPath, [script], {
+			cwd: dir,
+			encoding: 'utf8',
+		});
+		expect(status).not.toBe(0);
+		expect(stdout + stderr).toContain('notes.md');
 	});
 
 	it('passes when every tracked file is unsupported', () => {
