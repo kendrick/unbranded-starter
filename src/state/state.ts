@@ -269,6 +269,14 @@ export function refreshTrackedFiles(opts: {
 	const prior = priorStateForWrite(opts.targetDir);
 	if (!prior) return;
 
+	// Migrate first, so a refreshed baseline lands on a `.base` name with no legacy
+	// copy left beside it. `update` is most 2.x projects' first state write after
+	// the upgrade, and a leftover legacy copy is live config to oxfmt.
+	migrateLegacyBaselines(
+		opts.targetDir,
+		Object.keys(prior.files ?? {}).filter((rel) => prior.modes?.[rel] === 'copy'),
+	);
+
 	const files = { ...prior.files };
 	for (const [rel, entry] of Object.entries(opts.entries)) {
 		files[rel] = entry.hash;
@@ -425,15 +433,9 @@ function syncSidecar(
 	// honest base even when this run didn't rewrite the file); everything else goes.
 	const kept = Object.keys(files).filter((rel) => modes[rel] === 'copy');
 
-	// A pre-#182 sidecar holds a kept file's copy under its real name. Move it before
-	// the prune, which recognizes only suffixed names and would otherwise delete the
-	// merge base of every tracked file this run didn't rewrite.
-	for (const rel of kept) {
-		const suffixed = baselinePath(targetDir, rel);
-		const legacy = legacyBaselinePath(targetDir, rel);
-		if (!existsSync(suffixed) && existsSync(legacy) && statSync(legacy).isFile())
-			renameSync(legacy, suffixed);
-	}
+	// Migrate before the prune. The prune keeps only suffixed names, so it would delete
+	// a legacy copy that is still the merge base of a tracked file this run didn't rewrite.
+	migrateLegacyBaselines(targetDir, kept);
 
 	const keep = new Set(kept.map((rel) => `${rel}${BASELINE_SUFFIX}`));
 	if (existsSync(baselineDir)) {
@@ -453,6 +455,20 @@ function syncSidecar(
 
 	mkdirSync(join(targetDir, SIDECAR_DIR), { recursive: true });
 	writeFileSync(join(targetDir, SIDECAR_DIR, 'README.md'), SIDECAR_README);
+}
+
+// A pre-#182 sidecar holds copies under their real names. Callers pass only tracked
+// copy-mode rels, so a file in `baseline/` that no tracked copy owns never becomes a
+// merge base. Where both names exist, the `.base` copy is the current merge base
+// and the legacy one is stale.
+function migrateLegacyBaselines(targetDir: string, rels: string[]): void {
+	for (const rel of rels) {
+		const legacy = legacyBaselinePath(targetDir, rel);
+		if (!existsSync(legacy) || !statSync(legacy).isFile()) continue;
+		const suffixed = baselinePath(targetDir, rel);
+		if (existsSync(suffixed)) rmSync(legacy);
+		else renameSync(legacy, suffixed);
+	}
 }
 
 function readCliVersion(): string {
