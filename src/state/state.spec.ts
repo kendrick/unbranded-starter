@@ -9,7 +9,7 @@ import {
 	writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
 	applyRemovalToState,
@@ -534,8 +534,13 @@ describe('writeStateFile / readStateFile', () => {
 	it('maps nested rels segment by segment and top-level rels to a single suffix', () => {
 		const baselineDir = join(tmp, '.unbranded', 'baseline');
 		expect(baselinePath(tmp, 'src/x.ts')).toBe(join(baselineDir, 'src.base', 'x.ts.base'));
-		// Rels are posix by the time they reach state; a `\\` is part of a posix name.
-		expect(baselinePath(tmp, 'src\\x.ts')).toBe(join(baselineDir, 'src\\x.ts.base'));
+		// A `\\` is part of a file name on posix but the separator on Windows, so only
+		// Windows splits on it.
+		expect(baselinePath(tmp, 'src\\x.ts')).toBe(
+			sep === '\\'
+				? join(baselineDir, 'src.base', 'x.ts.base')
+				: join(baselineDir, 'src\\x.ts.base'),
+		);
 		expect(baselinePath(tmp, '.oxfmtrc.json')).toBe(join(baselineDir, '.oxfmtrc.json.base'));
 		expect(legacyBaselinePath(tmp, 'src/x.ts')).toBe(join(baselineDir, 'src', 'x.ts'));
 	});

@@ -51,10 +51,12 @@ export function baselinePath(targetDir: string, rel: string): string {
 // `baseline/foo.base` and tracked `foo.base/bar` to a path inside a directory of the
 // same name, so syncSidecar throws partway through a scaffold. With every segment
 // suffixed, one baseline sits under another only when one rel sits under the other,
-// and two tracked files can't nest that way. Rels reach state through toPosix, so `/`
-// is the only separator; on posix a `\` is part of a file name and must not split.
+// and two tracked files can't nest that way. Callers hand in posix rels from state and
+// native rels from `relative()`, and on Windows the two must land on one file, so the
+// native separator folds to `/` here. Only the native one: on posix a `\` is part of
+// a file name, and splitting on it would let two different rels share a baseline.
 function baselineRel(rel: string): string {
-	return rel
+	return toPosix(rel)
 		.split('/')
 		.map((segment) => `${segment}${BASELINE_SUFFIX}`)
 		.join('/');
@@ -458,7 +460,7 @@ function syncSidecar(
 
 	for (const w of landed) {
 		if (w.mode !== 'copy') continue;
-		const dest = baselinePath(targetDir, relative(targetDir, w.dest));
+		const dest = baselinePath(targetDir, toPosix(relative(targetDir, w.dest)));
 		mkdirSync(dirname(dest), { recursive: true });
 		writeFileSync(dest, readFileSync(w.dest));
 	}
