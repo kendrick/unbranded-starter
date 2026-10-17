@@ -5,9 +5,12 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
 	applyRemovalToState,
+	baselinePath,
 	buildStateFile,
 	builtinUnits,
 	hashBuffer,
+	legacyBaselinePath,
+	migrateTrackedBaselines,
 	readStateFile,
 	refreshTrackedFiles,
 	serializeState,
@@ -476,6 +479,59 @@ describe('writeStateFile / readStateFile', () => {
 		expect(existsSync(join(tmp, '.unbranded', 'baseline', 'tsconfig.json'))).toBe(false);
 	});
 
+	it('suffixes every path segment, so `foo` and `foo.base/bar` both get a baseline', () => {
+		// Suffixing only the file name sent `foo` to the file `baseline/foo.base` and
+		// `foo.base/bar` under a directory of that same name, so syncSidecar threw.
+		writeFileSync(join(tmp, 'foo'), 'foo bytes\n');
+		mkdirSync(join(tmp, 'foo.base'));
+		writeFileSync(join(tmp, 'foo.base', 'bar'), 'bar bytes\n');
+
+		expect(() =>
+			writeStateFile({
+				targetDir: tmp,
+				units: builtinUnits(['core-eslint']),
+				writes: [write('foo'), write('foo.base/bar')],
+			}),
+		).not.toThrow();
+
+		const baselineDir = join(tmp, '.unbranded', 'baseline');
+		expect(readFileSync(join(baselineDir, 'foo.base'), 'utf-8')).toBe('foo bytes\n');
+		expect(readFileSync(join(baselineDir, 'foo.base.base', 'bar.base'), 'utf-8')).toBe(
+			'bar bytes\n',
+		);
+		expect(Object.keys(readOk(tmp)?.files ?? {}).sort()).toEqual(['foo', 'foo.base/bar']);
+	});
+
+	it('keeps a nested baseline through a later run that only rewrites another file', () => {
+		// The prune compares against the same per-segment encoding the writer uses; a
+		// mismatch would delete `src.base/x.ts.base` as a stray here.
+		mkdirSync(join(tmp, 'src'));
+		writeFileSync(join(tmp, 'src', 'x.ts'), 'x\n');
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('src/x.ts')],
+		});
+		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('a.txt')],
+		});
+
+		const baselineDir = join(tmp, '.unbranded', 'baseline');
+		expect(readFileSync(join(baselineDir, 'src.base', 'x.ts.base'), 'utf-8')).toBe('x\n');
+		expect(readFileSync(join(baselineDir, 'a.txt.base'), 'utf-8')).toBe('alpha\n');
+	});
+
+	it('maps nested rels segment by segment and top-level rels to a single suffix', () => {
+		const baselineDir = join(tmp, '.unbranded', 'baseline');
+		expect(baselinePath(tmp, 'src/x.ts')).toBe(join(baselineDir, 'src.base', 'x.ts.base'));
+		expect(baselinePath(tmp, 'src\\x.ts')).toBe(join(baselineDir, 'src.base', 'x.ts.base'));
+		expect(baselinePath(tmp, '.oxfmtrc.json')).toBe(join(baselineDir, '.oxfmtrc.json.base'));
+		expect(legacyBaselinePath(tmp, 'src/x.ts')).toBe(join(baselineDir, 'src', 'x.ts'));
+	});
+
 	it('moves a legacy-named baseline to its `.base` name instead of pruning it', () => {
 		// A pre-#182 sidecar: tsconfig.json is tracked and its baseline sits under the
 		// real name. A run that doesn't rewrite tsconfig.json must keep that merge base.
@@ -812,6 +868,26 @@ describe('refreshTrackedFiles', () => {
 
 		expect(readFileSync(join(baselineDir, 'notes.txt'), 'utf-8')).toBe('mine\n');
 		expect(existsSync(join(baselineDir, 'notes.txt.base'))).toBe(false);
+	});
+
+	it('migrates nested legacy copies and clears the directories they leave', () => {
+		const baselineDir = join(tmp, '.unbranded', 'baseline');
+		mkdirSync(join(baselineDir, 'src'), { recursive: true });
+		mkdirSync(join(baselineDir, '.vscode'), { recursive: true });
+		writeFileSync(join(baselineDir, 'src', 'x.ts'), 'legacy x\n');
+		writeFileSync(join(baselineDir, '.vscode', 'settings.json'), 'not a copy\n');
+
+		migrateTrackedBaselines(tmp, {
+			files: { 'src/x.ts': 'h1', '.vscode/settings.json': 'h2' },
+			modes: { 'src/x.ts': 'copy', '.vscode/settings.json': 'merge-json' },
+		});
+
+		expect(readFileSync(join(baselineDir, 'src.base', 'x.ts.base'), 'utf-8')).toBe('legacy x\n');
+		expect(existsSync(join(baselineDir, 'src'))).toBe(false);
+		// Not a copy-mode file, so not ours to move.
+		expect(readFileSync(join(baselineDir, '.vscode', 'settings.json'), 'utf-8')).toBe(
+			'not a copy\n',
+		);
 	});
 
 	it('is a no-op without a state file', () => {

@@ -80,9 +80,9 @@ describe('state schema v2 (attribution, modes, baseline sidecar)', () => {
 		expect(readFileSync(join(tmp, '.unbranded', 'baseline', '.editorconfig.base'), 'utf-8')).toBe(
 			readFileSync(join(tmp, '.editorconfig'), 'utf-8'),
 		);
-		expect(existsSync(join(tmp, '.unbranded', 'baseline', '.vscode', 'settings.json.base'))).toBe(
-			false,
-		);
+		expect(
+			existsSync(join(tmp, '.unbranded', 'baseline', '.vscode.base', 'settings.json.base')),
+		).toBe(false);
 		expect(existsSync(join(tmp, '.unbranded', 'baseline', '.nvmrc.base'))).toBe(false);
 
 		// The sidecar explains itself; a user who stumbles on it learns to commit it.

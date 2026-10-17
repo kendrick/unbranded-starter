@@ -1,9 +1,18 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	existsSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { hashBuffer } from '../../src/state/state';
+import { baselinePath, hashBuffer, legacyBaselinePath } from '../../src/state/state';
 import { PKG_ROOT } from '../../src/util/paths';
 
 const CLI = join(PKG_ROOT, 'dist/cli.js');
@@ -49,6 +58,35 @@ function drift(tmp: string, disk: string): void {
 	const state = JSON.parse(readFileSync(statePath, 'utf-8')) as { files: Record<string, string> };
 	state.files['.editorconfig'] = hashBuffer(Buffer.from(OLD));
 	writeFileSync(statePath, `${JSON.stringify(state, null, '\t')}\n`);
+}
+
+// Turn a fresh scaffold back into a pre-#182 one: schema 3, every copy-mode baseline
+// under its real name. Returns the rels it moved and their bytes.
+function legacySidecar(tmp: string): Record<string, string> {
+	const statePath = join(tmp, '.unbranded.json');
+	const state = JSON.parse(readFileSync(statePath, 'utf-8')) as {
+		schema: number;
+		files: Record<string, string>;
+		modes: Record<string, string>;
+	};
+	const moved: Record<string, string> = {};
+	for (const rel of Object.keys(state.files).filter((r) => state.modes[r] === 'copy')) {
+		const bytes = readFileSync(baselinePath(tmp, rel), 'utf-8');
+		renameSync(baselinePath(tmp, rel), legacyBaselinePath(tmp, rel));
+		moved[rel] = bytes;
+	}
+	state.schema = 3;
+	writeFileSync(statePath, `${JSON.stringify(state, null, '\t')}\n`);
+	return moved;
+}
+
+function hashSidecar(tmp: string): Record<string, string> {
+	const root = join(tmp, '.unbranded');
+	const out: Record<string, string> = {};
+	for (const rel of readdirSync(root, { recursive: true }) as string[]) {
+		if (statSync(join(root, rel)).isFile()) out[rel] = hashBuffer(readFileSync(join(root, rel)));
+	}
+	return out;
 }
 
 function run(args: string[], cwd: string): ReturnType<typeof spawnSync<string>> {
@@ -175,6 +213,37 @@ describe('unbranded update', () => {
 
 		expect(readFileSync(join(tmp, '.editorconfig'), 'utf-8')).toBe(OLD);
 		expect(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')).toBe(before);
+	});
+
+	it('moves legacy-named baselines on an update with nothing else to do', () => {
+		// A schema-3 project whose files are all current returns at "Everything up to
+		// date." without a state write. Unless runUpdate migrates first, its legacy
+		// copies stay live config for oxfmt to reformat (#182).
+		scaffold(tmp);
+		const moved = legacySidecar(tmp);
+		expect(Object.keys(moved)).toEqual(expect.arrayContaining(['.editorconfig']));
+
+		const result = run(['update', '--yes'], tmp);
+		expect(result.status, result.stderr).toBe(0);
+		expect(result.stdout).toContain('Everything up to date.');
+
+		for (const [rel, bytes] of Object.entries(moved)) {
+			expect(existsSync(legacyBaselinePath(tmp, rel)), `${rel} legacy copy`).toBe(false);
+			expect(readFileSync(baselinePath(tmp, rel), 'utf-8'), `${rel} .base copy`).toBe(bytes);
+		}
+	});
+
+	it('leaves a legacy sidecar byte-identical under --dry-run', () => {
+		scaffold(tmp);
+		legacySidecar(tmp);
+		const before = hashSidecar(tmp);
+		const stateBefore = readFileSync(join(tmp, '.unbranded.json'), 'utf-8');
+
+		const result = run(['update', '--dry-run'], tmp);
+		expect(result.status, result.stderr).toBe(0);
+
+		expect(hashSidecar(tmp)).toEqual(before);
+		expect(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')).toBe(stateBefore);
 	});
 
 	it('rejects a bogus --strategy value', () => {

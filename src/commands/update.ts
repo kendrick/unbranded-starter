@@ -19,6 +19,7 @@ import {
 	baselinePath,
 	hashBuffer,
 	legacyBaselinePath,
+	migrateTrackedBaselines,
 	readStateFile,
 	refreshTrackedFiles,
 	unsupportedStateMessage,
@@ -175,8 +176,8 @@ export function planUpdate(opts: {
 		const mineBuf = readFileSync(abs);
 		const mine = mineBuf.toString('utf-8');
 		const theirs = entry.content;
-		// Pre-#182 scaffolds stored the copy under its own name; fall back to it
-		// until the next update's syncSidecar renames it to `.base`.
+		// Pre-#182 scaffolds stored the copy under its own name; fall back to it, since
+		// the plan is read before runUpdate migrates and a dry run never migrates.
 		const baseFile = [baselinePath(targetDir, rel), legacyBaselinePath(targetDir, rel)].find((p) =>
 			existsSync(p),
 		);
@@ -349,6 +350,11 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 		outro('Dry run: nothing written.');
 		return 0;
 	}
+
+	// A schema-3 project whose files are all current returns below without writing
+	// state, so this call is the only one that moves its legacy-named baselines off
+	// names oxfmt and oxlint read as config (#182).
+	migrateTrackedBaselines(cwd, state);
 
 	const auto = plan.files.filter((f) => f.status === 'clean-update' || f.status === 'merged');
 	const contested = plan.files.filter(
