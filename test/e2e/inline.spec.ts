@@ -132,9 +132,24 @@ describe('no package-manager signal', () => {
 	let tmp: string;
 	const PKG_JSON = JSON.stringify({ name: 'p', version: '0.0.0' });
 
+	// A plain-object copy of process.env loses its Windows case-insensitivity, and
+	// pnpm sets NPM_CONFIG_USER_AGENT there, so deleting only the lowercase key
+	// would leave the signal in place.
+	function envWithoutUserAgent(): NodeJS.ProcessEnv {
+		return Object.fromEntries(
+			Object.entries(process.env).filter(([key]) => !/^npm_config_user_agent$/i.test(key)),
+		);
+	}
+
 	beforeEach(() => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-nopm-'));
 		writeFileSync(join(tmp, 'package.json'), PKG_JSON);
+		// inspectPm walks every ancestor of cwd, so a lockfile or workspace file above
+		// os.tmpdir() would supply a signal; fail here, naming it, not in the CLI assertion.
+		expect(
+			inspectPm(tmp, envWithoutUserAgent()),
+			'a detection signal survived the test setup',
+		).toEqual({ kind: 'needs-prompt' });
 	});
 
 	afterEach(() => {
@@ -144,23 +159,14 @@ describe('no package-manager signal', () => {
 	// A fresh dir has no lockfile or packageManager field; dropping the user agent
 	// removes the last signal, and closed stdin turns a stray prompt into a failure.
 	function run(args: string[]) {
-		const env = { ...process.env };
-		delete env.npm_config_user_agent;
+		const env = envWithoutUserAgent();
 		return spawnSync('node', [CLI, ...args], { cwd: tmp, encoding: 'utf-8', env, input: '' });
-	}
-
-	// TEMP diagnostic for the windows-latest failure on #202; removed by the fix.
-	function diag(result: { stdout: string; stderr: string }): string {
-		const env = { ...process.env };
-		delete env.npm_config_user_agent;
-		const uaKeys = Object.keys(env).filter((k) => /user_agent/i.test(k));
-		return `inspectPm: ${JSON.stringify(inspectPm(tmp, env))}\nua-like keys left: ${JSON.stringify(uaKeys.map((k) => [k, env[k]]))}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`;
 	}
 
 	it('refuses --yes without writing anything when no signal resolves a pm', () => {
 		const result = run(['--units', 'core-tailwind', '--yes']);
 
-		expect(result.status, diag(result)).toBe(1);
+		expect(result.status, `stdout: ${result.stdout}\nstderr: ${result.stderr}`).toBe(1);
 		expect(result.stdout + result.stderr).toMatch(/--pm/);
 		expect(readdirSync(tmp)).toEqual(['package.json']);
 		expect(readFileSync(join(tmp, 'package.json'), 'utf-8')).toBe(PKG_JSON);
@@ -169,7 +175,7 @@ describe('no package-manager signal', () => {
 	it('fails --dry-run --json with the message on stderr and nothing on stdout', () => {
 		const result = run(['--dry-run', '--json', '--units', 'core-tailwind']);
 
-		expect(result.status, diag(result)).toBe(1);
+		expect(result.status, `stdout: ${result.stdout}\nstderr: ${result.stderr}`).toBe(1);
 		expect(result.stdout).toBe('');
 		expect(result.stderr).toMatch(/--pm/);
 	});
