@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { UNITS } from '../manifest/index';
 import { buildOptionSchema } from '../manifest/options';
-import { assertValidPm, loadConfig, resolveConfig, validate } from './load';
+import { assertValidPm, loadConfig, parsePmFlag, resolveConfig, validate } from './load';
 
 const KNOWN_UNITS = new Set<UnitId>(['core-eslint', 'core-typescript', 'opt-shadcn']);
 
@@ -257,6 +257,14 @@ describe('resolveConfig (inline flags)', () => {
 		);
 		expect(resolveConfig(file, {}, KNOWN_UNITS).force).toBe(true);
 	});
+
+	it('lets `--pm null` beat a recipe pm in resolveConfig', () => {
+		const file = validate(
+			{ units: ['core-eslint'], pm: 'pnpm', onConflict: 'skip', postInstall: 'none' },
+			KNOWN_UNITS,
+		);
+		expect(resolveConfig(file, { pm: 'null' }, KNOWN_UNITS).pm).toBeNull();
+	});
 });
 
 describe('options (unit-option selections)', () => {
@@ -400,6 +408,20 @@ describe('assertValidPm', () => {
 
 	it('rejects anything else with the recipe-style message', () => {
 		expect(() => assertValidPm('cargo')).toThrow(/pm must be one of/);
+	});
+});
+
+describe('parsePmFlag', () => {
+	it('turns the flag string "null" into null', () => {
+		expect(parsePmFlag('null')).toBeNull();
+	});
+
+	it('passes a known package manager through', () => {
+		expect(parsePmFlag('pnpm')).toBe('pnpm');
+	});
+
+	it('rejects a near-miss with the recipe-style message', () => {
+		expect(() => parsePmFlag('nul')).toThrow(/config\.pm must be one of/);
 	});
 });
 

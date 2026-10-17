@@ -8,7 +8,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, posix, relative, sep } from 'node:path';
 import { cancel, confirm, intro, isCancel, log, note, outro, select } from '@clack/prompts';
 import {
-	assertValidPm,
+	parsePmFlag,
 	peekUnitsDir,
 	readConfigFile,
 	resolveConfig,
@@ -216,7 +216,7 @@ export async function runPlanJson(opts: {
 	latest?: boolean;
 }): Promise<number> {
 	const inline = opts.inline ?? {};
-	if (inline.pm !== undefined) assertValidPm(inline.pm);
+	const pmFlag = inline.pm === undefined ? undefined : parsePmFlag(inline.pm);
 
 	const { catalog, fileConfig } = openCatalog(opts);
 	// Skipped units go to stderr here rather than through clack: this path's stdout
@@ -241,10 +241,13 @@ export async function runPlanJson(opts: {
 
 	const target = await detectTarget({ projectName: config.projectName, cwd: opts.targetDir });
 	// Mirrors runInit's override expression exactly so the two dry-run flavors
-	// can't drift: an explicit --pm wins, then the recipe's pm, then detection.
+	// can't drift: an explicit --pm wins (even `--pm null`, hence no `??`), then
+	// the recipe's pm, then detection.
 	const pm = await detectPm(target.dir, {
-		override: inline.pm ?? fileConfig?.pm,
+		override: pmFlag !== undefined ? pmFlag : fileConfig?.pm,
 		mode: target.mode,
+		// No picker to fall back on here, since a selection is required.
+		nonInteractive: true,
 	});
 
 	// Read before resolving: a tracked lint unit satisfies a slot without joining
@@ -364,12 +367,11 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	}
 
 	// Validate --pm up front so a bad value fails fast in every mode, not only
-	// once a full config gets assembled. The assertion narrows the raw flag
-	// string to `Pm | null` so it can feed detectPm's override below.
+	// once a full config gets assembled. Parsing narrows the raw flag string
+	// (`"null"` included) to `Pm | null` so it can feed detectPm's override below.
 	let pmOverride: Pm | null | undefined;
 	if (inline.pm !== undefined) {
-		assertValidPm(inline.pm);
-		pmOverride = inline.pm;
+		pmOverride = parsePmFlag(inline.pm);
 	}
 
 	// Loading config first means we fail with a clear error before prompting,
@@ -432,16 +434,19 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 
 	// --pm rides the existing detectPm override channel, so it skips the PM
 	// prompt in interactive runs too, not just config mode. Inline --pm wins
-	// over the recipe's pm; when neither is set the override is undefined and
-	// detection runs exactly as before.
+	// over the recipe's pm, even as `--pm null`, which is why this isn't `??`.
+	// When neither is set the override is undefined and detection runs as before.
 	const pm = await detectPm(target.dir, {
-		override: pmOverride ?? fileConfig?.pm,
+		override: pmOverride !== undefined ? pmOverride : fileConfig?.pm,
 		mode: target.mode,
+		nonInteractive,
 	});
 	log.info(
 		pm
 			? `Package manager: ${pm}`
-			: 'No package.json — files will be written; install will be skipped.',
+			: target.mode === 'new'
+				? 'No package.json — files will be written; install will be skipped.'
+				: 'Package manager: none — files will be written; install will be skipped.',
 	);
 
 	// Badge already-installed units, but only in an interactive augment run: a new
@@ -578,7 +583,10 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		applyLintStaged(applyUnitOptions(unit, optionSelections), selectedIds),
 	);
 
-	note(formatPlan(units, resolution.auto, resolution.requiredBy, pm, latest), 'Plan');
+	note(
+		formatPlan(units, resolution.auto, resolution.requiredBy, pm, latest, target.mode === 'new'),
+		'Plan',
+	);
 
 	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
 
@@ -911,6 +919,9 @@ export function formatPlan(
 	requiredBy: Record<string, string>,
 	pm: Pm | null,
 	latest: boolean,
+	// A null pm also comes from `--pm null` or a recipe's `pm: null` on a project
+	// that has a package.json, so "no package.json" is only true for a fresh target.
+	freshProject = false,
 ): string {
 	const lines: string[] = [];
 	const labelById = new Map(units.map((u) => [u.id, u.label]));
@@ -937,7 +948,11 @@ export function formatPlan(
 	);
 
 	lines.push('');
-	const installLine = pm ? `install via ${pm}` : 'no install (no package.json)';
+	const installLine = pm
+		? `install via ${pm}`
+		: freshProject
+			? 'no install (no package.json)'
+			: 'no install (pm is null)';
 	lines.push(
 		`${units.length} units · ${fileCount} files · ${depCount} deps (${latest ? 'latest' : 'pinned'}) · ${installLine}`,
 	);

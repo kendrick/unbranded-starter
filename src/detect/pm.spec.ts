@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { detectPm, inspectPm } from './pm';
+import { detectPm, inspectPm, NO_PM_MESSAGE } from './pm';
 
 describe('inspectPm', () => {
 	let dir: string;
@@ -217,5 +217,40 @@ describe('detectPm — override', () => {
 
 	it('passes a null override straight through, so install is skipped', async () => {
 		await expect(detectPm(dir, { override: null })).resolves.toBeNull();
+	});
+});
+
+// Clack isn't mocked here on purpose: a case that reached select() would hang
+// and time out instead of passing, so a missing guard can't go green.
+describe('detectPm — non-interactive', () => {
+	let dir: string;
+	let savedUserAgent: string | undefined;
+
+	beforeEach(() => {
+		dir = mkdtempSync(join(tmpdir(), 'unbranded-pm-noninteractive-'));
+		writeFileSync(join(dir, 'package.json'), '{"name":"p","version":"0.0.0"}');
+		savedUserAgent = process.env.npm_config_user_agent;
+		delete process.env.npm_config_user_agent;
+	});
+
+	afterEach(() => {
+		rmSync(dir, { recursive: true, force: true });
+		if (savedUserAgent !== undefined) process.env.npm_config_user_agent = savedUserAgent;
+	});
+
+	it('refuses with a message naming --pm when no signal exists', async () => {
+		// Pins the precondition, so a stray signal can't turn this into a vacuous pass.
+		expect(inspectPm(dir, process.env)).toEqual({ kind: 'needs-prompt' });
+		await expect(detectPm(dir, { nonInteractive: true })).rejects.toThrow(/--pm/);
+		await expect(detectPm(dir, { nonInteractive: true })).rejects.toThrow(NO_PM_MESSAGE);
+	});
+
+	it('still honors a null override', async () => {
+		await expect(detectPm(dir, { nonInteractive: true, override: null })).resolves.toBeNull();
+	});
+
+	it('still detects from a lockfile', async () => {
+		writeFileSync(join(dir, 'pnpm-lock.yaml'), '');
+		await expect(detectPm(dir, { nonInteractive: true })).resolves.toBe('pnpm');
 	});
 });

@@ -48,7 +48,7 @@ Options:
   --units-dir <dir>              Load your own unit definitions from <dir>; they're referenced as
                                  <dir-name>/<id> (recipe field: unitsDir). Works with \`diff\`,
                                  \`remove\`, and \`update\` too, which otherwise read the recorded path
-  --pm <npm|pnpm|yarn|bun>       Package manager (recipe field: pm); skips detection, including the workspace-leaf refusal
+  --pm <npm|pnpm|yarn|bun|null>  Package manager (recipe field: pm); skips detection, including the workspace-leaf refusal; null writes files and skips the install
   --on-conflict <overwrite|skip> How to treat existing files and dependency version conflicts (recipe field: onConflict)
   --post-install <all|none>      Run post-install steps or skip them (recipe field: postInstall)
   --yes                          Apply without the confirmation prompt; needs --units (or --config)
@@ -85,7 +85,7 @@ Examples:
   unbranded validate ./my-units                        # check a directory of unit definitions you authored
   unbranded validate ./my-units --json                 # publish gate for a unit pack's CI
   unbranded --units-dir ./my-units                     # pick from your own units alongside the built-ins
-  unbranded --units-dir ./my-units --units my-units/banner --yes   # install one of them by its namespaced id
+  unbranded --units-dir ./my-units --units my-units/banner --pm pnpm --yes   # install one of them by its namespaced id
   unbranded --config recipe.json                       # reproducible, scriptable run
   unbranded --preset node-lib --pm pnpm                # a shipped recipe; add --units to extend it
   unbranded --units core-eslint,core-vitest --pm pnpm --yes   # fully non-interactive, no recipe file
