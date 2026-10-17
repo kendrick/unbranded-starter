@@ -42,12 +42,19 @@ export function lintTracked(cwd = process.cwd()) {
 	const files = trackedFiles(cwd);
 	if (files.length === 0) return 0;
 
+	// `./` makes every name a literal path. A bare `!notes.md` is an exclusion
+	// glob to oxfmt, and with --no-error-on-unmatched-pattern the miss is silent,
+	// so the hook would pass on an unformatted tracked file. It also keeps a
+	// leading `-` from reading as an option, and one prefix covers both tools
+	// without relying on `--`. .oxfmtrc.json ignorePatterns still apply.
+	const paths = files.map((p) => `./${p}`);
+
 	const steps = [
 		[binPath('oxlint'), '--no-error-on-unmatched-pattern'],
 		[binPath('oxfmt'), '--check', '--no-error-on-unmatched-pattern'],
 	];
 	for (const args of steps) {
-		const { status } = spawnSync(process.execPath, [...args, ...files], {
+		const { status } = spawnSync(process.execPath, [...args, ...paths], {
 			cwd,
 			stdio: 'inherit',
 		});
