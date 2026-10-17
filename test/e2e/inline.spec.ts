@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { inspectPm } from '../../src/detect/pm';
 import { PKG_ROOT } from '../../src/util/paths';
 
 const CLI = join(PKG_ROOT, 'dist/cli.js');
@@ -148,10 +149,18 @@ describe('no package-manager signal', () => {
 		return spawnSync('node', [CLI, ...args], { cwd: tmp, encoding: 'utf-8', env, input: '' });
 	}
 
+	// TEMP diagnostic for the windows-latest failure on #202; removed by the fix.
+	function diag(result: { stdout: string; stderr: string }): string {
+		const env = { ...process.env };
+		delete env.npm_config_user_agent;
+		const uaKeys = Object.keys(env).filter((k) => /user_agent/i.test(k));
+		return `inspectPm: ${JSON.stringify(inspectPm(tmp, env))}\nua-like keys left: ${JSON.stringify(uaKeys.map((k) => [k, env[k]]))}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`;
+	}
+
 	it('refuses --yes without writing anything when no signal resolves a pm', () => {
 		const result = run(['--units', 'core-tailwind', '--yes']);
 
-		expect(result.status).toBe(1);
+		expect(result.status, diag(result)).toBe(1);
 		expect(result.stdout + result.stderr).toMatch(/--pm/);
 		expect(readdirSync(tmp)).toEqual(['package.json']);
 		expect(readFileSync(join(tmp, 'package.json'), 'utf-8')).toBe(PKG_JSON);
@@ -160,7 +169,7 @@ describe('no package-manager signal', () => {
 	it('fails --dry-run --json with the message on stderr and nothing on stdout', () => {
 		const result = run(['--dry-run', '--json', '--units', 'core-tailwind']);
 
-		expect(result.status).toBe(1);
+		expect(result.status, diag(result)).toBe(1);
 		expect(result.stdout).toBe('');
 		expect(result.stderr).toMatch(/--pm/);
 	});
