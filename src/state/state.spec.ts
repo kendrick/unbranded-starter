@@ -1,5 +1,13 @@
 import type { StateFile, TrackedWrite } from './state';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -10,7 +18,6 @@ import {
 	builtinUnits,
 	hashBuffer,
 	legacyBaselinePath,
-	migrateTrackedBaselines,
 	readStateFile,
 	refreshTrackedFiles,
 	serializeState,
@@ -527,7 +534,8 @@ describe('writeStateFile / readStateFile', () => {
 	it('maps nested rels segment by segment and top-level rels to a single suffix', () => {
 		const baselineDir = join(tmp, '.unbranded', 'baseline');
 		expect(baselinePath(tmp, 'src/x.ts')).toBe(join(baselineDir, 'src.base', 'x.ts.base'));
-		expect(baselinePath(tmp, 'src\\x.ts')).toBe(join(baselineDir, 'src.base', 'x.ts.base'));
+		// Rels are posix by the time they reach state; a `\\` is part of a posix name.
+		expect(baselinePath(tmp, 'src\\x.ts')).toBe(join(baselineDir, 'src\\x.ts.base'));
 		expect(baselinePath(tmp, '.oxfmtrc.json')).toBe(join(baselineDir, '.oxfmtrc.json.base'));
 		expect(legacyBaselinePath(tmp, 'src/x.ts')).toBe(join(baselineDir, 'src', 'x.ts'));
 	});
@@ -568,9 +576,8 @@ describe('writeStateFile / readStateFile', () => {
 		expect(existsSync(join(tmp, '.unbranded', 'baseline', 'tsconfig.json'))).toBe(false);
 	});
 
-	it('drops a legacy-named baseline when its `.base` copy already exists', () => {
-		// An `update` that refreshed a baseline without migrating leaves both names. The
-		// `.base` copy is the current merge base.
+	it('prunes a real-named file beside a schema-4 `.base` copy instead of migrating it', () => {
+		// At schema 4 the `.base` copy is the merge base and a real-named file is a stray.
 		writeFileSync(join(tmp, 'tsconfig.json'), 'user drift\n');
 		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
 		writeFileSync(
@@ -834,9 +841,7 @@ describe('refreshTrackedFiles', () => {
 		expect(existsSync(join(baselineDir, '.oxfmtrc.json'))).toBe(false);
 	});
 
-	it('drops a legacy-named baseline that sits beside its `.base` copy', () => {
-		// An `update` that skipped migration leaves this duplicate, and the legacy copy
-		// keeps oxfmt reading `.unbranded/baseline/` as config.
+	it('leaves a real-named file alone at schema 4, since only schema 3 has legacy copies', () => {
 		writeFileSync(join(tmp, 'a.txt'), 'v1\n');
 		writeStateFile({
 			targetDir: tmp,
@@ -844,12 +849,12 @@ describe('refreshTrackedFiles', () => {
 			writes: [{ dest: join(tmp, 'a.txt'), unit: 'core-eslint', mode: 'copy' }],
 		});
 		const baselineDir = join(tmp, '.unbranded', 'baseline');
-		writeFileSync(join(baselineDir, 'a.txt'), 'legacy base\n');
+		writeFileSync(join(baselineDir, 'a.txt'), 'not a legacy copy\n');
 
 		refreshTrackedFiles({ targetDir: tmp, entries: { 'a.txt': { hash: 'newhash' } } });
 
 		expect(readFileSync(join(baselineDir, 'a.txt.base'), 'utf-8')).toBe('v1\n');
-		expect(existsSync(join(baselineDir, 'a.txt'))).toBe(false);
+		expect(readFileSync(join(baselineDir, 'a.txt'), 'utf-8')).toBe('not a legacy copy\n');
 	});
 
 	it('leaves a baseline-directory file alone when no tracked copy-mode file owns it', () => {
@@ -870,17 +875,34 @@ describe('refreshTrackedFiles', () => {
 		expect(existsSync(join(baselineDir, 'notes.txt.base'))).toBe(false);
 	});
 
+	function seedSchema3(modes: Record<string, TrackedWrite['mode']>): void {
+		const files = Object.fromEntries(Object.keys(modes).map((rel) => [rel, 'h']));
+		writeFileSync(
+			join(tmp, STATE_FILENAME),
+			`${JSON.stringify(
+				{
+					_tool: 'x',
+					schema: 3,
+					version: '2.0.0',
+					units: [{ id: 'core-eslint', source: { kind: 'builtin' } }],
+					files,
+					modes,
+				},
+				null,
+				'\t',
+			)}\n`,
+		);
+	}
+
 	it('migrates nested legacy copies and clears the directories they leave', () => {
+		seedSchema3({ 'src/x.ts': 'copy', '.vscode/settings.json': 'merge-json' });
 		const baselineDir = join(tmp, '.unbranded', 'baseline');
 		mkdirSync(join(baselineDir, 'src'), { recursive: true });
 		mkdirSync(join(baselineDir, '.vscode'), { recursive: true });
 		writeFileSync(join(baselineDir, 'src', 'x.ts'), 'legacy x\n');
 		writeFileSync(join(baselineDir, '.vscode', 'settings.json'), 'not a copy\n');
 
-		migrateTrackedBaselines(tmp, {
-			files: { 'src/x.ts': 'h1', '.vscode/settings.json': 'h2' },
-			modes: { 'src/x.ts': 'copy', '.vscode/settings.json': 'merge-json' },
-		});
+		refreshTrackedFiles({ targetDir: tmp, entries: {} });
 
 		expect(readFileSync(join(baselineDir, 'src.base', 'x.ts.base'), 'utf-8')).toBe('legacy x\n');
 		expect(existsSync(join(baselineDir, 'src'))).toBe(false);
@@ -888,6 +910,45 @@ describe('refreshTrackedFiles', () => {
 		expect(readFileSync(join(baselineDir, '.vscode', 'settings.json'), 'utf-8')).toBe(
 			'not a copy\n',
 		);
+		expect(readOk(tmp)?.schema).toBe(STATE_SCHEMA);
+	});
+
+	it('keeps both merge bases when `foo` and `foo.base` are tracked, and migrates once', () => {
+		// Tracked `foo` moves to `baseline/foo.base`, which is where tracked `foo.base`
+		// keeps its legacy copy. Moving in place deleted or overwrote one of the two.
+		seedSchema3({ 'foo': 'copy', 'foo.base': 'copy' });
+		const baselineDir = join(tmp, '.unbranded', 'baseline');
+		mkdirSync(baselineDir, { recursive: true });
+		writeFileSync(join(baselineDir, 'foo'), 'base of foo\n');
+		writeFileSync(join(baselineDir, 'foo.base'), 'base of foo.base\n');
+
+		refreshTrackedFiles({ targetDir: tmp, entries: {} });
+		// A second write sees schema 4 and must not take `foo.base` for a legacy copy.
+		refreshTrackedFiles({ targetDir: tmp, entries: {} });
+
+		expect(readFileSync(baselinePath(tmp, 'foo'), 'utf-8')).toBe('base of foo\n');
+		expect(readFileSync(baselinePath(tmp, 'foo.base'), 'utf-8')).toBe('base of foo.base\n');
+		expect(existsSync(join(baselineDir, 'foo'))).toBe(false);
+		expect(readdirSync(join(tmp, '.unbranded')).sort()).toEqual(['baseline']);
+	});
+
+	it('keeps both merge bases through a scaffold write over a schema-3 `foo` + `foo.base`', () => {
+		seedSchema3({ 'foo': 'copy', 'foo.base': 'copy' });
+		const baselineDir = join(tmp, '.unbranded', 'baseline');
+		mkdirSync(baselineDir, { recursive: true });
+		writeFileSync(join(baselineDir, 'foo'), 'base of foo\n');
+		writeFileSync(join(baselineDir, 'foo.base'), 'base of foo.base\n');
+		writeFileSync(join(tmp, 'a.txt'), 'alpha\n');
+
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [{ dest: join(tmp, 'a.txt'), unit: 'core-eslint', mode: 'copy' }],
+		});
+
+		expect(readFileSync(baselinePath(tmp, 'foo'), 'utf-8')).toBe('base of foo\n');
+		expect(readFileSync(baselinePath(tmp, 'foo.base'), 'utf-8')).toBe('base of foo.base\n');
+		expect(readFileSync(baselinePath(tmp, 'a.txt'), 'utf-8')).toBe('alpha\n');
 	});
 
 	it('is a no-op without a state file', () => {

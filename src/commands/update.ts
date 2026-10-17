@@ -19,10 +19,11 @@ import {
 	baselinePath,
 	hashBuffer,
 	legacyBaselinePath,
-	migrateTrackedBaselines,
+	legacyBaselinesPending,
 	readStateFile,
 	refreshTrackedFiles,
 	unsupportedStateMessage,
+	usesLegacyBaselines,
 } from '../state/state';
 import { cancelAndExit } from '../util/cancel';
 import { colorEnabled } from '../util/color';
@@ -176,12 +177,13 @@ export function planUpdate(opts: {
 		const mineBuf = readFileSync(abs);
 		const mine = mineBuf.toString('utf-8');
 		const theirs = entry.content;
-		// Pre-#182 scaffolds stored the copy under its own name; fall back to it, since
-		// the plan is read before runUpdate migrates and a dry run never migrates.
-		const baseFile = [baselinePath(targetDir, rel), legacyBaselinePath(targetDir, rel)].find((p) =>
-			existsSync(p),
-		);
-		let base = baseFile === undefined ? undefined : readFileSync(baseFile, 'utf-8');
+		// The recorded schema picks the layout, never the files present: a schema-3
+		// sidecar's legacy copy of `foo.base` sits exactly where `foo`'s `.base` copy
+		// would. The plan is read before runUpdate migrates, and a dry run never does.
+		const baseFile = usesLegacyBaselines(state)
+			? legacyBaselinePath(targetDir, rel)
+			: baselinePath(targetDir, rel);
+		let base = existsSync(baseFile) ? readFileSync(baseFile, 'utf-8') : undefined;
 		// No baseline, but the recorded hash proves the disk bytes are exactly
 		// what we wrote — so the disk IS the base, and the merge stays exact.
 		if (base === undefined && hashBuffer(mineBuf) === state.files[rel]) base = mine;
@@ -351,16 +353,19 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 		return 0;
 	}
 
-	// A schema-3 project whose files are all current returns below without writing
-	// state, so this call is the only one that moves its legacy-named baselines off
-	// names oxfmt and oxlint read as config (#182).
-	migrateTrackedBaselines(cwd, state);
-
 	const auto = plan.files.filter((f) => f.status === 'clean-update' || f.status === 'merged');
 	const contested = plan.files.filter(
 		(f) => f.status === 'conflict' || f.status === 'needs-choice',
 	);
 	if (auto.length === 0 && contested.length === 0 && !plan.pkg.changed) {
+		// A schema-3 project whose files are all current would otherwise return here
+		// without writing state, leaving its legacy-named baselines on names oxfmt and
+		// oxlint read as config (#182). Migrate through the state door so the move and
+		// the schema-4 stamp land together: left at schema 3 over a `.base` layout, the
+		// project would open in an older unbranded, which prunes every `.base` copy as
+		// a stray. With nothing to move, nothing is written. Every other path migrates
+		// in its own refreshTrackedFiles call below, after the user confirms.
+		if (legacyBaselinesPending(cwd, state)) refreshTrackedFiles({ targetDir: cwd, entries: {} });
 		outro('Everything up to date.');
 		return 0;
 	}

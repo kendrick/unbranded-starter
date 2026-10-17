@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import {
 	existsSync,
 	mkdirSync,
+	mkdtempSync,
 	readdirSync,
 	readFileSync,
 	renameSync,
@@ -50,19 +51,38 @@ export function baselinePath(targetDir: string, rel: string): string {
 // `baseline/foo.base` and tracked `foo.base/bar` to a path inside a directory of the
 // same name, so syncSidecar throws partway through a scaffold. With every segment
 // suffixed, one baseline sits under another only when one rel sits under the other,
-// and two tracked files can't nest that way. Splits on `\` too, for Windows-style rels.
+// and two tracked files can't nest that way. Rels reach state through toPosix, so `/`
+// is the only separator; on posix a `\` is part of a file name and must not split.
 function baselineRel(rel: string): string {
 	return rel
-		.split(/[\\/]/)
+		.split('/')
 		.map((segment) => `${segment}${BASELINE_SUFFIX}`)
 		.join('/');
 }
 
-// Pre-#182 sidecars stored copies under their real names. planUpdate reads this name
-// as a fallback until migrateLegacyBaselines moves the copy. Every state write and
-// every non-dry-run `update` migrates, no-op updates included.
+// A pre-#182 sidecar (schema 3 and below) keeps each copy under its real name.
 export function legacyBaselinePath(targetDir: string, rel: string): string {
 	return join(targetDir, SIDECAR_DIR, 'baseline', rel);
+}
+
+// Below this schema every file under `baseline/` is a legacy copy, whatever its name.
+// A legacy copy of tracked `foo.base` sits at `foo`'s suffixed path, so a reader can't
+// tell the layouts apart by looking at the files; only the recorded schema can.
+const SUFFIXED_BASELINE_SCHEMA = 4;
+
+export function usesLegacyBaselines(state: Pick<StateFile, 'schema'>): boolean {
+	return state.schema < SUFFIXED_BASELINE_SCHEMA;
+}
+
+// True when a state write would move at least one legacy copy.
+export function legacyBaselinesPending(
+	targetDir: string,
+	state: Pick<StateFile, 'schema' | 'files' | 'modes'>,
+): boolean {
+	return (
+		usesLegacyBaselines(state) &&
+		trackedCopyRels(state).some((rel) => isFile(legacyBaselinePath(targetDir, rel)))
+	);
 }
 
 // A self-describing breadcrumb. This file lands in every scaffolded repo, so an
@@ -216,7 +236,7 @@ export function writeStateFile(opts: {
 		doctor: prior?.doctor,
 	};
 
-	syncSidecar(opts.targetDir, landed, merged.files, merged.modes);
+	syncSidecar(opts.targetDir, prior, landed, merged.files, merged.modes);
 
 	const path = join(opts.targetDir, STATE_FILENAME);
 	writeFileSync(path, serializeState(buildStateFile(merged)));
@@ -258,7 +278,7 @@ export function applyRemovalToState(opts: {
 		doctor: prior.doctor,
 	};
 
-	syncSidecar(opts.targetDir, [], merged.files, merged.modes);
+	syncSidecar(opts.targetDir, prior, [], merged.files, merged.modes);
 	writeFileSync(join(opts.targetDir, STATE_FILENAME), serializeState(buildStateFile(merged)));
 }
 
@@ -282,10 +302,9 @@ export function refreshTrackedFiles(opts: {
 	const prior = priorStateForWrite(opts.targetDir);
 	if (!prior) return;
 
-	// Migrate first, so a refreshed baseline lands on a `.base` name with no legacy
-	// copy left beside it. `update` is most 2.x projects' first state write after
-	// the upgrade, and a leftover legacy copy is live config to oxfmt.
-	migrateTrackedBaselines(opts.targetDir, prior);
+	// Migrate before writing refreshed copies, so a refreshed `.base` file can't be
+	// mistaken for a legacy copy and moved.
+	migrateLegacyBaselines(opts.targetDir, prior);
 
 	const files = { ...prior.files };
 	for (const [rel, entry] of Object.entries(opts.entries)) {
@@ -426,11 +445,16 @@ Deleting it breaks nothing today, but \`unbranded update\` would lose its merge 
 // are pruned: a wrong merge base is worse than none.
 function syncSidecar(
 	targetDir: string,
+	prior: StateFile | undefined,
 	landed: TrackedWrite[],
 	files: Record<string, string>,
 	modes: Record<string, TrackedFileMode>,
 ): void {
 	const baselineDir = join(targetDir, SIDECAR_DIR, 'baseline');
+
+	// Before the landed writes, which could overwrite a legacy copy sitting at a
+	// suffixed path, and before the prune, which keeps only suffixed names.
+	migrateLegacyBaselines(targetDir, prior);
 
 	for (const w of landed) {
 		if (w.mode !== 'copy') continue;
@@ -441,13 +465,7 @@ function syncSidecar(
 
 	// Tracked copy-mode files keep their baseline (a prior run's copy is still the
 	// honest base even when this run didn't rewrite the file); everything else goes.
-	const kept = Object.keys(files).filter((rel) => modes[rel] === 'copy');
-
-	// Migrate before the prune. The prune keeps only suffixed names, so it would delete
-	// a legacy copy that is still the merge base of a tracked file this run didn't rewrite.
-	migrateLegacyBaselines(targetDir, kept);
-
-	const keep = new Set(kept.map(baselineRel));
+	const keep = new Set(trackedCopyRels({ files, modes }).map(baselineRel));
 	if (existsSync(baselineDir)) {
 		const entries = (readdirSync(baselineDir, { recursive: true }) as string[]).map((e) =>
 			join(baselineDir, e),
@@ -467,35 +485,38 @@ function syncSidecar(
 	writeFileSync(join(targetDir, SIDECAR_DIR, 'README.md'), SIDECAR_README);
 }
 
-// `update` calls this before deciding there's nothing to do, because a schema-3 project
-// whose files are already current never reaches a state write, and its legacy copies
-// would stay live config to oxfmt.
-export function migrateTrackedBaselines(
-	targetDir: string,
-	state: Pick<StateFile, 'files' | 'modes'>,
-): void {
-	migrateLegacyBaselines(
-		targetDir,
-		Object.keys(state.files ?? {}).filter((rel) => state.modes?.[rel] === 'copy'),
-	);
+function trackedCopyRels(state: Pick<StateFile, 'files' | 'modes'>): string[] {
+	return Object.keys(state.files ?? {}).filter((rel) => state.modes?.[rel] === 'copy');
 }
 
-// A pre-#182 sidecar holds copies under their real names. Callers pass only tracked
-// copy-mode rels, so a file in `baseline/` that no tracked copy owns never becomes a
-// merge base. Where both names exist, the `.base` copy is the current merge base
-// and the legacy one is stale.
-function migrateLegacyBaselines(targetDir: string, rels: string[]): void {
-	for (const rel of rels) {
+// Moves a pre-#182 sidecar's tracked copies to their suffixed names. Every caller
+// writes schema 4 right after, so the schema check stops a second migration. Files no
+// tracked copy owns stay put, so they never become a merge base. Everything goes
+// through a staging directory first, because one copy's suffixed path can be another
+// copy's legacy path: tracked `foo` moves to `baseline/foo.base`, where tracked
+// `foo.base` keeps its legacy copy. Moving in place would overwrite that copy.
+function migrateLegacyBaselines(targetDir: string, prior: StateFile | undefined): void {
+	if (!prior || !usesLegacyBaselines(prior)) return;
+	const moves = trackedCopyRels(prior).filter((rel) => isFile(legacyBaselinePath(targetDir, rel)));
+	if (moves.length === 0) return;
+
+	const baselineDir = join(targetDir, SIDECAR_DIR, 'baseline');
+	const staging = mkdtempSync(join(targetDir, SIDECAR_DIR, '.baseline-migrate-'));
+	moves.forEach((rel, i) => {
 		const legacy = legacyBaselinePath(targetDir, rel);
-		if (!existsSync(legacy) || !statSync(legacy).isFile()) continue;
-		const suffixed = baselinePath(targetDir, rel);
-		if (existsSync(suffixed)) rmSync(legacy);
-		else {
-			mkdirSync(dirname(suffixed), { recursive: true });
-			renameSync(legacy, suffixed);
-		}
-		pruneEmptyParents(dirname(legacy), join(targetDir, SIDECAR_DIR, 'baseline'));
-	}
+		renameSync(legacy, join(staging, String(i)));
+		pruneEmptyParents(dirname(legacy), baselineDir);
+	});
+	moves.forEach((rel, i) => {
+		const dest = baselinePath(targetDir, rel);
+		mkdirSync(dirname(dest), { recursive: true });
+		renameSync(join(staging, String(i)), dest);
+	});
+	rmdirSync(staging);
+}
+
+function isFile(path: string): boolean {
+	return existsSync(path) && statSync(path).isFile();
 }
 
 function readCliVersion(): string {

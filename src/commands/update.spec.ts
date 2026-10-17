@@ -75,7 +75,23 @@ describe('planUpdate', () => {
 		expect(existsSync(baselinePath(tmp, 'config.txt'))).toBe(false);
 		const { files } = planUpdate({
 			targetDir: tmp,
-			state: state({ files: { 'config.txt': h('not the disk bytes') } }),
+			state: state({ schema: 3, files: { 'config.txt': h('not the disk bytes') } }),
+			units: catalog,
+			pkgRoot: tmp,
+		});
+		expect(files[0]?.status).toBe('merged');
+		expect(files[0]?.proposed).toBe(`${NEW}user line\n`);
+	});
+
+	it('reads a schema-3 legacy copy even when a `.base` name sits beside it', () => {
+		// In a schema-3 sidecar, `config.txt.base` is the legacy copy of a tracked file
+		// by that name, never `config.txt`'s merge base.
+		writeFileSync(join(tmp, 'config.txt'), `${OLD}user line\n`);
+		writeBaseline(OLD, legacyBaselinePath(tmp, 'config.txt'));
+		writeBaseline('some other file entirely\n', baselinePath(tmp, 'config.txt'));
+		const { files } = planUpdate({
+			targetDir: tmp,
+			state: state({ schema: 3, files: { 'config.txt': h('not the disk bytes') } }),
 			units: catalog,
 			pkgRoot: tmp,
 		});

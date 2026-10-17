@@ -12,7 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { baselinePath, hashBuffer, legacyBaselinePath } from '../../src/state/state';
+import { baselinePath, hashBuffer, legacyBaselinePath, STATE_SCHEMA } from '../../src/state/state';
 import { PKG_ROOT } from '../../src/util/paths';
 
 const CLI = join(PKG_ROOT, 'dist/cli.js');
@@ -231,6 +231,25 @@ describe('unbranded update', () => {
 			expect(existsSync(legacyBaselinePath(tmp, rel)), `${rel} legacy copy`).toBe(false);
 			expect(readFileSync(baselinePath(tmp, rel), 'utf-8'), `${rel} .base copy`).toBe(bytes);
 		}
+		// Left at schema 3, the `.base` layout would open in an older unbranded, which
+		// prunes every `.base` copy as a stray.
+		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as {
+			schema: number;
+		};
+		expect(state.schema).toBe(STATE_SCHEMA);
+	});
+
+	it('writes nothing on an update with nothing to do and nothing to migrate', () => {
+		scaffold(tmp);
+		const before = hashSidecar(tmp);
+		const stateBefore = readFileSync(join(tmp, '.unbranded.json'), 'utf-8');
+
+		const result = run(['update', '--yes'], tmp);
+		expect(result.status, result.stderr).toBe(0);
+		expect(result.stdout).toContain('Everything up to date.');
+
+		expect(hashSidecar(tmp)).toEqual(before);
+		expect(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')).toBe(stateBefore);
 	});
 
 	it('leaves a legacy sidecar byte-identical under --dry-run', () => {
