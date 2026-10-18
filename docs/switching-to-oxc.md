@@ -83,7 +83,7 @@ Run lint and typecheck:
 pnpm lint && pnpm typecheck
 ```
 
-Both exit 0 unless your code trips a stricter flag in the new `tsconfig.base.json`. `erasableSyntaxOnly` rejects enums, namespaces, and parameter properties, and `noImplicitOverride` requires the `override` keyword on overriding methods. Fix the code, or set the flag back to `false` in `tsconfig.json`. Then confirm the TypeScript line:
+Both exit 0 unless your code trips a stricter flag in the new `tsconfig.base.json`. `erasableSyntaxOnly` rejects enums, namespaces, and parameter properties, and `noImplicitOverride` requires the `override` keyword on overriding methods. Fix the code, or set the flag back to `false` in `tsconfig.json`. The new `.oxlintrc.json` also turns on type-aware rules such as `no-floating-promises`, so lint can report findings your ESLint config never raised. Fix them, or delete `"typeAware": true` from `.oxlintrc.json` to turn the type-aware rules off. Then confirm the TypeScript line:
 
 ```bash
 grep '"typescript"' package.json
