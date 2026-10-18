@@ -55,7 +55,9 @@ export function buildOxlintConfig(flavor: OxlintFlavor): string {
 		categories: { correctness: 'error', suspicious: 'error' },
 		// An override can't set typeAware, so the root config is the only place to switch
 		// it. A scaffolded project opts out by deleting this line from its own
-		// .oxlintrc.json.
+		// .oxlintrc.json. typeAware stays on for the TS 6 line too, even though tsgolint checks with
+		// its own bundled TS 7: the shipped tsconfigs set no option TS 7 removed, and the
+		// README documents what breaks for a project that adds one.
 		options: { typeAware: true },
 		env:
 			flavor === 'base'
