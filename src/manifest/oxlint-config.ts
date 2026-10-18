@@ -6,9 +6,12 @@ export type OxlintFlavor = 'base' | 'react' | 'next';
 
 export const OXLINT_FLAVORS: OxlintFlavor[] = ['base', 'react', 'next'];
 
+// oxlint lists oxlint-tsgolint as an optional peer, and an oxlint release can raise
+// the minimum version. Bump the two pins together so tsgolint never falls below it.
 export const OXC_DEV_DEPENDENCIES: Record<string, string> = {
-	oxlint: '1.86.0',
-	oxfmt: '0.71.0',
+	'oxlint': '1.86.0',
+	'oxfmt': '0.71.0',
+	'oxlint-tsgolint': '7.0.2004',
 };
 
 // oxlint drops a rule whose plugin isn't listed here without a word, so this list
@@ -49,6 +52,9 @@ export function buildOxlintConfig(flavor: OxlintFlavor): string {
 		$schema: './node_modules/oxlint/configuration_schema.json',
 		plugins: oxlintPlugins(flavor),
 		categories: { correctness: 'error', suspicious: 'error' },
+		// An override can't set typeAware, so the root config is the only place to switch
+		// it. To turn the type-aware rules off, delete this line.
+		options: { typeAware: true },
 		env:
 			flavor === 'base'
 				? { builtin: true, node: true }
