@@ -1,8 +1,8 @@
 {
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"$id": "https://github.com/kendrick/unbranded-starter/schemas/state.schema.json",
-	"title": ".unbranded.json (state file, schema 3)",
-	"description": "What unbranded manages in a scaffolded repo: the installed units and where each came from, one content hash per tracked file, plus which unit wrote each file, how it was produced, and the run's resolved options. Byte-exact merge baselines live beside it in .unbranded/baseline/. Schema 3 turns `units` from bare id strings into {id, source} entries; a schema-1 or -2 file is this shape with bare strings there, and minus options/attribution/modes at schema 1.",
+	"title": ".unbranded.json (state file, schema 4)",
+	"description": "What unbranded manages in a scaffolded repo: the installed units and where each came from, one content hash per tracked file, plus which unit wrote each file, how it was produced, and the run's resolved options. Byte-exact merge baselines live beside it in .unbranded/baseline/, with `.base` appended to every path segment (src/x.ts is stored as src.base/x.ts.base) so tools that walk the tree never read a copy as live config. Schema 4 keeps the schema-3 envelope and changes only that baseline naming; schema 3 stored copies under their real names. Schema 3 turns `units` from bare id strings into {id, source} entries; a schema-1 or -2 file is this shape with bare strings there, and minus options/attribution/modes at schema 1.",
 	"type": "object",
 	"required": ["_tool", "schema", "version", "units", "files"],
 	"additionalProperties": false,

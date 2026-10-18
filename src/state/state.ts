@@ -3,8 +3,10 @@ import { createHash } from 'node:crypto';
 import {
 	existsSync,
 	mkdirSync,
+	mkdtempSync,
 	readdirSync,
 	readFileSync,
+	renameSync,
 	rmdirSync,
 	rmSync,
 	statSync,
@@ -19,7 +21,10 @@ import { PKG_ROOT } from '../util/paths';
 // is the first bump that isn't additive: `units` changes from bare id strings to
 // {id, source} entries, and an older reader handed a namespaced id would drop it as
 // unknown rather than refuse. That's what readStateFile's version gate exists for.
-export const STATE_SCHEMA = 3;
+// Schema 4 keeps the envelope's shape and moves the sidecar's baseline copies to a
+// `.base` suffix (#182). A schema-3 reader's syncSidecar would prune every `.base`
+// file as a stray, so that reader has to refuse the project.
+export const STATE_SCHEMA = 4;
 
 // Lives at the project root, one level of visibility above node_modules. The
 // leading dot keeps it out of the way while staying obviously ours.
@@ -29,6 +34,58 @@ export const STATE_FILENAME = '.unbranded.json';
 // files (the merge base for `unbranded update`) plus a README that tells a human
 // what the directory is and why it should be committed.
 export const SIDECAR_DIR = '.unbranded';
+
+// Copies keep a `.base` suffix so tools that walk the tree never take one for live
+// config. Under its real name, `.unbranded/baseline/.oxfmtrc.json` is the nearest
+// oxfmt config for every file beside it, and its `.unbranded/**` ignore resolves
+// against the baseline directory, where it matches nothing (#182). A suffix that
+// keeps a known extension (`.base.json`) would put the copies back in front of
+// formatters, so the suffix goes after the whole name.
+export const BASELINE_SUFFIX = '.base';
+
+export function baselinePath(targetDir: string, rel: string): string {
+	return join(targetDir, SIDECAR_DIR, 'baseline', baselineRel(rel));
+}
+
+// Suffix every segment. Suffixing only the file name maps tracked `foo` to the file
+// `baseline/foo.base` and tracked `foo.base/bar` to a path inside a directory of the
+// same name, so syncSidecar throws partway through a scaffold. With every segment
+// suffixed, one baseline sits under another only when one rel sits under the other,
+// and two tracked files can't nest that way. Callers hand in posix rels from state and
+// native rels from `relative()`, and on Windows the two must land on one file, so the
+// native separator folds to `/` here. Only the native one: on posix a `\` is part of
+// a file name, and splitting on it would let two different rels share a baseline.
+function baselineRel(rel: string): string {
+	return toPosix(rel)
+		.split('/')
+		.map((segment) => `${segment}${BASELINE_SUFFIX}`)
+		.join('/');
+}
+
+// A pre-#182 sidecar (schema 3 and below) keeps each copy under its real name.
+export function legacyBaselinePath(targetDir: string, rel: string): string {
+	return join(targetDir, SIDECAR_DIR, 'baseline', rel);
+}
+
+// Below this schema every file under `baseline/` is a legacy copy, whatever its name.
+// A legacy copy of tracked `foo.base` sits at `foo`'s suffixed path, so a reader can't
+// tell the layouts apart by looking at the files; only the recorded schema can.
+const SUFFIXED_BASELINE_SCHEMA = 4;
+
+export function usesLegacyBaselines(state: Pick<StateFile, 'schema'>): boolean {
+	return state.schema < SUFFIXED_BASELINE_SCHEMA;
+}
+
+// True when a state write would move at least one legacy copy.
+export function legacyBaselinesPending(
+	targetDir: string,
+	state: Pick<StateFile, 'schema' | 'files' | 'modes'>,
+): boolean {
+	return (
+		usesLegacyBaselines(state) &&
+		trackedCopyRels(state).some((rel) => isFile(legacyBaselinePath(targetDir, rel)))
+	);
+}
 
 // A self-describing breadcrumb. This file lands in every scaffolded repo, so an
 // agent or person who stumbles on it should learn what wrote it and which
@@ -181,7 +238,7 @@ export function writeStateFile(opts: {
 		doctor: prior?.doctor,
 	};
 
-	syncSidecar(opts.targetDir, landed, merged.files, merged.modes);
+	syncSidecar(opts.targetDir, prior, landed, merged.files, merged.modes);
 
 	const path = join(opts.targetDir, STATE_FILENAME);
 	writeFileSync(path, serializeState(buildStateFile(merged)));
@@ -223,7 +280,7 @@ export function applyRemovalToState(opts: {
 		doctor: prior.doctor,
 	};
 
-	syncSidecar(opts.targetDir, [], merged.files, merged.modes);
+	syncSidecar(opts.targetDir, prior, [], merged.files, merged.modes);
 	writeFileSync(join(opts.targetDir, STATE_FILENAME), serializeState(buildStateFile(merged)));
 }
 
@@ -247,11 +304,15 @@ export function refreshTrackedFiles(opts: {
 	const prior = priorStateForWrite(opts.targetDir);
 	if (!prior) return;
 
+	// Migrate before writing refreshed copies, so a refreshed `.base` file can't be
+	// mistaken for a legacy copy and moved.
+	migrateLegacyBaselines(opts.targetDir, prior);
+
 	const files = { ...prior.files };
 	for (const [rel, entry] of Object.entries(opts.entries)) {
 		files[rel] = entry.hash;
 		if (entry.baseline !== undefined) {
-			const dest = join(opts.targetDir, SIDECAR_DIR, 'baseline', rel);
+			const dest = baselinePath(opts.targetDir, rel);
 			mkdirSync(dirname(dest), { recursive: true });
 			writeFileSync(dest, entry.baseline);
 		}
@@ -333,9 +394,9 @@ function normalizeSource(raw: unknown): UnitSource {
 
 	const s = raw as { kind?: unknown; path?: unknown; name?: unknown; version?: unknown };
 	if (s.kind === 'dir' && typeof s.path === 'string') return { kind: 'dir', path: s.path };
-	// Packs ship in a later release and deliberately reuse schema 3, so a pack entry
-	// arrives without a version bump to announce it. Reading it here is what makes
-	// that promise good.
+	// Packs ship in a later release and deliberately bring no schema bump of their own
+	// (4 belongs to the sidecar layout), so a pack entry arrives unannounced. Reading
+	// it here is what makes that promise good.
 	if (s.kind === 'pack' && typeof s.name === 'string' && typeof s.version === 'string')
 		return { kind: 'pack', name: s.name, version: s.version };
 	return { kind: 'builtin' };
@@ -368,7 +429,7 @@ function byId(a: StateUnit, b: StateUnit): number {
 
 const SIDECAR_README = `# The unbranded Sidecar
 
-[unbranded](https://github.com/kendrick/unbranded-starter) scaffolded some of this project's tooling config, and this directory is its working data. \`baseline/\` keeps a byte-exact copy of each managed file as unbranded last wrote it.
+[unbranded](https://github.com/kendrick/unbranded-starter) scaffolded some of this project's tooling config, and this directory is its working data. \`baseline/\` keeps a byte-exact copy of each managed file as unbranded last wrote it, named with a \`.base\` suffix so formatters, linters, and other tools that walk the tree don't read the copies as live config.
 
 ## Why It Should Be Committed
 
@@ -386,22 +447,27 @@ Deleting it breaks nothing today, but \`unbranded update\` would lose its merge 
 // are pruned: a wrong merge base is worse than none.
 function syncSidecar(
 	targetDir: string,
+	prior: StateFile | undefined,
 	landed: TrackedWrite[],
 	files: Record<string, string>,
 	modes: Record<string, TrackedFileMode>,
 ): void {
 	const baselineDir = join(targetDir, SIDECAR_DIR, 'baseline');
 
+	// Before the landed writes, which could overwrite a legacy copy sitting at a
+	// suffixed path, and before the prune, which keeps only suffixed names.
+	migrateLegacyBaselines(targetDir, prior);
+
 	for (const w of landed) {
 		if (w.mode !== 'copy') continue;
-		const dest = join(baselineDir, relative(targetDir, w.dest));
+		const dest = baselinePath(targetDir, toPosix(relative(targetDir, w.dest)));
 		mkdirSync(dirname(dest), { recursive: true });
 		writeFileSync(dest, readFileSync(w.dest));
 	}
 
 	// Tracked copy-mode files keep their baseline (a prior run's copy is still the
 	// honest base even when this run didn't rewrite the file); everything else goes.
-	const keep = new Set(Object.keys(files).filter((rel) => modes[rel] === 'copy'));
+	const keep = new Set(trackedCopyRels({ files, modes }).map(baselineRel));
 	if (existsSync(baselineDir)) {
 		const entries = (readdirSync(baselineDir, { recursive: true }) as string[]).map((e) =>
 			join(baselineDir, e),
@@ -419,6 +485,40 @@ function syncSidecar(
 
 	mkdirSync(join(targetDir, SIDECAR_DIR), { recursive: true });
 	writeFileSync(join(targetDir, SIDECAR_DIR, 'README.md'), SIDECAR_README);
+}
+
+function trackedCopyRels(state: Pick<StateFile, 'files' | 'modes'>): string[] {
+	return Object.keys(state.files ?? {}).filter((rel) => state.modes?.[rel] === 'copy');
+}
+
+// Moves a pre-#182 sidecar's tracked copies to their suffixed names. Every caller
+// writes schema 4 right after, so the schema check stops a second migration. Files no
+// tracked copy owns stay put, so they never become a merge base. Everything goes
+// through a staging directory first, because one copy's suffixed path can be another
+// copy's legacy path: tracked `foo` moves to `baseline/foo.base`, where tracked
+// `foo.base` keeps its legacy copy. Moving in place would overwrite that copy.
+function migrateLegacyBaselines(targetDir: string, prior: StateFile | undefined): void {
+	if (!prior || !usesLegacyBaselines(prior)) return;
+	const moves = trackedCopyRels(prior).filter((rel) => isFile(legacyBaselinePath(targetDir, rel)));
+	if (moves.length === 0) return;
+
+	const baselineDir = join(targetDir, SIDECAR_DIR, 'baseline');
+	const staging = mkdtempSync(join(targetDir, SIDECAR_DIR, '.baseline-migrate-'));
+	moves.forEach((rel, i) => {
+		const legacy = legacyBaselinePath(targetDir, rel);
+		renameSync(legacy, join(staging, String(i)));
+		pruneEmptyParents(dirname(legacy), baselineDir);
+	});
+	moves.forEach((rel, i) => {
+		const dest = baselinePath(targetDir, rel);
+		mkdirSync(dirname(dest), { recursive: true });
+		renameSync(join(staging, String(i)), dest);
+	});
+	rmdirSync(staging);
+}
+
+function isFile(path: string): boolean {
+	return existsSync(path) && statSync(path).isFile();
 }
 
 function readCliVersion(): string {
@@ -452,6 +552,17 @@ function sortKeys(value: unknown): unknown {
 		return out;
 	}
 	return value;
+}
+
+// A nested legacy copy leaves its old directory behind once moved. `update` has no
+// prune pass to sweep it, so clear the empties here, stopping at the baseline root.
+function pruneEmptyParents(dir: string, stopAt: string): void {
+	let current = dir;
+	while (current !== stopAt && current.startsWith(stopAt + sep)) {
+		if (!existsSync(current) || readdirSync(current).length > 0) return;
+		rmdirSync(current);
+		current = dirname(current);
+	}
 }
 
 // Manifest and dest paths are authored/compared posix-style; normalize the

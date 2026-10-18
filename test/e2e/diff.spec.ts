@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { STATE_SCHEMA } from '../../src/state/state';
 import { PKG_ROOT } from '../../src/util/paths';
 
 const CLI = join(PKG_ROOT, 'dist/cli.js');
@@ -50,7 +51,7 @@ describe('unbranded diff', () => {
 			files: Record<string, string>;
 		};
 
-		expect(state.schema).toBe(3);
+		expect(state.schema).toBe(STATE_SCHEMA);
 		expect(state.units).toContainEqual({ id: 'core-editorconfig', source: { kind: 'builtin' } });
 		// One hash per written file, keys sorted for a clean VCS diff.
 		expect(Object.keys(state.files)).toEqual(['.editorconfig']);

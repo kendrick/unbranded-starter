@@ -11,6 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { STATE_SCHEMA } from '../../src/state/state';
 import { PKG_ROOT } from '../../src/util/paths';
 
 const CLI = join(PKG_ROOT, 'dist/cli.js');
@@ -124,7 +125,7 @@ describe('unbranded --units-dir', () => {
 		expect(result.status, result.stderr).toBe(0);
 
 		const state = readState(tmp);
-		expect(state.schema).toBe(3);
+		expect(state.schema).toBe(STATE_SCHEMA);
 
 		const byId = new Map(state.units.map((u) => [u.id, u]));
 		// Relative, with the leading ./. The state file is committed and read on

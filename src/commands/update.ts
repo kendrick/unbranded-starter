@@ -16,11 +16,14 @@ import { applyLintStaged } from '../manifest/lint-staged';
 import { legacyTsFlavor, resolveLine } from '../manifest/option-lines';
 import { applyUnitOptions } from '../manifest/options';
 import {
+	baselinePath,
 	hashBuffer,
+	legacyBaselinePath,
+	legacyBaselinesPending,
 	readStateFile,
 	refreshTrackedFiles,
-	SIDECAR_DIR,
 	unsupportedStateMessage,
+	usesLegacyBaselines,
 } from '../state/state';
 import { cancelAndExit } from '../util/cancel';
 import { colorEnabled } from '../util/color';
@@ -174,8 +177,13 @@ export function planUpdate(opts: {
 		const mineBuf = readFileSync(abs);
 		const mine = mineBuf.toString('utf-8');
 		const theirs = entry.content;
-		const baselinePath = join(targetDir, SIDECAR_DIR, 'baseline', rel);
-		let base = existsSync(baselinePath) ? readFileSync(baselinePath, 'utf-8') : undefined;
+		// The recorded schema picks the layout, never the files present: a schema-3
+		// sidecar's legacy copy of `foo.base` sits exactly where `foo`'s `.base` copy
+		// would. The plan is read before runUpdate migrates, and a dry run never does.
+		const baseFile = usesLegacyBaselines(state)
+			? legacyBaselinePath(targetDir, rel)
+			: baselinePath(targetDir, rel);
+		let base = existsSync(baseFile) ? readFileSync(baseFile, 'utf-8') : undefined;
 		// No baseline, but the recorded hash proves the disk bytes are exactly
 		// what we wrote — so the disk IS the base, and the merge stays exact.
 		if (base === undefined && hashBuffer(mineBuf) === state.files[rel]) base = mine;
@@ -350,6 +358,14 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 		(f) => f.status === 'conflict' || f.status === 'needs-choice',
 	);
 	if (auto.length === 0 && contested.length === 0 && !plan.pkg.changed) {
+		// A schema-3 project whose files are all current would otherwise return here
+		// without writing state, leaving its legacy-named baselines on names oxfmt and
+		// oxlint read as config (#182). Migrate through the state door so the move and
+		// the schema-4 stamp land together: left at schema 3 over a `.base` layout, the
+		// project would open in an older unbranded, which prunes every `.base` copy as
+		// a stray. With nothing to move, nothing is written. Every other path migrates
+		// in its own refreshTrackedFiles call below, after the user confirms.
+		if (legacyBaselinesPending(cwd, state)) refreshTrackedFiles({ targetDir: cwd, entries: {} });
 		outro('Everything up to date.');
 		return 0;
 	}
