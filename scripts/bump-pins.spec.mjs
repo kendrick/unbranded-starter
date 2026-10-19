@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { groupByUnit, planBumps, rewritePackageJson, rewritePins } from './bump-pins.mjs';
+import {
+	groupByUnit,
+	MANIFEST_FILES,
+	planBumps,
+	rewritePackageJson,
+	rewritePins,
+} from './bump-pins.mjs';
 
 describe('planBumps', () => {
 	it('keeps only pins the registry is ahead of, mapping pin→from and latest→to', () => {
@@ -239,5 +245,22 @@ describe('rewritePins with two typescript pins', () => {
 			"const a = { typescript: '7.0.2' };\nconst b = { typescript: '6.0.5' };\n",
 		);
 		expect(r.applied).toEqual(['typescript']);
+	});
+});
+
+describe('oxlint-config.ts pins', () => {
+	it('rewrites a quoted oxlint-tsgolint key and reports it applied', () => {
+		const source = `export const OXC_DEV_DEPENDENCIES = {\n\t'oxlint': '1.86.0',\n\t'oxlint-tsgolint': '7.0.2004',\n};\n`;
+		const result = rewritePins(source, [
+			{ name: 'oxlint-tsgolint', from: '7.0.2004', to: '7.0.2010' },
+		]);
+		expect(result.source).toContain("'oxlint-tsgolint': '7.0.2010'");
+		expect(result.source).toContain("'oxlint': '1.86.0'");
+		expect(result.applied).toEqual(['oxlint-tsgolint']);
+		expect(result.missed).toEqual([]);
+	});
+
+	it('scans oxlint-config.ts, where the oxc pins live', () => {
+		expect(MANIFEST_FILES).toContain('src/manifest/oxlint-config.ts');
 	});
 });

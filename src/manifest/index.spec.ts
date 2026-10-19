@@ -53,7 +53,11 @@ describe('manifest', () => {
 		const oxlint = UNITS.find((u) => u.id === 'core-oxlint');
 		expect(oxlint?.category).toBe('lint');
 		expect(oxlint?.files).toEqual([]);
-		expect(oxlint?.devDependencies).toEqual({ oxlint: '1.86.0', oxfmt: '0.71.0' });
+		expect(oxlint?.devDependencies).toEqual({
+			'oxlint': '1.86.0',
+			'oxfmt': '0.71.0',
+			'oxlint-tsgolint': '7.0.2004',
+		});
 		expect(oxlint?.implies).toEqual(['core-typescript']);
 		expect(oxlint?.excludes).toEqual(['core-eslint']);
 		expect(oxlint?.recommendedExtensions).toEqual(['oxc.oxc-vscode']);

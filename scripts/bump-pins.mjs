@@ -16,13 +16,19 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 
-// Every manifest file that carries version pins. eslint's live in the flavor
-// tables of eslint-config.ts, not the unit registry, so both files get the
-// rewrite. package.json is handled separately (rewritePackageJson)—it's not
-// a manifest source and its misses aren't a build-breaking signal the way a
-// missing manifest pin is, so it stays out of this list and out of the
-// missed-union hard-fail below.
-const MANIFEST_FILES = ['src/manifest/index.ts', 'src/manifest/eslint-config.ts'];
+// Every manifest file that carries version pins. None of them is in the unit
+// registry, so all three get the rewrite. eslint's pins live in the flavor
+// tables of eslint-config.ts. The oxc toolchain's (oxlint, oxfmt,
+// oxlint-tsgolint) live in OXC_DEV_DEPENDENCIES in oxlint-config.ts.
+// package.json is handled separately (rewritePackageJson)—it's not a manifest
+// source and its misses aren't a build-breaking signal the way a missing
+// manifest pin is, so it stays out of this list and out of the missed-union
+// hard-fail below.
+export const MANIFEST_FILES = [
+	'src/manifest/index.ts',
+	'src/manifest/eslint-config.ts',
+	'src/manifest/oxlint-config.ts',
+];
 
 const majorOf = (spec) => /^[\^~]?(\d+)\./.exec(spec)?.[1];
 

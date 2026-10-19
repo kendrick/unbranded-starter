@@ -75,51 +75,70 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main')(
 			expect(lint.status, `${lint.stdout}\n${lint.stderr}`).toBe(0);
 		});
 
-		// #193: the TS line is its own choice, so oxlint must also lint and typecheck clean
-		// on 6. A recipe's `units` take bare ids only; the line rides in `options`.
-		it('lints and typechecks a core-typescript:6 + core-oxlint scaffold', () => {
-			writeFileSync(
-				join(tmp, 'recipe.json'),
-				JSON.stringify(
-					{
-						units: ['core-typescript', 'core-oxlint'],
-						options: { typescriptLine: '6' },
-						pm: 'pnpm',
-						onConflict: 'overwrite',
-						postInstall: 'none',
-						projectName: '.',
-					},
-					null,
-					2,
-				),
-			);
+		// #193: the TS line is its own choice, so oxlint must lint and typecheck clean on 6 and
+		// 7, and #195's type-aware rules must fire on both. A recipe's `units` take bare ids
+		// only; the line rides in `options`.
+		for (const line of ['6', '7'] as const) {
+			it(`lints, typechecks, and catches a floating promise on a core-typescript:${line} + core-oxlint scaffold`, () => {
+				writeFileSync(
+					join(tmp, 'recipe.json'),
+					JSON.stringify(
+						{
+							units: ['core-typescript', 'core-oxlint'],
+							options: { typescriptLine: line },
+							pm: 'pnpm',
+							onConflict: 'overwrite',
+							postInstall: 'none',
+							projectName: '.',
+						},
+						null,
+						2,
+					),
+				);
 
-			const run = spawnSync('node', [CLI, '--config', 'recipe.json'], {
-				cwd: tmp,
-				encoding: 'utf-8',
-			});
-			expect(run.status, `scaffold stderr: ${run.stderr}`).toBe(0);
-			rmSync(join(tmp, 'recipe.json'));
-
-			const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as {
-				devDependencies: Record<string, string>;
-			};
-			expect(pkg.devDependencies.typescript).toMatch(/^\^?6\./);
-
-			// The scaffold's `lint` script is plain `oxlint` and installs no oxlint-tsgolint, so
-			// type-aware rules don't run here; this proves the TS 6 line lints and typechecks.
-			// Write one typed source so lint and typecheck have something to check.
-			mkdirSync(join(tmp, 'src'));
-			writeFileSync(join(tmp, 'src', 'index.ts'), 'export const n: number = [1, 2].length;\n');
-
-			for (const script of ['lint', 'typecheck']) {
-				const result = spawnSync('pnpm', [script], {
+				const run = spawnSync('node', [CLI, '--config', 'recipe.json'], {
 					cwd: tmp,
 					encoding: 'utf-8',
-					shell: process.platform === 'win32',
 				});
-				expect(result.status, `pnpm ${script}:\n${result.stdout}\n${result.stderr}`).toBe(0);
-			}
-		});
+				expect(run.status, `scaffold stderr: ${run.stderr}`).toBe(0);
+				rmSync(join(tmp, 'recipe.json'));
+
+				const pkg = JSON.parse(readFileSync(join(tmp, 'package.json'), 'utf-8')) as {
+					devDependencies: Record<string, string>;
+				};
+				expect(pkg.devDependencies.typescript).toMatch(new RegExp(`^\\^?${line}\\.`));
+
+				mkdirSync(join(tmp, 'src'));
+				writeFileSync(join(tmp, 'src', 'index.ts'), 'export const n: number = [1, 2].length;\n');
+
+				const pnpm = (script: string): { status: number | null; output: string } => {
+					const result = spawnSync('pnpm', [script], {
+						cwd: tmp,
+						encoding: 'utf-8',
+						shell: process.platform === 'win32',
+					});
+					return { status: result.status, output: `${result.stdout}\n${result.stderr}` };
+				};
+
+				for (const script of ['lint', 'typecheck']) {
+					const result = pnpm(script);
+					expect(result.status, `pnpm ${script}:\n${result.output}`).toBe(0);
+				}
+
+				// No `export {}` at the end: that trips unicorn(require-module-specifiers).
+				const floating = join(tmp, 'src', 'floating.ts');
+				writeFileSync(
+					floating,
+					'export async function work(): Promise<number> {\n\treturn 1;\n}\n\nwork();\n',
+				);
+				const dirty = pnpm('lint');
+				expect(dirty.status, dirty.output).not.toBe(0);
+				expect(dirty.output).toContain('typescript(no-floating-promises)');
+
+				rmSync(floating);
+				const clean = pnpm('lint');
+				expect(clean.status, clean.output).toBe(0);
+			});
+		}
 	},
 );
