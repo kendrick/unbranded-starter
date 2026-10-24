@@ -142,9 +142,22 @@ describe('buildTsconfigBase', () => {
 		expect(parse('dom').compilerOptions.lib).toEqual(['ES2022', 'DOM', 'DOM.Iterable']);
 	});
 
+	it('sets exactOptionalPropertyTypes for node and leaves it off for dom', () => {
+		expect(parse('node').compilerOptions.exactOptionalPropertyTypes).toBe(true);
+		expect(parse('dom').compilerOptions).not.toHaveProperty('exactOptionalPropertyTypes');
+	});
+
 	it('keeps every other compiler option and the exclude list identical across flavors', () => {
-		const { lib: _nodeLib, ...nodeRest } = parse('node').compilerOptions;
-		const { lib: _domLib, ...domRest } = parse('dom').compilerOptions;
+		const {
+			lib: _nodeLib,
+			exactOptionalPropertyTypes: _nodeExact,
+			...nodeRest
+		} = parse('node').compilerOptions;
+		const {
+			lib: _domLib,
+			exactOptionalPropertyTypes: _domExact,
+			...domRest
+		} = parse('dom').compilerOptions;
 		expect(domRest).toEqual(nodeRest);
 		expect(parse('dom').exclude).toEqual(parse('node').exclude);
 	});
