@@ -24,11 +24,11 @@ describe('classify', () => {
 	});
 
 	it('treats a deleted file (no on-disk hash) as user-modified', () => {
-		expect(classify({ recorded: 'h', onDisk: undefined, template: 'h' })).toBe('user-modified');
+		expect(classify({ recorded: 'h', template: 'h' })).toBe('user-modified');
 	});
 
 	it('never flags template-updated when the template hash is unknown', () => {
-		expect(classify({ recorded: 'h', onDisk: 'h', template: undefined })).toBe('unchanged');
+		expect(classify({ recorded: 'h', onDisk: 'h' })).toBe('unchanged');
 	});
 });
 

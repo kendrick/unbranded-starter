@@ -78,7 +78,7 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 			const plan = planFileOp(op, {
 				pkgRoot,
 				targetDir: opts.targetDir,
-				projectName: opts.projectName,
+				...(opts.projectName !== undefined ? { projectName: opts.projectName } : {}),
 			});
 			planByRel.set(toPosix(plan.rel), plan);
 		}
@@ -90,7 +90,15 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 		const destPath = plan?.dest ?? join(opts.targetDir, ...rel.split(posix.sep));
 		const onDisk = existsSync(destPath) ? hashBuffer(readFileSync(destPath)) : undefined;
 		const template = plan && existsSync(plan.src) ? hashBuffer(readFileSync(plan.src)) : undefined;
-		files.push({ path: rel, status: classify({ recorded, onDisk, template }), plan });
+		files.push({
+			path: rel,
+			status: classify({
+				recorded,
+				...(onDisk !== undefined ? { onDisk } : {}),
+				...(template !== undefined ? { template } : {}),
+			}),
+			...(plan !== undefined ? { plan } : {}),
+		});
 	}
 
 	return { drift: files.some((f) => f.status !== 'unchanged'), files };

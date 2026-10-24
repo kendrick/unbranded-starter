@@ -297,9 +297,9 @@ export function validate(
 		onConflict: obj.onConflict as 'overwrite' | 'skip',
 		postInstall: obj.postInstall as 'all' | 'none',
 		versions: (obj.versions as 'pinned' | 'latest') ?? 'pinned',
-		projectName: obj.projectName,
+		...(obj.projectName === undefined ? {} : { projectName: obj.projectName }),
 		git: (obj.git as 'init' | 'init-commit' | 'none') ?? 'none',
-		force: obj.force,
+		...(obj.force === undefined ? {} : { force: obj.force }),
 		...(typeof obj.unitsDir === 'string'
 			? { unitsDir: resolve(opts.configDir ?? '.', obj.unitsDir) }
 			: {}),

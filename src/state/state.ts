@@ -235,7 +235,7 @@ export function writeStateFile(opts: {
 		options: { ...prior?.options, ...opts.options },
 		attribution: { ...prior?.attribution, ...attribution },
 		modes: { ...prior?.modes, ...modes },
-		doctor: prior?.doctor,
+		...(prior?.doctor ? { doctor: prior.doctor } : {}),
 	};
 
 	syncSidecar(opts.targetDir, prior, landed, merged.files, merged.modes);
@@ -277,7 +277,7 @@ export function applyRemovalToState(opts: {
 		options: dropKeys(prior.options ?? {}, new Set(opts.removeOptionKeys ?? [])),
 		attribution: dropKeys(prior.attribution ?? {}, gone),
 		modes: dropKeys(prior.modes ?? {}, gone),
-		doctor: prior.doctor,
+		...(prior.doctor ? { doctor: prior.doctor } : {}),
 	};
 
 	syncSidecar(opts.targetDir, prior, [], merged.files, merged.modes);
@@ -322,10 +322,10 @@ export function refreshTrackedFiles(opts: {
 		version: readCliVersion(),
 		units: prior.units,
 		files,
-		options: prior.options,
-		attribution: prior.attribution,
-		modes: prior.modes,
-		doctor: prior.doctor,
+		...(prior.options ? { options: prior.options } : {}),
+		...(prior.attribution ? { attribution: prior.attribution } : {}),
+		...(prior.modes ? { modes: prior.modes } : {}),
+		...(prior.doctor ? { doctor: prior.doctor } : {}),
 	});
 	writeFileSync(join(opts.targetDir, STATE_FILENAME), serializeState(state));
 }

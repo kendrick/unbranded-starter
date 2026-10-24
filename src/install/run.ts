@@ -94,12 +94,16 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 	// Files this run writes outside the copy loop, collected for the state file.
 	const computedWrites: ComputedWrite[] = [];
 
+	// Keys are omitted rather than set to undefined: MergeInput's fields are
+	// `?: T`, which under exactOptionalPropertyTypes means absent, not undefined.
 	const patches: MergeInput[] = opts.units.map((u) => ({
-		dependencies: u.dependencies,
-		devDependencies: u.devDependencies,
-		scripts: u.packageJsonPatch?.scripts,
-		engines: u.packageJsonPatch?.engines,
-		packageManager: u.packageJsonPatch?.packageManager,
+		...(u.dependencies ? { dependencies: u.dependencies } : {}),
+		...(u.devDependencies ? { devDependencies: u.devDependencies } : {}),
+		...(u.packageJsonPatch?.scripts ? { scripts: u.packageJsonPatch.scripts } : {}),
+		...(u.packageJsonPatch?.engines ? { engines: u.packageJsonPatch.engines } : {}),
+		...(u.packageJsonPatch?.packageManager
+			? { packageManager: u.packageJsonPatch.packageManager }
+			: {}),
 	}));
 
 	// The pm's real version drives two computed outputs below: core-node-version's
@@ -117,7 +121,10 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 			pm: opts.pm,
 			pmVersion,
 		});
-		patches.push({ engines: pins.engines, packageManager: pins.packageManager });
+		patches.push({
+			engines: pins.engines,
+			...(pins.packageManager ? { packageManager: pins.packageManager } : {}),
+		});
 		const nvmrcPath = join(opts.targetDir, '.nvmrc');
 		// Existing user pins win, so we only write .nvmrc when the user doesn't
 		// already have one, and only track it when we actually wrote it. Recording a
@@ -149,7 +156,7 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 		pm: opts.pm,
 		pmVersion,
 		units: opts.units,
-		journal: opts.journal,
+		...(opts.journal ? { journal: opts.journal } : {}),
 	});
 	if (pnpmWorkspace) computedWrites.push(pnpmWorkspace);
 
@@ -235,7 +242,7 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 		installed: false,
 		cancelled: false,
 		failed: true,
-		error: result.error,
+		...(result.error === undefined ? {} : { error: result.error }),
 		installExitCode: result.code,
 		computedWrites,
 		depResolutions,

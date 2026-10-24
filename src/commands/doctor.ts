@@ -166,7 +166,7 @@ export function auditRepo(opts: { cwd: string }): AuditResult {
 				unit,
 				'Add a CI workflow, e.g. .github/workflows/ci.yml, to run lint and tests on push.',
 			),
-			unit,
+			...(unit !== undefined ? { unit } : {}),
 		});
 	}
 
@@ -213,7 +213,7 @@ export function auditRepo(opts: { cwd: string }): AuditResult {
 				id: 'no-node-version',
 				message: 'No Node version pin (engines.node, .nvmrc, or packageManager all absent).',
 				fix: fixForUnit(unit, 'Add a .nvmrc and engines.node to pin the Node version.'),
-				unit,
+				...(unit !== undefined ? { unit } : {}),
 			});
 		}
 		if (!hasScript(pkg, 'test')) {
@@ -252,14 +252,12 @@ export function auditRepo(opts: { cwd: string }): AuditResult {
 			);
 		}
 		if (hasTsconfig && !hasTsDep) {
+			const tsconfigUnit = unitForDest(catalog, 'tsconfig.json');
 			findings.push({
 				id: 'tsconfig-no-ts-dep',
 				message: "tsconfig.json is present but typescript isn't a dependency.",
-				fix: fixForUnit(
-					unitForDest(catalog, 'tsconfig.json'),
-					'Add typescript as a devDependency.',
-				),
-				unit: unitForDest(catalog, 'tsconfig.json'),
+				fix: fixForUnit(tsconfigUnit, 'Add typescript as a devDependency.'),
+				...(tsconfigUnit !== undefined ? { unit: tsconfigUnit } : {}),
 			});
 		}
 
@@ -365,17 +363,25 @@ export async function runDoctorFix(opts: RunDoctorFixOpts = {}): Promise<number>
 		return 0;
 	}
 
-	const shared = { targetDir: cwd, dryRun: opts.dryRun, diff: opts.diff, force: opts.force };
+	const shared = {
+		targetDir: cwd,
+		...(opts.dryRun !== undefined ? { dryRun: opts.dryRun } : {}),
+		...(opts.diff !== undefined ? { diff: opts.diff } : {}),
+		...(opts.force !== undefined ? { force: opts.force } : {}),
+		...(opts.unitsDir !== undefined ? { unitsDir: opts.unitsDir } : {}),
+	};
 	const result = opts.yes
 		? await runInit({
 				...shared,
-				unitsDir: opts.unitsDir,
-				inline: { units: units.join(','), pm: opts.pm, yes: true },
+				inline: {
+					units: units.join(','),
+					...(opts.pm !== undefined ? { pm: opts.pm } : {}),
+					yes: true,
+				},
 			})
 		: await runInit({
 				...shared,
-				unitsDir: opts.unitsDir,
-				inline: { pm: opts.pm },
+				inline: { ...(opts.pm !== undefined ? { pm: opts.pm } : {}) },
 				preselect: units,
 			});
 	return result.ok ? 0 : 1;
@@ -422,7 +428,12 @@ function missingFile(
 	id = `missing-${basename(dest)}`,
 ): Finding {
 	const unit = unitForDest(catalog, dest);
-	return { id, message, fix: fixForUnit(unit, `Add ${dest}.`), unit };
+	return {
+		id,
+		message,
+		fix: fixForUnit(unit, `Add ${dest}.`),
+		...(unit !== undefined ? { unit } : {}),
+	};
 }
 
 function missingScript(
@@ -433,7 +444,12 @@ function missingScript(
 	message: string,
 ): Finding {
 	const unit = unitForScript(catalog, tracked, script);
-	return { id, message, fix: fixForUnit(unit, `Add a "${script}" script to package.json.`), unit };
+	return {
+		id,
+		message,
+		fix: fixForUnit(unit, `Add a "${script}" script to package.json.`),
+		...(unit !== undefined ? { unit } : {}),
+	};
 }
 
 function fixForUnit(unit: string | undefined, fallback: string): string {

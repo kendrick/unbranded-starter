@@ -248,7 +248,12 @@ describe('auditRepo', () => {
 });
 
 describe('partitionFixable', () => {
-	const finding = (id: string, unit?: UnitId): Finding => ({ id, message: id, fix: 'x', unit });
+	const finding = (id: string, unit?: UnitId): Finding => ({
+		id,
+		message: id,
+		fix: 'x',
+		...(unit !== undefined ? { unit } : {}),
+	});
 
 	it('splits unit-backed findings from manual ones, keeping audit order', () => {
 		const r = partitionFixable([

@@ -167,10 +167,12 @@ export function applyLatest(unit: AnyUnit, held: ReadonlyMap<string, string>): A
 	): Record<string, string> | undefined =>
 		deps &&
 		Object.fromEntries(Object.keys(deps).map((name) => [name, holds.get(name) ?? 'latest']));
+	const dependencies = rewrite(unit.dependencies, new Map());
+	const devDependencies = rewrite(unit.devDependencies, held);
 	return {
 		...unit,
-		dependencies: rewrite(unit.dependencies, new Map()),
-		devDependencies: rewrite(unit.devDependencies, held),
+		...(dependencies ? { dependencies } : {}),
+		...(devDependencies ? { devDependencies } : {}),
 	};
 }
 
