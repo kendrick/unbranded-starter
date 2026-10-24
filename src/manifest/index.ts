@@ -277,8 +277,8 @@ export const UNITS: Unit[] = [
 		description: 'Baseline jsdom test setup with the common excludes.',
 		files: [{ src: 'vitest.config.ts', dest: 'vitest.config.ts' }],
 		devDependencies: {
-			vitest: '5.0.4',
-			jsdom: '30.1.2',
+			vitest: '5.0.5',
+			jsdom: '30.1.3',
 		},
 		packageJsonPatch: {
 			scripts: {
