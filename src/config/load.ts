@@ -303,7 +303,7 @@ export function validate(
 		...(typeof obj.unitsDir === 'string'
 			? { unitsDir: resolve(opts.configDir ?? '.', obj.unitsDir) }
 			: {}),
-		...(options ? { options } : {}),
+		...(options !== undefined ? { options } : {}),
 	};
 }
 
