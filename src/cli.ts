@@ -24,11 +24,8 @@ if (versionError) {
 	process.exit(EXIT_ERROR);
 }
 
-// parseArgs reports an unset flag as `undefined`, and with
-// exactOptionalPropertyTypes an options bag declaring `x?: T` rejects an
-// explicit `x: undefined`. Dropping the unset keys here keeps every command's
-// signature honest instead of widening each one to `| undefined`.
-function setOnly<T extends object>(bag: T): { [K in keyof T]?: Exclude<T[K], undefined> } {
+// parseArgs reports an unset flag as `undefined`, and with exactOptionalPropertyTypes an options bag declaring `x?: T` rejects an explicit `x: undefined`. Dropping the unset keys here keeps every command's signature honest instead of widening each one to `| undefined`.
+function omitUnset<T extends object>(bag: T): { [K in keyof T]?: Exclude<T[K], undefined> } {
 	return Object.fromEntries(Object.entries(bag).filter(([, value]) => value !== undefined)) as {
 		[K in keyof T]?: Exclude<T[K], undefined>;
 	};
@@ -172,7 +169,7 @@ const command = positionals[0];
 // `list` needs no target project and no TTY, so it runs and exits before any
 // of the init flow's detection kicks in.
 if (command === 'list') {
-	runList(setOnly({ json: values.json, unitsDir }));
+	runList(omitUnset({ json: values.json, unitsDir }));
 	process.exit(EXIT_OK);
 }
 
@@ -187,13 +184,13 @@ if (command === 'validate') {
 		);
 		process.exit(EXIT_ERROR);
 	}
-	process.exit(runValidate(target, setOnly({ json: values.json })));
+	process.exit(runValidate(target, omitUnset({ json: values.json })));
 }
 
 // Read-only drift check against .unbranded.json. No target, no TTY; exit code
 // carries the verdict (non-zero on drift) so CI can gate on it directly.
 if (command === 'diff') {
-	process.exit(runDiff(setOnly({ json: values.json, diff: values.diff, unitsDir })));
+	process.exit(runDiff(omitUnset({ json: values.json, diff: values.diff, unitsDir })));
 }
 
 // Read-only repo audit: guaranteed zero writes, cwd only. Default exit is 0 so a
@@ -210,7 +207,7 @@ if (command === 'doctor') {
 		}
 		process.exit(
 			await runDoctorFix(
-				setOnly({
+				omitUnset({
 					yes: values.yes,
 					dryRun: values['dry-run'],
 					diff: values.diff,
@@ -224,7 +221,7 @@ if (command === 'doctor') {
 			}),
 		);
 	}
-	process.exit(runDoctor(setOnly({ json: values.json, strict: values.strict })));
+	process.exit(runDoctor(omitUnset({ json: values.json, strict: values.strict })));
 }
 
 // Backing a unit out is an apply-shaped verb (it writes), so it reuses the same
@@ -238,7 +235,7 @@ if (command === 'remove') {
 	process.exit(
 		await runRemove(
 			unitId,
-			setOnly({
+			omitUnset({
 				yes: values.yes,
 				dryRun: values['dry-run'],
 				force: values.force,
@@ -258,7 +255,7 @@ if (command === 'remove') {
 if (command === 'outdated') {
 	process.exit(
 		await runOutdated(
-			setOnly({
+			omitUnset({
 				json: values.json,
 				strict: values.strict,
 				registry: values.registry,
@@ -285,7 +282,7 @@ if (command === 'update') {
 	}
 	process.exit(
 		await runUpdate(
-			setOnly({
+			omitUnset({
 				yes: values.yes,
 				dryRun: values['dry-run'],
 				diff: values.diff,
@@ -312,13 +309,13 @@ if (command !== undefined) {
 if (values['dry-run'] && values.json) {
 	process.exit(
 		await runPlanJson(
-			setOnly({
+			omitUnset({
 				configPath: values.config,
 				preset: values.preset,
 				unitsDir,
 				latest: values.latest,
 				targetDir: values.target ? resolve(values.target) : undefined,
-				inline: setOnly({
+				inline: omitUnset({
 					units: values.units,
 					pm: values.pm,
 					onConflict: values['on-conflict'],
@@ -334,7 +331,7 @@ if (values['dry-run'] && values.json) {
 }
 
 runInit(
-	setOnly({
+	omitUnset({
 		configPath: values.config,
 		preset: values.preset,
 		unitsDir,
@@ -345,7 +342,7 @@ runInit(
 		force: values.force,
 		dryRun: values['dry-run'],
 		diff: values.diff,
-		inline: setOnly({
+		inline: omitUnset({
 			units: values.units,
 			pm: values.pm,
 			onConflict: values['on-conflict'],

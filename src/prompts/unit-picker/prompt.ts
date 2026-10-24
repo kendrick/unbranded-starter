@@ -99,9 +99,9 @@ class UnitPickerPrompt extends Prompt<string[]> {
 				render() {
 					return (this as unknown as UnitPickerPrompt).frame();
 				},
-				...(opts.input ? { input: opts.input } : {}),
-				...(opts.output ? { output: opts.output } : {}),
-				...(opts.signal ? { signal: opts.signal } : {}),
+				...(opts.input !== undefined ? { input: opts.input } : {}),
+				...(opts.output !== undefined ? { output: opts.output } : {}),
+				...(opts.signal !== undefined ? { signal: opts.signal } : {}),
 			},
 			false,
 		);

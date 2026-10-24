@@ -94,14 +94,13 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 	// Files this run writes outside the copy loop, collected for the state file.
 	const computedWrites: ComputedWrite[] = [];
 
-	// Keys are omitted rather than set to undefined: MergeInput's fields are
-	// `?: T`, which under exactOptionalPropertyTypes means absent, not undefined.
+	// Keys are omitted rather than set to undefined: MergeInput's fields are `?: T`, which under exactOptionalPropertyTypes means absent, not undefined.
 	const patches: MergeInput[] = opts.units.map((u) => ({
-		...(u.dependencies ? { dependencies: u.dependencies } : {}),
-		...(u.devDependencies ? { devDependencies: u.devDependencies } : {}),
-		...(u.packageJsonPatch?.scripts ? { scripts: u.packageJsonPatch.scripts } : {}),
-		...(u.packageJsonPatch?.engines ? { engines: u.packageJsonPatch.engines } : {}),
-		...(u.packageJsonPatch?.packageManager
+		...(u.dependencies !== undefined ? { dependencies: u.dependencies } : {}),
+		...(u.devDependencies !== undefined ? { devDependencies: u.devDependencies } : {}),
+		...(u.packageJsonPatch?.scripts !== undefined ? { scripts: u.packageJsonPatch.scripts } : {}),
+		...(u.packageJsonPatch?.engines !== undefined ? { engines: u.packageJsonPatch.engines } : {}),
+		...(u.packageJsonPatch?.packageManager !== undefined
 			? { packageManager: u.packageJsonPatch.packageManager }
 			: {}),
 	}));
@@ -123,7 +122,7 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 		});
 		patches.push({
 			engines: pins.engines,
-			...(pins.packageManager ? { packageManager: pins.packageManager } : {}),
+			...(pins.packageManager !== undefined ? { packageManager: pins.packageManager } : {}),
 		});
 		const nvmrcPath = join(opts.targetDir, '.nvmrc');
 		// Existing user pins win, so we only write .nvmrc when the user doesn't
@@ -156,7 +155,7 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 		pm: opts.pm,
 		pmVersion,
 		units: opts.units,
-		...(opts.journal ? { journal: opts.journal } : {}),
+		...(opts.journal !== undefined ? { journal: opts.journal } : {}),
 	});
 	if (pnpmWorkspace) computedWrites.push(pnpmWorkspace);
 

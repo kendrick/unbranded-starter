@@ -9,7 +9,7 @@ function unit(id: string, recommendedExtensions?: string[]): Unit {
 		label: '',
 		description: '',
 		files: [],
-		...(recommendedExtensions ? { recommendedExtensions } : {}),
+		...(recommendedExtensions !== undefined ? { recommendedExtensions } : {}),
 	};
 }
 

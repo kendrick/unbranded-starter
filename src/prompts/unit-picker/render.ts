@@ -65,8 +65,8 @@ function optionSpans(
 
 	const spans: Span[] = [
 		{ text: `${active ? theme.pointer : ' '} ` },
-		{ text: `${box} `, ...(boxStyle ? { style: boxStyle } : {}) },
-		{ text: option.label, ...(labelStyle ? { style: labelStyle } : {}) },
+		{ text: `${box} `, ...(boxStyle !== undefined ? { style: boxStyle } : {}) },
+		{ text: option.label, ...(labelStyle !== undefined ? { style: labelStyle } : {}) },
 	];
 	// Everything after the label is secondary, so it's dim and only shown when earned.
 	if (flavor) spans.push({ text: ` · ${flavor} ▸`, style: theme.dim });

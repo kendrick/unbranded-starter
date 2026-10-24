@@ -171,8 +171,8 @@ export function applyLatest(unit: AnyUnit, held: ReadonlyMap<string, string>): A
 	const devDependencies = rewrite(unit.devDependencies, held);
 	return {
 		...unit,
-		...(dependencies ? { dependencies } : {}),
-		...(devDependencies ? { devDependencies } : {}),
+		...(dependencies !== undefined ? { dependencies } : {}),
+		...(devDependencies !== undefined ? { devDependencies } : {}),
 	};
 }
 
