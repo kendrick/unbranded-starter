@@ -295,8 +295,8 @@ export const UNITS: Unit[] = [
 		description: 'Mobile-first device matrix with @axe-core/playwright wired up.',
 		files: [{ src: 'opt-in/playwright/playwright.config.ts', dest: 'playwright.config.ts' }],
 		devDependencies: {
-			'@playwright/test': '1.64.0',
-			'@axe-core/playwright': '4.13.0',
+			'@playwright/test': '1.64.1',
+			'@axe-core/playwright': '4.14.0',
 		},
 		packageJsonPatch: {
 			scripts: {

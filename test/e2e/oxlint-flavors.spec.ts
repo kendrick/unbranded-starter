@@ -19,6 +19,7 @@ function flavorRuns(flavor: Flavor): boolean {
 
 interface OxlintConfig {
 	plugins: string[];
+	options?: { typeAware?: boolean };
 }
 interface PackageJson {
 	devDependencies?: Record<string, string>;
@@ -69,6 +70,15 @@ const PROBES: Record<string, { file: string; source: string; reported: string }>
 	},
 };
 
+// Not keyed by plugin: it needs `options.typeAware` and oxlint-tsgolint, not a plugin
+// entry, so a config that drops either one silently stops reporting it. No `export {}`
+// at the end, which would trip unicorn(require-module-specifiers).
+const TYPE_AWARE_PROBE = {
+	file: 'src/floating.ts',
+	source: 'export async function work(): Promise<number> {\n\treturn 1;\n}\n\nwork();\n',
+	reported: 'typescript(no-floating-promises)',
+};
+
 // Content oxfmt would rewrite (bullets to `-`, emphasis to `_`) if it weren't ignored.
 const README = '# Notes\n\n* star bullet\n*emphasis*\n';
 
@@ -90,7 +100,10 @@ function pnpm(dir: string, script: string): { status: number | null; output: str
 	return { status: res.status, output: `${res.stdout}\n${res.stderr}` };
 }
 
-function scaffold(dir: string, flavor: Flavor): { plugins: string[]; dev: Record<string, string> } {
+function scaffold(
+	dir: string,
+	flavor: Flavor,
+): { plugins: string[]; typeAware: boolean | undefined; dev: Record<string, string> } {
 	writeFileSync(
 		join(dir, 'package.json'),
 		JSON.stringify({ name: `oxlint-${flavor}`, version: '0.0.0', private: true }, null, 2),
@@ -111,9 +124,10 @@ function scaffold(dir: string, flavor: Flavor): { plugins: string[]; dev: Record
 	);
 	const run = spawnSync('node', [CLI, '--config', 'recipe.json'], { cwd: dir, encoding: 'utf-8' });
 	expect(run.status, `scaffold stderr: ${run.stderr}`).toBe(0);
+	const config = JSON.parse(readFileSync(join(dir, '.oxlintrc.json'), 'utf-8')) as OxlintConfig;
 	return {
-		plugins: (JSON.parse(readFileSync(join(dir, '.oxlintrc.json'), 'utf-8')) as OxlintConfig)
-			.plugins,
+		plugins: config.plugins,
+		typeAware: config.options?.typeAware,
 		dev:
 			(JSON.parse(readFileSync(join(dir, 'package.json'), 'utf-8')) as PackageJson)
 				.devDependencies ?? {},
@@ -140,6 +154,8 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main')(
 					const s = scaffold(tmp, flavor);
 					expect(s.dev).toHaveProperty('oxlint');
 					expect(s.dev).toHaveProperty('oxfmt');
+					expect(s.dev).toHaveProperty('oxlint-tsgolint');
+					expect(s.typeAware).toBe(true);
 					expect(s.dev).not.toHaveProperty('eslint');
 
 					if (flavor === 'next') {
@@ -166,14 +182,33 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main')(
 						expect(probe, `no probe for plugin ${plugin}; add one to PROBES`).toBeDefined();
 						write(tmp, probe!.file, probe!.source);
 					}
+					write(tmp, TYPE_AWARE_PROBE.file, TYPE_AWARE_PROBE.source);
 					const dirty = pnpm(tmp, 'lint');
 					expect(dirty.status, dirty.output).not.toBe(0);
 					for (const plugin of s.plugins)
 						expect(dirty.output, `${plugin}'s probe didn't report`).toContain(
 							PROBES[plugin]!.reported,
 						);
+					expect(dirty.output, "type-aware probe didn't report").toContain(
+						TYPE_AWARE_PROBE.reported,
+					);
 				},
 			);
 		}
 	},
 );
+
+// Runs on the main leg too (no real install): the dependency has to be planned.
+describe('core-oxlint dry run (e2e)', () => {
+	it('plans oxlint-tsgolint in devDependencies', () => {
+		const run = spawnSync(
+			'node',
+			[CLI, '--dry-run', '--json', '--units', 'core-oxlint', '--pm', 'pnpm'],
+			{ encoding: 'utf-8' },
+		);
+		expect(run.status, run.stderr).toBe(0);
+		expect(run.stdout).toContain('oxlint-tsgolint');
+		const plan = JSON.parse(run.stdout) as { devDependencies?: Record<string, string> };
+		expect(plan.devDependencies).toHaveProperty('oxlint-tsgolint');
+	});
+});

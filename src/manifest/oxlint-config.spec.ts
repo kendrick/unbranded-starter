@@ -12,6 +12,7 @@ interface Parsed {
 	categories: Record<string, string>;
 	ignorePatterns: string[];
 	rules: Record<string, unknown>;
+	options: Record<string, unknown>;
 	useTabs: boolean;
 }
 
@@ -72,8 +73,17 @@ describe('oxlint flavors', () => {
 		expect(config.useTabs).toBe(true);
 	});
 
-	it('pins the two binaries exactly', () => {
-		expect(OXC_DEV_DEPENDENCIES).toEqual({ oxlint: '1.86.0', oxfmt: '0.71.0' });
+	it('turns on type-aware linting for every flavor (#195)', () => {
+		for (const flavor of OXLINT_FLAVORS)
+			expect(parse(buildOxlintConfig(flavor)).options).toEqual({ typeAware: true });
+	});
+
+	it('pins the three binaries exactly', () => {
+		expect(OXC_DEV_DEPENDENCIES).toEqual({
+			'oxlint': '1.86.0',
+			'oxfmt': '0.71.0',
+			'oxlint-tsgolint': '7.0.2004',
+		});
 	});
 
 	it('emits tab-indented JSON with a trailing newline, like the scaffolded .editorconfig asks', () => {

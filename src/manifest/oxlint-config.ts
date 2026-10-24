@@ -6,9 +6,13 @@ export type OxlintFlavor = 'base' | 'react' | 'next';
 
 export const OXLINT_FLAVORS: OxlintFlavor[] = ['base', 'react', 'next'];
 
+// oxlint lists oxlint-tsgolint as an optional peer, and an oxlint release can raise
+// the minimum version. Bump oxlint and oxlint-tsgolint together so tsgolint never
+// falls below it.
 export const OXC_DEV_DEPENDENCIES: Record<string, string> = {
-	oxlint: '1.86.0',
-	oxfmt: '0.71.0',
+	'oxlint': '1.86.0',
+	'oxfmt': '0.71.0',
+	'oxlint-tsgolint': '7.0.2004',
 };
 
 // oxlint drops a rule whose plugin isn't listed here without a word, so this list
@@ -49,6 +53,12 @@ export function buildOxlintConfig(flavor: OxlintFlavor): string {
 		$schema: './node_modules/oxlint/configuration_schema.json',
 		plugins: oxlintPlugins(flavor),
 		categories: { correctness: 'error', suspicious: 'error' },
+		// An override can't set typeAware, so the root config is the only place to switch
+		// it. A scaffolded project opts out by deleting this line from its own
+		// .oxlintrc.json. typeAware stays on for the TS 6 line too, even though tsgolint checks with
+		// its own bundled TS 7: the shipped tsconfigs set no option TS 7 removed, and the
+		// README documents what breaks for a project that adds one.
+		options: { typeAware: true },
 		env:
 			flavor === 'base'
 				? { builtin: true, node: true }
