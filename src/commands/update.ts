@@ -225,11 +225,13 @@ function planPkgUpdate(targetDir: string, units: AnyUnit[]): UpdatePkgPlan {
 	const merged = mergePackageJson(
 		existing,
 		units.map((u) => ({
-			dependencies: u.dependencies,
-			devDependencies: u.devDependencies,
-			scripts: u.packageJsonPatch?.scripts,
-			engines: u.packageJsonPatch?.engines,
-			packageManager: u.packageJsonPatch?.packageManager,
+			...(u.dependencies !== undefined ? { dependencies: u.dependencies } : {}),
+			...(u.devDependencies !== undefined ? { devDependencies: u.devDependencies } : {}),
+			...(u.packageJsonPatch?.scripts !== undefined ? { scripts: u.packageJsonPatch.scripts } : {}),
+			...(u.packageJsonPatch?.engines !== undefined ? { engines: u.packageJsonPatch.engines } : {}),
+			...(u.packageJsonPatch?.packageManager !== undefined
+				? { packageManager: u.packageJsonPatch.packageManager }
+				: {}),
 		})),
 	);
 

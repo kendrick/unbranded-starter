@@ -115,7 +115,7 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main')(
 			rmSync(tmp, { recursive: true, force: true });
 		});
 
-		function scaffoldPreset(preset: string): string {
+		function scaffoldPreset(preset: string, extraFiles: Record<string, string> = {}): string {
 			const run = spawnSync(
 				'node',
 				[CLI, '--preset', preset, '--pm', 'pnpm', '--yes', '--post-install', 'none'],
@@ -125,6 +125,9 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main')(
 
 			mkdirSync(join(tmp, 'src'), { recursive: true });
 			writeFileSync(join(tmp, 'src', 'index.ts'), 'export const t = document.title;\n');
+			for (const [path, content] of Object.entries(extraFiles)) {
+				writeFileSync(join(tmp, path), content);
+			}
 
 			// node on the tsc JS entry (not the .bin shim) stays portable to windows CI.
 			const tsc = spawnSync(
@@ -159,6 +162,24 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main')(
 			const out = scaffoldPreset('next-app');
 			expectTscRan(out);
 			expect(out, out).not.toMatch(/src[\\/]index\.ts/);
+		});
+
+		// #121: the node flavor alone sets exactOptionalPropertyTypes, so passing `undefined` to an optional property is an error in a cli scaffold and fine in a next-app one.
+		const OPTIONAL_PROBE = {
+			'src/optional.ts':
+				'export function f(o: { a?: string }) { return o; }\nf({ a: undefined });\n',
+		};
+
+		it('the cli preset (node flavor) fails tsc on undefined passed to an optional property', () => {
+			const out = scaffoldPreset('cli', OPTIONAL_PROBE);
+			expect(out, out).toContain('EXITNONZERO');
+			expect(out, out).toMatch(/src[\\/]optional\.ts.*exactOptionalPropertyTypes/);
+		});
+
+		it('the next-app preset (dom flavor) accepts undefined passed to an optional property', () => {
+			const out = scaffoldPreset('next-app', OPTIONAL_PROBE);
+			expectTscRan(out);
+			expect(out, out).not.toMatch(/src[\\/]optional\.ts/);
 		});
 	},
 );

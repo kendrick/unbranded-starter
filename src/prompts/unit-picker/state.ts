@@ -276,16 +276,22 @@ export function pickerRows(state: PickerState): PickerRow[] {
 		}
 
 		const flavor = flavorTag(opt, state.flavors);
+		const requiredBy = state.requiredBy[opt.value];
 		rows.push({
 			kind: 'option',
 			option: opt,
 			selected: state.selected.has(opt.value),
 			auto: state.auto.has(opt.value),
-			requiredBy: state.requiredBy[opt.value],
+			...(requiredBy === undefined ? {} : { requiredBy }),
 			active: opt.value === activeId,
-			flavor,
+			...(flavor === undefined ? {} : { flavor }),
 		});
-		if (state.expanded === opt.value) rows.push({ kind: 'detail', option: opt, flavor });
+		if (state.expanded === opt.value)
+			rows.push({
+				kind: 'detail',
+				option: opt,
+				...(flavor === undefined ? {} : { flavor }),
+			});
 	}
 
 	return rows;

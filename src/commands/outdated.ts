@@ -135,8 +135,8 @@ export async function runOutdated(opts: RunOutdatedOpts = {}): Promise<number> {
 		// Deduped: a held pin and its unheld twin share one packument.
 		found = await fetchVersions([...new Set(pins.map((p) => p.name))], {
 			registry,
-			fetchImpl: opts.fetchImpl,
-			timeoutMs: opts.timeoutMs,
+			...(opts.fetchImpl !== undefined ? { fetchImpl: opts.fetchImpl } : {}),
+			...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
 		});
 	} catch (err) {
 		process.stderr.write(

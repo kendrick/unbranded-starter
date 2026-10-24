@@ -625,7 +625,9 @@ describe('renderPlanDiff color gating', () => {
 	});
 
 	it('still returns null when there is nothing to diff, regardless of color', () => {
-		expect(renderPlanDiff({ ...plan, diff: undefined }, true)).toBeNull();
-		expect(renderPlanDiff({ ...plan, diff: undefined }, false)).toBeNull();
+		// Omit `diff` rather than set it undefined: the type says `diff?: ...`, which under exactOptionalPropertyTypes means absent.
+		const { diff: _diff, ...noDiff } = plan;
+		expect(renderPlanDiff(noDiff, true)).toBeNull();
+		expect(renderPlanDiff(noDiff, false)).toBeNull();
 	});
 });

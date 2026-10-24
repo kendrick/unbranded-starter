@@ -229,7 +229,7 @@ export async function runPlanJson(opts: {
 		fileConfig !== null || inline.units !== undefined
 			? resolveConfig(fileConfig, inline, known, optionSchema, {
 					unitsMode: opts.preset ? 'additive' : 'override',
-					unitsDir: opts.unitsDir,
+					...(opts.unitsDir !== undefined ? { unitsDir: opts.unitsDir } : {}),
 				})
 			: null;
 	if (!config) {
@@ -239,12 +239,16 @@ export async function runPlanJson(opts: {
 		return 1;
 	}
 
-	const target = await detectTarget({ projectName: config.projectName, cwd: opts.targetDir });
+	const target = await detectTarget({
+		...(config.projectName !== undefined ? { projectName: config.projectName } : {}),
+		...(opts.targetDir !== undefined ? { cwd: opts.targetDir } : {}),
+	});
 	// Mirrors runInit's override expression exactly so the two dry-run flavors
 	// can't drift: an explicit --pm wins (even `--pm null`, hence no `??`), then
 	// the recipe's pm, then detection.
+	const pmOverrideValue = pmFlag !== undefined ? pmFlag : fileConfig?.pm;
 	const pm = await detectPm(target.dir, {
-		override: pmFlag !== undefined ? pmFlag : fileConfig?.pm,
+		...(pmOverrideValue !== undefined ? { override: pmOverrideValue } : {}),
 		mode: target.mode,
 		// No picker to fall back on here, since a selection is required.
 		nonInteractive: true,
@@ -315,7 +319,7 @@ export async function runPlanJson(opts: {
 			planFileOp(file, {
 				pkgRoot: templateRoot(catalog, unit.id),
 				targetDir: target.dir,
-				projectName,
+				...(projectName !== undefined ? { projectName } : {}),
 			}),
 		),
 	);
@@ -389,7 +393,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	const config = nonInteractive
 		? resolveConfig(fileConfig, inline, known, optionSchema, {
 				unitsMode: opts.preset ? 'additive' : 'override',
-				unitsDir: opts.unitsDir,
+				...(opts.unitsDir !== undefined ? { unitsDir: opts.unitsDir } : {}),
 			})
 		: null;
 
@@ -405,7 +409,10 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 
 	for (const notice of catalogNotices(catalog)) log.warn(notice);
 
-	const target = await detectTarget({ projectName: config?.projectName, cwd: opts.targetDir });
+	const target = await detectTarget({
+		...(config?.projectName !== undefined ? { projectName: config.projectName } : {}),
+		...(opts.targetDir !== undefined ? { cwd: opts.targetDir } : {}),
+	});
 	log.info(`Target: ${target.dir} (${target.mode})`);
 
 	// On a clean tree `git checkout .` is a full undo of everything this run
@@ -436,8 +443,9 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// prompt in interactive runs too, not just config mode. Inline --pm wins
 	// over the recipe's pm, even as `--pm null`, which is why this isn't `??`.
 	// When neither is set the override is undefined and detection runs as before.
+	const pmOverrideValue = pmOverride !== undefined ? pmOverride : fileConfig?.pm;
 	const pm = await detectPm(target.dir, {
-		override: pmOverride !== undefined ? pmOverride : fileConfig?.pm,
+		...(pmOverrideValue !== undefined ? { override: pmOverrideValue } : {}),
 		mode: target.mode,
 		nonInteractive,
 	});
@@ -515,7 +523,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 				}),
 				...presetFlavors,
 			},
-			initialSelected,
+			...(initialSelected !== undefined ? { initialSelected } : {}),
 		});
 		if (isCancel(picked)) return cancelAndExit();
 		selection = picked.ids;
@@ -599,7 +607,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 				planFileOp(file, {
 					pkgRoot: templateRoot(catalog, unit.id),
 					targetDir: target.dir,
-					projectName,
+					...(projectName !== undefined ? { projectName } : {}),
 				}),
 			),
 		);
@@ -635,8 +643,8 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 			const result = await copyFileOp(file, {
 				pkgRoot: templateRoot(catalog, unit.id),
 				targetDir: target.dir,
-				projectName,
-				onConflict: config?.onConflict,
+				...(projectName !== undefined ? { projectName } : {}),
+				...(config?.onConflict !== undefined ? { onConflict: config.onConflict } : {}),
 				journal,
 			});
 			copyResults.push(result);
@@ -661,7 +669,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		// Undefined on an interactive run, which is what makes dependency
 		// collisions prompt. resolveConfig defaults it to 'overwrite' on every
 		// non-interactive path, so a --yes run never reaches a picker.
-		onConflict: config?.onConflict,
+		...(config?.onConflict !== undefined ? { onConflict: config.onConflict } : {}),
 		journal,
 	});
 
@@ -735,7 +743,10 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// gates on `.git`, so initializing here (not after) is what lets husky wire up
 	// its hooks in the same pass. Augment targets already have their own repo.
 	if (target.mode === 'new') {
-		await maybeInitGit({ targetDir: target.dir, plan: config?.git });
+		await maybeInitGit({
+			targetDir: target.dir,
+			...(config?.git !== undefined ? { plan: config.git } : {}),
+		});
 	}
 
 	// Post-installs only make sense if the install step actually ran. Without
@@ -745,7 +756,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 			targetDir: target.dir,
 			pm,
 			units,
-			auto: config?.postInstall,
+			...(config?.postInstall !== undefined ? { auto: config.postInstall } : {}),
 		});
 	}
 
@@ -783,10 +794,10 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 						ids: resolution.ids,
 						pm,
 						latest,
-						projectName,
+						...(projectName !== undefined ? { projectName } : {}),
 						options: optionSelections,
 						version,
-						unitsDir: unitsDir?.path,
+						...(unitsDir !== undefined ? { unitsDir: unitsDir.path } : {}),
 					}),
 				),
 			);
@@ -836,7 +847,7 @@ async function resolveUnitOptions(
 					.map((c: UnitOption['choices'][number]) => ({
 						value: c.value,
 						label: c.label,
-						hint: c.hint,
+						...(c.hint !== undefined ? { hint: c.hint } : {}),
 					})),
 				initialValue: fallback,
 			});

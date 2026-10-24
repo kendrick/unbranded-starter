@@ -10,11 +10,17 @@ export type TsFlavor = 'node' | 'dom';
 
 export const TS_FLAVORS: TsFlavor[] = ['node', 'dom'];
 
-// The only line that differs between flavors (#117). With DOM globals in scope, a
-// Node CLI typechecks a `document` reference that then crashes at runtime.
+// The flavors differ only in `lib` and `exactOptionalPropertyTypes`. With DOM globals in scope, a Node CLI typechecks a `document` reference that then crashes at runtime (#117).
 const LIB: Record<TsFlavor, string[]> = {
 	node: ['ES2022'],
 	dom: ['ES2022', 'DOM', 'DOM.Iterable'],
+};
+
+const EXACT_OPTIONAL: Record<TsFlavor, string> = {
+	node: `\t\t// This flag rejects \`{ x: undefined }\` where a type says \`x?: T\`, so code says a property is absent by leaving its key out. The dom flavor leaves the flag off because React prop types aren't written against it.
+\t\t"exactOptionalPropertyTypes": true,
+`,
+	dom: '',
 };
 
 export function buildTsconfigBase(flavor: TsFlavor): string {
@@ -41,7 +47,7 @@ export function buildTsconfigBase(flavor: TsFlavor): string {
 
 		// Strictness (the full suite)
 		"strict": true,
-		"noFallthroughCasesInSwitch": true,
+${EXACT_OPTIONAL[flavor]}		"noFallthroughCasesInSwitch": true,
 		// With the \`override\` keyword required, renaming a base method breaks the
 		// subclass build instead of leaving its override as an unrelated new method.
 		"noImplicitOverride": true,

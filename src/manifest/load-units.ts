@@ -95,7 +95,12 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 			firstClaim.set(bareId, c.file);
 		}
 
-		parsed.push({ file: c.file, baseDir: c.baseDir, value, bareId });
+		parsed.push({
+			file: c.file,
+			baseDir: c.baseDir,
+			value,
+			...(bareId === undefined ? {} : { bareId }),
+		});
 	}
 
 	// knownIds for relation checking is builtin ids plus this directory's own
@@ -114,7 +119,11 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 	for (const p of parsed) {
 		const result = validateUnitDefinition(p.value, { baseDir: p.baseDir, knownIds });
 		if (!result.ok) {
-			skipped.push({ path: p.file, id: p.bareId, issues: result.issues });
+			skipped.push({
+				path: p.file,
+				...(p.bareId === undefined ? {} : { id: p.bareId }),
+				issues: result.issues,
+			});
 			continue;
 		}
 		validated.push({ file: p.file, baseDir: p.baseDir, unit: result.unit });

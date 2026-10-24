@@ -24,6 +24,13 @@ if (versionError) {
 	process.exit(EXIT_ERROR);
 }
 
+// parseArgs reports an unset flag as `undefined`, and with exactOptionalPropertyTypes an options bag declaring `x?: T` rejects an explicit `x: undefined`. Dropping the unset keys here keeps every command's signature honest instead of widening each one to `| undefined`.
+function omitUnset<T extends object>(bag: T): { [K in keyof T]?: Exclude<T[K], undefined> } {
+	return Object.fromEntries(Object.entries(bag).filter(([, value]) => value !== undefined)) as {
+		[K in keyof T]?: Exclude<T[K], undefined>;
+	};
+}
+
 const HELP = `Usage: unbranded [command] [options]
 
 Commands:
@@ -162,7 +169,7 @@ const command = positionals[0];
 // `list` needs no target project and no TTY, so it runs and exits before any
 // of the init flow's detection kicks in.
 if (command === 'list') {
-	runList({ json: values.json, unitsDir });
+	runList(omitUnset({ json: values.json, unitsDir }));
 	process.exit(EXIT_OK);
 }
 
@@ -177,13 +184,13 @@ if (command === 'validate') {
 		);
 		process.exit(EXIT_ERROR);
 	}
-	process.exit(runValidate(target, { json: values.json }));
+	process.exit(runValidate(target, omitUnset({ json: values.json })));
 }
 
 // Read-only drift check against .unbranded.json. No target, no TTY; exit code
 // carries the verdict (non-zero on drift) so CI can gate on it directly.
 if (command === 'diff') {
-	process.exit(runDiff({ json: values.json, diff: values.diff, unitsDir }));
+	process.exit(runDiff(omitUnset({ json: values.json, diff: values.diff, unitsDir })));
 }
 
 // Read-only repo audit: guaranteed zero writes, cwd only. Default exit is 0 so a
@@ -199,20 +206,22 @@ if (command === 'doctor') {
 			process.exit(EXIT_ERROR);
 		}
 		process.exit(
-			await runDoctorFix({
-				yes: values.yes,
-				dryRun: values['dry-run'],
-				diff: values.diff,
-				force: values.force,
-				pm: values.pm,
-				unitsDir,
-			}).catch((err: unknown) => {
+			await runDoctorFix(
+				omitUnset({
+					yes: values.yes,
+					dryRun: values['dry-run'],
+					diff: values.diff,
+					force: values.force,
+					pm: values.pm,
+					unitsDir,
+				}),
+			).catch((err: unknown) => {
 				log.error(err instanceof Error ? err.message : String(err));
 				return 1;
 			}),
 		);
 	}
-	process.exit(runDoctor({ json: values.json, strict: values.strict }));
+	process.exit(runDoctor(omitUnset({ json: values.json, strict: values.strict })));
 }
 
 // Backing a unit out is an apply-shaped verb (it writes), so it reuses the same
@@ -224,13 +233,16 @@ if (command === 'remove') {
 		process.exit(EXIT_ERROR);
 	}
 	process.exit(
-		await runRemove(unitId, {
-			yes: values.yes,
-			dryRun: values['dry-run'],
-			force: values.force,
-			cascade: values.cascade,
-			unitsDir,
-		}).catch((err: unknown) => {
+		await runRemove(
+			unitId,
+			omitUnset({
+				yes: values.yes,
+				dryRun: values['dry-run'],
+				force: values.force,
+				cascade: values.cascade,
+				unitsDir,
+			}),
+		).catch((err: unknown) => {
 			log.error(err instanceof Error ? err.message : String(err));
 			return EXIT_ERROR;
 		}),
@@ -242,11 +254,13 @@ if (command === 'remove') {
 // opt-in gate, and it trips on majors only.
 if (command === 'outdated') {
 	process.exit(
-		await runOutdated({
-			json: values.json,
-			strict: values.strict,
-			registry: values.registry,
-		}).catch((err: unknown) => {
+		await runOutdated(
+			omitUnset({
+				json: values.json,
+				strict: values.strict,
+				registry: values.registry,
+			}),
+		).catch((err: unknown) => {
 			log.error(err instanceof Error ? err.message : String(err));
 			return EXIT_ERROR;
 		}),
@@ -267,14 +281,16 @@ if (command === 'update') {
 		process.exit(EXIT_ERROR);
 	}
 	process.exit(
-		await runUpdate({
-			yes: values.yes,
-			dryRun: values['dry-run'],
-			diff: values.diff,
-			force: values.force,
-			strategy,
-			unitsDir,
-		}).catch((err: unknown) => {
+		await runUpdate(
+			omitUnset({
+				yes: values.yes,
+				dryRun: values['dry-run'],
+				diff: values.diff,
+				force: values.force,
+				strategy,
+				unitsDir,
+			}),
+		).catch((err: unknown) => {
 			log.error(err instanceof Error ? err.message : String(err));
 			return EXIT_ERROR;
 		}),
@@ -292,45 +308,49 @@ if (command !== undefined) {
 // ahead of runInit because that flow starts narrating from its first line.
 if (values['dry-run'] && values.json) {
 	process.exit(
-		await runPlanJson({
-			configPath: values.config,
-			preset: values.preset,
-			unitsDir,
-			latest: values.latest,
-			targetDir: values.target ? resolve(values.target) : undefined,
-			inline: {
-				units: values.units,
-				pm: values.pm,
-				onConflict: values['on-conflict'],
-				postInstall: values['post-install'],
-				yes: values.yes,
-			},
-		}).catch((err: unknown) => {
+		await runPlanJson(
+			omitUnset({
+				configPath: values.config,
+				preset: values.preset,
+				unitsDir,
+				latest: values.latest,
+				targetDir: values.target ? resolve(values.target) : undefined,
+				inline: omitUnset({
+					units: values.units,
+					pm: values.pm,
+					onConflict: values['on-conflict'],
+					postInstall: values['post-install'],
+					yes: values.yes,
+				}),
+			}),
+		).catch((err: unknown) => {
 			process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
 			return EXIT_ERROR;
 		}),
 	);
 }
 
-runInit({
-	configPath: values.config,
-	preset: values.preset,
-	unitsDir,
-	// Resolve against the invocation cwd now, before any detection runs, so the
-	// dir is stable even though a relative --config path is still read from here.
-	targetDir: values.target ? resolve(values.target) : undefined,
-	latest: values.latest,
-	force: values.force,
-	dryRun: values['dry-run'],
-	diff: values.diff,
-	inline: {
-		units: values.units,
-		pm: values.pm,
-		onConflict: values['on-conflict'],
-		postInstall: values['post-install'],
-		yes: values.yes,
-	},
-})
+runInit(
+	omitUnset({
+		configPath: values.config,
+		preset: values.preset,
+		unitsDir,
+		// Resolve against the invocation cwd now, before any detection runs, so the
+		// dir is stable even though a relative --config path is still read from here.
+		targetDir: values.target ? resolve(values.target) : undefined,
+		latest: values.latest,
+		force: values.force,
+		dryRun: values['dry-run'],
+		diff: values.diff,
+		inline: omitUnset({
+			units: values.units,
+			pm: values.pm,
+			onConflict: values['on-conflict'],
+			postInstall: values['post-install'],
+			yes: values.yes,
+		}),
+	}),
+)
 	.then((result) => {
 		// A scaffold that wrote its files but couldn't install them hasn't done its
 		// job, and the exit code is the only part of that CI reads (#114). Set the
