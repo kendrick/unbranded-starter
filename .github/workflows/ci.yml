@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The pin-health canary. Lockfile-free scaffold installs pick up upstream releases between pushes (#174), so a weekly run on main shows that drift before Monday's bump PRs go red. It's advisory, since it blocks nothing, and agent-pin-health.yml reads its result to tell drift from a bad bump.
+  schedule:
+    - cron: '0 22 * * 0'
 
 # Every job here reads the tree and reports; none of them write to the repo, so
 # the token they inherit doesn't need to either. pin-bumps.yml opens PRs and

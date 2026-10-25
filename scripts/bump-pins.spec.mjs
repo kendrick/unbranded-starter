@@ -5,6 +5,7 @@ import {
 	planBumps,
 	rewritePackageJson,
 	rewritePins,
+	skipLoopUnits,
 } from './bump-pins.mjs';
 
 describe('planBumps', () => {
@@ -262,5 +263,26 @@ describe('oxlint-config.ts pins', () => {
 
 	it('scans oxlint-config.ts, where the oxc pins live', () => {
 		expect(MANIFEST_FILES).toContain('src/manifest/oxlint-config.ts');
+	});
+});
+
+describe('skipLoopUnits', () => {
+	it('sits out a unit whose pin-health repair PR is open, and only that unit', () => {
+		const groups = new Map([
+			['core-eslint', [{ name: 'eslint', from: '10.11.0', to: '10.12.0', units: ['core-eslint'] }]],
+			['core-vitest', [{ name: 'vitest', from: '5.0.4', to: '5.0.5', units: ['core-vitest'] }]],
+		]);
+		const { kept, skipped } = skipLoopUnits(groups, [
+			'pin-health/core-eslint',
+			'bump/core-vitest',
+			'pin-health/main-drift',
+		]);
+		expect(skipped).toEqual(['core-eslint']);
+		expect([...kept.keys()]).toEqual(['core-vitest']);
+	});
+
+	it('keeps every unit when no repair PR is open', () => {
+		const groups = new Map([['core-eslint', []]]);
+		expect([...skipLoopUnits(groups, []).kept.keys()]).toEqual(['core-eslint']);
 	});
 });
