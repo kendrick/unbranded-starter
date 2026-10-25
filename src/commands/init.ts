@@ -655,7 +655,12 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 				journal,
 			});
 			copyResults.push(result);
-			writes.push({ dest: result.dest, unit: unit.id, mode: file.mode ?? 'copy' });
+			// A user-skip leaves the user's own file in place; tracking it would hand
+			// it to remove and update as template output (#214). An identical skip is
+			// the template's bytes, so it stays tracked.
+			if (result.reason !== 'user-skip') {
+				writes.push({ dest: result.dest, unit: unit.id, mode: file.mode ?? 'copy' });
+			}
 		}
 	}
 
