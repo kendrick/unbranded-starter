@@ -133,4 +133,21 @@ describe('opt-vscode lint keys follow the lint unit (#184)', () => {
 			);
 		},
 	);
+
+	// Replaying the generator must not blind the template axis: a state file that
+	// says core-oxlint over a core-eslint scaffold is the shape of a release whose
+	// generated output moved, and update would merge it.
+	it('diff --json reports template-updated when the installed lint unit no longer matches the recorded settings', () => {
+		scaffold(tmp, ['core-eslint', 'opt-vscode']);
+		const statePath = join(tmp, '.unbranded.json');
+		const state = readFileSync(statePath, 'utf-8');
+		expect(state).toContain('"id": "core-eslint"');
+		writeFileSync(statePath, state.replace('"id": "core-eslint"', '"id": "core-oxlint"'));
+		const run = cli(['diff', '--json'], tmp);
+		expect(run.status, `${run.stdout}${run.stderr}`).toBe(1);
+		const report = JSON.parse(run.stdout) as { files: { path: string; status: string }[] };
+		expect(report.files.find((f) => f.path === '.vscode/settings.json')?.status).toBe(
+			'template-updated',
+		);
+	});
 });
