@@ -359,6 +359,17 @@ describe('runDoctorFix', () => {
 			}),
 		);
 	});
+
+	it('threads onConflict into the --yes apply (#215)', async () => {
+		cleanRepo(tmp);
+		rmSync(join(tmp, '.editorconfig'));
+		await runDoctorFix({ cwd: tmp, yes: true, onConflict: 'skip' });
+		expect(runInit).toHaveBeenCalledWith(
+			expect.objectContaining({
+				inline: expect.objectContaining({ onConflict: 'skip', yes: true }) as InlineFlags,
+			}),
+		);
+	});
 });
 
 describe('applySuppression', () => {

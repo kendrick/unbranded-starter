@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -110,5 +110,25 @@ describe('unbranded doctor --fix', () => {
 		expect(fix.status).toBe(1);
 		expect(fix.stderr).toContain('--json');
 		expect(existsSync(join(tmp, '.editorconfig'))).toBe(false);
+	});
+
+	it("keeps the user's tsconfig.json under --on-conflict skip (#215)", () => {
+		writeJson(join(tmp, 'package.json'), {
+			name: 'x',
+			version: '1.0.0',
+			scripts: { test: 'vitest', lint: 'eslint .' },
+			engines: { node: '>=22' },
+		});
+		const mine = '{ "compilerOptions": { "strict": false, "MINE": true } }\n';
+		writeFileSync(join(tmp, 'tsconfig.json'), mine);
+		writeFileSync(join(tmp, '.editorconfig'), 'root = true\n');
+		writeFileSync(join(tmp, '.gitattributes'), '* text=auto\n');
+		mkdirSync(join(tmp, '.github', 'workflows'), { recursive: true });
+		writeFileSync(join(tmp, '.github', 'workflows', 'ci.yml'), 'on: push\njobs: {}\n');
+
+		const fix = run(['doctor', '--fix', '--yes', '--pm', 'null', '--on-conflict', 'skip'], tmp);
+		expect(fix.status, `stdout: ${fix.stdout}\nstderr: ${fix.stderr}`).toBe(0);
+		expect(fix.stdout).toContain('1 skipped');
+		expect(readFileSync(join(tmp, 'tsconfig.json'), 'utf-8')).toBe(mine);
 	});
 });
