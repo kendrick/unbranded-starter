@@ -114,4 +114,23 @@ describe('opt-vscode lint keys follow the lint unit (#184)', () => {
 			rmSync(fresh, { recursive: true, force: true });
 		}
 	});
+
+	// The drift checker used to hash the raw catalog file, so a fresh scaffold
+	// read template-updated for either lint unit and `update` could never clear it.
+	it.each(['core-oxlint', 'core-eslint'])(
+		'diff --json reads a fresh %s,opt-vscode scaffold as clean',
+		(lint) => {
+			scaffold(tmp, [lint, 'opt-vscode']);
+			const run = cli(['diff', '--json'], tmp);
+			expect(run.status, `${run.stdout}${run.stderr}`).toBe(0);
+			const report = JSON.parse(run.stdout) as {
+				drift: boolean;
+				files: { path: string; status: string }[];
+			};
+			expect(report.drift).toBe(false);
+			expect(report.files.find((f) => f.path === '.vscode/settings.json')?.status).toBe(
+				'unchanged',
+			);
+		},
+	);
 });
