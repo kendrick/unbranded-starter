@@ -132,6 +132,18 @@ export function rewritePackageJson(source, bumps) {
 	return { source: out, applied, missed };
 }
 
+// The pin-health loop (.github/control-loops/pin-health.md) repairs a red bump on its own `pin-health/<unit>` branch. This script rebuilds `bump/<unit>` from main and force-pushes it every week, so while that repair PR is open the unit sits out, and the bump rides the repair PR instead.
+export function skipLoopUnits(groups, openHeads) {
+	const heads = new Set(openHeads);
+	const kept = new Map();
+	const skipped = [];
+	for (const [unit, bumps] of groups) {
+		if (heads.has(`pin-health/${unit}`)) skipped.push(unit);
+		else kept.set(unit, bumps);
+	}
+	return { kept, skipped };
+}
+
 function escapeRegExp(text) {
 	return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -149,9 +161,19 @@ function main() {
 	const dryRun = flags.includes('--dry-run');
 
 	const report = JSON.parse(readFileSync(jsonPath, 'utf-8'));
-	const groups = groupByUnit(planBumps(report));
+	// A dry run stays offline, so it can't see open PRs and plans every unit.
+	const openHeads = dryRun
+		? []
+		: JSON.parse(
+				sh('gh', ['pr', 'list', '--state', 'open', '--limit', '100', '--json', 'headRefName']),
+			).map((p) => p.headRefName);
+	const { kept: groups, skipped } = skipLoopUnits(groupByUnit(planBumps(report)), openHeads);
+	for (const unit of skipped)
+		process.stdout.write(`bump/${unit}: skipped while pin-health/${unit} is open.\n`);
 	if (groups.size === 0) {
-		process.stdout.write('All pins current; nothing to bump.\n');
+		process.stdout.write(
+			skipped.length > 0 ? 'Nothing else to bump.\n' : 'All pins current; nothing to bump.\n',
+		);
 		return;
 	}
 

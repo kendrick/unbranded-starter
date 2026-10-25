@@ -1,0 +1,185 @@
+name: 'Agent: pin health'
+
+# The repair half of the pin-health control loop (.github/control-loops/pin-health.md). pin-bumps.yml opens the weekly bump PRs. This picks one that stays red, has a coding agent repair it, hold it, or escalate it, and opens at most one PR with the result.
+on:
+  schedule:
+    # Tuesdays 06:00 UTC, a day after pin-bumps.yml, so Monday's bump PRs have finished CI.
+    - cron: '0 6 * * 2'
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: Coding agent behind the actuator seam
+        type: choice
+        options: [claude, codex]
+        default: claude
+
+# github.token re-runs failed CI jobs (actions: write) and reads PRs and runs. Pushes and PRs go through PIN_BUMP_TOKEN so CI runs on them, and the write scopes here are only the fallback when it's unset, same as pin-bumps.yml.
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: agent-pin-health
+  cancel-in-progress: false
+
+env:
+  PIN_HEALTH_AGENT: ${{ inputs.agent || 'claude' }}
+  LOOP_LABEL: agent-pin-health
+
+jobs:
+  pin-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      # No persisted credentials: the agent runs in this checkout and must not be able to push. The publish step authenticates its own push.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The loop's own files come from this checkout (the ref the workflow runs from) and go outside it, before the target branch replaces the tree. The target branch would otherwise supply its own scope guard, validator, skill, and prompt, and an older bump branch has none of them.
+      - name: Copy the loop's tooling
+        run: |
+          tooling="$RUNNER_TEMP/pin-health-tooling"
+          mkdir -p "$tooling"
+          cp -r --parents scripts/pin-health-*.mjs scripts/pin-health-*.sh .claude/skills/repair-pin-bump .github/agent-prompts/pin-health.md .github/agent-memory/pin-health.md "$tooling/"
+          echo "PIN_HEALTH_TOOLING=$tooling" >> "$GITHUB_ENV"
+
+      # Fail before any install or agent spend, with an error that names the missing secret.
+      - name: Check the agent secret
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-actuator.mjs" --check-secret --agent "$PIN_HEALTH_AGENT"
+
+      # Flow control: one open loop PR at a time. A scheduled run stops here when one exists; a manual run goes ahead.
+      - name: Check for an open loop PR
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          open=$(gh pr list --state open --label "$LOOP_LABEL" --json number --jq 'length')
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$open" -gt 0 ]; then
+            echo "An $LOOP_LABEL PR is already open; nothing to do this run."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@v6
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: actions/setup-node@v7
+        if: steps.gate.outputs.run == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.gate.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        if: steps.gate.outputs.run == 'true'
+        run: pnpm build
+
+      - name: Sensor - grade the manifest pins
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          mkdir -p /tmp/pin-health
+          node dist/cli.js outdated --json > /tmp/pin-health/outdated.json
+
+      - name: Controller - pick the target
+        id: controller
+        if: steps.gate.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-controller.mjs" --outdated /tmp/pin-health/outdated.json --memory "$PIN_HEALTH_TOOLING/.github/agent-memory/pin-health.md"
+
+      - name: Check out the target branch
+        id: branch
+        if: steps.controller.outputs.target == 'bump-pr' || steps.controller.outputs.target == 'main-drift'
+        env:
+          BRANCH: ${{ steps.controller.outputs.branch }}
+          BASE_REF: ${{ steps.controller.outputs.base_ref }}
+        run: |
+          git fetch origin "$BASE_REF"
+          git checkout -B "$BRANCH" "origin/$BASE_REF"
+          echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          # The agent edits main's memory file even on a bump branch that predates it, and classify, the scope guard, and publish all measure against this baseline commit.
+          bash "$PIN_HEALTH_TOOLING/scripts/pin-health-baseline.sh"
+
+      # A bump branch can move package.json and the lockfile, so this installs and builds again from its tree. When the bump is what breaks the install or the build, that failure is the thing to investigate, so the script records it in the target for the agent and the step passes. A failed checkout above stays fatal.
+      - name: Set up the target
+        id: setup
+        if: steps.branch.outcome == 'success'
+        run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-setup.mjs"
+
+      # Pinned to the versions whose flags the actuator seam was written against.
+      - name: Install the agent CLI
+        if: steps.branch.outcome == 'success'
+        run: |
+          if [ "$PIN_HEALTH_AGENT" = "codex" ]; then
+            npm install -g @openai/codex@0.160.0
+          else
+            npm install -g @anthropic-ai/claude-code@2.1.294
+          fi
+
+      # The agent gets its own API key and nothing else: no GitHub token, and no git credentials in the checkout. Claude's spend cap is a flag; Codex has none, so the step timeout stands in for both agents' turn caps.
+      - name: Actuator - run the agent
+        if: steps.branch.outcome == 'success'
+        timeout-minutes: 60
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-actuator.mjs" --agent "$PIN_HEALTH_AGENT" --out /tmp/pr-body.md --tooling "$PIN_HEALTH_TOOLING"
+
+      - name: Scope guard
+        if: steps.branch.outcome == 'success'
+        run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-scope-guard.mjs" --expect-head "${{ steps.branch.outputs.baseline }}"
+
+      # Classified against the target branch's head, before anything commits, so a bump branch's own commits never count. A hold changes only the memory file and gets published from main, so it has no code to validate. An escalation changes nothing, and its reproduction is red by definition.
+      - name: Classify the change
+        id: change
+        if: steps.branch.outcome == 'success'
+        run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-classify.mjs"
+
+      # The workflow runs the gate itself. The agent's report says it passed, and this confirms it.
+      - name: Validate
+        id: validate
+        if: steps.change.outputs.outcome == 'repair'
+        run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-validate.mjs" all
+
+      - name: Publish the result
+        if: steps.branch.outcome == 'success' && steps.validate.outcome != 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.PIN_BUMP_TOKEN || github.token }}
+          PUSH_TOKEN: ${{ secrets.PIN_BUMP_TOKEN || github.token }}
+          OUTCOME: ${{ steps.change.outputs.outcome }}
+          TARGET_HEAD: ${{ steps.branch.outputs.head }}
+          PIN_HEALTH_BODY: /tmp/pr-body.md
+        run: bash "$PIN_HEALTH_TOOLING/scripts/pin-health-publish.sh"
+
+      - name: Summary
+        if: always() && steps.gate.outputs.run == 'true'
+        run: |
+          # if/fi, not `[ -f ] && …`: in a quiet week neither file exists, and a false test as the block's last command fails the step under bash -e.
+          {
+            echo "## Pin health"
+            if [ -f /tmp/pin-health/target.json ]; then
+              jq -r '"Target: \(.target) - \(.reason)"' /tmp/pin-health/target.json
+            fi
+            if [ -f /tmp/pr-body.md ]; then
+              echo
+              cat /tmp/pr-body.md
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the loop's working files
+        if: always() && steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: pin-health
+          path: /tmp/pin-health/
+          if-no-files-found: ignore
