@@ -8,6 +8,7 @@ import {
 	missingSecret,
 	POLICY,
 	resolveAgent,
+	secretCheck,
 } from './pin-health-actuator.mjs';
 
 describe('resolveAgent', () => {
@@ -67,7 +68,7 @@ describe('claudeArgs', () => {
 	});
 	it('caps spend and loads no project settings', () => {
 		expect(args[args.indexOf('--max-budget-usd') + 1]).toBe('10');
-		expect(args[args.indexOf('--setting-sources') + 1]).toBe('user');
+		expect(args[args.indexOf('--setting-sources') + 1]).toBe('local');
 		expect(args).toContain('--strict-mcp-config');
 	});
 	it('passes a model override through', () => {
@@ -123,5 +124,26 @@ describe('extractClaudeResult', () => {
 	});
 	it('fails when the stream never finished', () => {
 		expect(extractClaudeResult(lines({ type: 'system' })).ok).toBe(false);
+	});
+});
+
+describe('secretCheck', () => {
+	it('requires the secret without --local', () => {
+		expect(secretCheck({ agent: 'claude', local: false, env: {} }).error).toMatch(
+			/ANTHROPIC_API_KEY is not set/,
+		);
+		expect(secretCheck({ agent: 'claude', local: false, env: { ANTHROPIC_API_KEY: 'k' } })).toEqual(
+			{ ok: true },
+		);
+	});
+	it('lets --local run Claude on a maintainer login with no key', () => {
+		expect(secretCheck({ agent: 'claude', local: true, env: {} })).toEqual({ ok: true });
+	});
+	// GitHub Actions sets both CI and GITHUB_ACTIONS on every runner, so either one refuses --local.
+	it.each([[{ CI: 'true' }], [{ GITHUB_ACTIONS: 'true' }]])('refuses --local in CI (%o)', (env) => {
+		expect(secretCheck({ agent: 'claude', local: true, env }).error).toMatch(/^::error::--local/);
+	});
+	it('refuses --local for Codex, which only logs in with its key here', () => {
+		expect(secretCheck({ agent: 'codex', local: true, env: {} }).error).toMatch(/claude only/);
 	});
 });

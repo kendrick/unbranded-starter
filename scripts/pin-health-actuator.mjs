@@ -1,9 +1,9 @@
 // The pin-health loop's agent seam: the one file that knows which coding agent runs. The workflow, controller, skill, and scope guard stay agent-neutral, so swapping Claude Code for Codex is a flag change here. Design: .github/control-loops/pin-health.md.
 //
 //   node scripts/pin-health-actuator.mjs --check-secret [--agent claude|codex]
-//   node scripts/pin-health-actuator.mjs [--agent claude|codex] [--target /tmp/pin-health/target.json] [--out /tmp/pr-body.md] [--print]
+//   node scripts/pin-health-actuator.mjs [--agent claude|codex] [--target /tmp/pin-health/target.json] [--out /tmp/pr-body.md] [--print] [--local]
 //
-// --agent defaults to PIN_HEALTH_AGENT, then claude. --print writes the assembled prompt and the agent command to stdout and runs nothing, which is how to check the seam without spending anything. The pure pieces are exported for the spec.
+// --local runs Claude on your own login instead of ANTHROPIC_API_KEY, for replaying a target by hand, and refuses to run in CI. --agent defaults to PIN_HEALTH_AGENT, then claude. --print writes the assembled prompt and the agent command to stdout and runs nothing, which is how to check the seam without spending anything. The pure pieces are exported for the spec.
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -68,9 +68,9 @@ export function buildPrompt({ template, target, memory }) {
 export function claudeArgs(policy, env = {}) {
 	const args = [
 		'-p',
-		// Project settings allow extra commands (curl among them) for interactive use. Loading only user settings, which a CI runner doesn't have, keeps the allowlist below the whole permission set.
+		// Project and user settings both carry allow rules for interactive use (this repo's allows curl). Loading only the gitignored local file, which neither a CI checkout nor a fresh worktree has, keeps the allowlist below the whole permission set. Login still works, because auth doesn't come from settings.
 		'--setting-sources',
-		'user',
+		'local',
 		'--strict-mcp-config',
 		// The whole tool set, which the allowlist below then narrows. Claude Code 2.1.294 has no Glob or Grep tool, so searching goes through the allowlisted `grep`. --bare would also skip CLAUDE.md, but it drops Write, which the skill needs for repro.json and new specs, so the prompt handles CLAUDE.md instead.
 		'--tools',
@@ -142,6 +142,21 @@ export function extractClaudeResult(streamJson) {
 	if (result.subtype !== 'success' || result.is_error)
 		return { ok: false, error: `agent stopped: ${result.subtype}` };
 	return { ok: true, text: result.result ?? '' };
+}
+
+// What to do about the API key before a run. --local skips it so a maintainer can replay a target on their own Claude login, but only off CI: a workflow that forgot the secret has to fail, not fall back to some other login.
+export function secretCheck({ agent, local, env }) {
+	if (!local) {
+		const error = missingSecret(agent, env);
+		return error ? { error } : { ok: true };
+	}
+	if (env.CI || env.GITHUB_ACTIONS)
+		return {
+			error: '::error::--local is for a maintainer machine. CI runs use the repository secret.',
+		};
+	if (agent !== 'claude')
+		return { error: `--local supports --agent claude only; ${agent} logs in with its API key.` };
+	return { ok: true };
 }
 
 function runClaude(prompt, outPath) {
@@ -219,7 +234,7 @@ function main() {
 		return;
 	}
 
-	const error = missingSecret(agent, process.env);
+	const { error } = secretCheck({ agent, local: flags.includes('--local'), env: process.env });
 	if (error) {
 		process.stdout.write(`${error}\n`);
 		process.exit(1);
