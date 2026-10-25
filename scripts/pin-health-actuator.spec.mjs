@@ -66,6 +66,9 @@ describe('claudeArgs', () => {
 		expect(bash).toEqual(POLICY.allowedCommands.map((c) => `Bash(${c})`));
 		expect(bash.some((a) => /git (commit|push)|\bgh\b|curl|\bfind\b|\brg\b/.test(a))).toBe(false);
 	});
+	it('lets the agent query the registry read-only, as Bash rules', () => {
+		expect(args).toEqual(expect.arrayContaining(['Bash(pnpm view *)', 'Bash(npm view *)']));
+	});
 	it('caps spend and loads no project settings', () => {
 		expect(args[args.indexOf('--max-budget-usd') + 1]).toBe('10');
 		expect(args[args.indexOf('--setting-sources') + 1]).toBe('local');
@@ -96,6 +99,8 @@ describe('codexArgs and codexRules', () => {
 		expect(rules).toContain('pattern = ["git",["commit","push"]]');
 		expect(rules).toContain('pattern = ["gh"]');
 		expect(rules).not.toContain('"allow"');
+		// The registry lookups are allowlisted for Claude and must stay runnable under Codex.
+		expect(rules).not.toContain('"view"');
 	});
 });
 

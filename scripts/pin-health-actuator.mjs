@@ -36,6 +36,9 @@ export const POLICY = {
 		'grep *',
 		'ls',
 		'ls *',
+		// Read-only registry lookups. Telling drift from a bad bump means checking what an unpinned dependency resolves to today, and on the #171 replay the agent escalated when it couldn't.
+		'pnpm view *',
+		'npm view *',
 	],
 	// Codex has no per-command allowlist, so the closest it gets is forbidding these prefixes. The workflow does every commit, push, and GitHub write itself, after the scope guard.
 	forbiddenPrefixes: [['git', ['commit', 'push']], ['gh'], ['curl'], ['npm', 'publish']],
