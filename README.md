@@ -146,7 +146,7 @@ The oxlint + oxfmt unit installs `oxlint-tsgolint` and turns on type-aware rules
 
 **Editor**
 
-- **VS Code workspace** — `settings.json` merged into whatever you already have, plus an `extensions.json` generated from the units you picked.
+- **VS Code workspace** — `settings.json` merged into whatever you already have, plus an `extensions.json` generated from the units you picked. The formatter and fix-on-save action in `settings.json` match your lint unit: oxc's extension for `core-oxlint`, ESLint's for `core-eslint`. Switching lint units replaces those keys unless you changed them.
 
 **CI**
 
