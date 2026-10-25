@@ -6,7 +6,9 @@ import { log } from '@clack/prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeAndInstall } from '../install/run';
 import { unitPicker } from '../prompts/unit-picker/prompt';
+import type { StateFile } from '../state/state';
 import { STATE_FILENAME } from '../state/state';
+import { PKG_ROOT } from '../util/paths';
 import { formatPlan, runInit, runPlanJson } from './init';
 
 // The picker is the one TTY boundary in the interactive flow; mocking just it lets
@@ -710,9 +712,10 @@ describe('runInit onConflict threading (#113)', () => {
 		vi.mocked(confirm).mockReset();
 	});
 
-	it('passes onConflict "skip" through to writeAndInstall when the resolved config says skip', async () => {
-		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-onconflict-skip-'));
-		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+	const readState = (dir: string) =>
+		JSON.parse(readFileSync(join(dir, STATE_FILENAME), 'utf-8')) as StateFile;
+
+	const mockInstall = () =>
 		vi.mocked(writeAndInstall).mockResolvedValue({
 			wrote: true,
 			installed: true,
@@ -720,6 +723,11 @@ describe('runInit onConflict threading (#113)', () => {
 			failed: false,
 			computedWrites: [],
 		});
+
+	it('passes onConflict "skip" through to writeAndInstall when the resolved config says skip', async () => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-onconflict-skip-'));
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		mockInstall();
 
 		// --yes plus an explicit --units skips the picker and the Apply confirm
 		// entirely, so config.onConflict comes straight from the inline flag.
@@ -729,6 +737,57 @@ describe('runInit onConflict threading (#113)', () => {
 		});
 
 		expect(vi.mocked(writeAndInstall).mock.calls[0]?.[0]?.onConflict).toBe('skip');
+	});
+
+	it('does not track a file the user chose to keep (#214)', async () => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-user-skip-'));
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		writeFileSync(join(tmp, '.editorconfig'), '# MY OWN editorconfig\n');
+		mockInstall();
+
+		await runInit({
+			targetDir: tmp,
+			inline: { units: 'core-editorconfig', pm: 'pnpm', onConflict: 'skip', yes: true },
+		});
+
+		expect(readFileSync(join(tmp, '.editorconfig'), 'utf-8')).toBe('# MY OWN editorconfig\n');
+		const state = readState(tmp);
+		expect(state.files).not.toHaveProperty('.editorconfig');
+		expect(state.attribution ?? {}).not.toHaveProperty('.editorconfig');
+		expect(state.modes ?? {}).not.toHaveProperty('.editorconfig');
+	});
+
+	it('still tracks a file skipped because it already matches the template (#214)', async () => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-identical-skip-'));
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		writeFileSync(join(tmp, '.editorconfig'), readFileSync(join(PKG_ROOT, '.editorconfig')));
+		mockInstall();
+
+		await runInit({
+			targetDir: tmp,
+			inline: { units: 'core-editorconfig', pm: 'pnpm', onConflict: 'skip', yes: true },
+		});
+
+		const state = readState(tmp);
+		expect(state.files).toHaveProperty('.editorconfig');
+		expect(state.attribution?.['.editorconfig']).toBe('core-editorconfig');
+		expect(state.modes?.['.editorconfig']).toBe('copy');
+	});
+
+	it("keeps an earlier baseline when a later run skips the file at the user's request (#214)", async () => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-user-skip-prior-'));
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		mockInstall();
+		const inline = { units: 'core-editorconfig', pm: 'pnpm', yes: true } as const;
+
+		await runInit({ targetDir: tmp, inline });
+		const baseline = readState(tmp).files['.editorconfig'];
+		expect(baseline).toBeDefined();
+
+		writeFileSync(join(tmp, '.editorconfig'), '# edited after init\n');
+		await runInit({ targetDir: tmp, inline: { ...inline, onConflict: 'skip' } });
+
+		expect(readState(tmp).files['.editorconfig']).toBe(baseline);
 	});
 
 	it('passes onConflict undefined on an interactive run, which is what makes collisions prompt', async () => {
