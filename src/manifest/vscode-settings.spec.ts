@@ -1,5 +1,8 @@
 import type { AnyUnit } from './types';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PKG_ROOT } from '../util/paths';
 import { UNITS } from './index';
 import { applyVscodeSettings, buildVscodeSettings, VSCODE_SETTINGS_DEST } from './vscode-settings';
 
@@ -67,5 +70,15 @@ describe('applyVscodeSettings (#184)', () => {
 	it('carries an empty retire list when no lint unit is selected', () => {
 		const out = applyVscodeSettings(vscode, new Set(['opt-vscode']));
 		expect(out.files.find((f) => f.dest === VSCODE_SETTINGS_DEST)?.retire).toEqual([]);
+	});
+
+	// The static file is still the catalog op's `src` and ships in the pack, so it
+	// must not drift from the generator's lint-free base.
+	it('keeps opt-in/vscode/settings.json equal to the lint-free generator output', () => {
+		const onDisk = JSON.parse(
+			readFileSync(join(PKG_ROOT, 'opt-in/vscode/settings.json'), 'utf8'),
+		) as unknown;
+		const generated = JSON.parse(buildVscodeSettings(new Set()).content) as unknown;
+		expect(onDisk).toEqual(generated);
 	});
 });
