@@ -122,6 +122,13 @@ export function runDiff(opts: RunDiffOpts = {}): number {
 	const cwd = opts.cwd ?? process.cwd();
 	const read = readStateFile(cwd);
 
+	if (read.kind === 'none' && existsSync(join(cwd, STATE_FILENAME))) {
+		process.stderr.write(
+			`unbranded diff: ${STATE_FILENAME} does not parse; resolve any merge conflict markers before checking drift.\n`,
+		);
+		return 1;
+	}
+
 	// Refuse rather than report clean. This is the case the version gate exists for:
 	// diff is a CI gate, and answering "no drift" for a project we can't read is
 	// worse than any error. Nothing goes to stdout either, so a --json consumer

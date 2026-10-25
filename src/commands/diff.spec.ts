@@ -1,10 +1,10 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildStateFile, builtinUnits, hashBuffer } from '../state/state';
 import { PKG_ROOT } from '../util/paths';
-import { classify, computeDiff } from './diff';
+import { classify, computeDiff, runDiff } from './diff';
 
 describe('classify', () => {
 	it('unchanged when disk and template both still match the record', () => {
@@ -117,5 +117,23 @@ describe('computeDiff', () => {
 		// planFileOp compares on-disk against the current template, which is the
 		// patch `unbranded diff --diff` renders for a drifted file.
 		expect(entry?.plan?.diff).toBeDefined();
+	});
+});
+
+describe('runDiff', () => {
+	it('refuses to report clean when the state file is malformed', () => {
+		const targetDir = mkdtempSync(join(tmpdir(), 'unbranded-diff-malformed-'));
+		writeFileSync(join(targetDir, '.unbranded.json'), '{ < HEAD');
+		const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+		const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+		try {
+			expect(runDiff({ cwd: targetDir })).toBe(1);
+			expect(stderr.mock.calls.join(' ')).toMatch(/\.unbranded\.json.*does not parse/i);
+			expect(stdout).not.toHaveBeenCalled();
+		} finally {
+			stderr.mockRestore();
+			stdout.mockRestore();
+			rmSync(targetDir, { recursive: true, force: true });
+		}
 	});
 });
