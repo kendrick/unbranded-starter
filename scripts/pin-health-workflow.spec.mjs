@@ -40,4 +40,26 @@ describe('agent-pin-health.yml', () => {
 			expect(step).toContain(path);
 		}
 	});
+
+	// PR #235 review: the old classify step only asked whether code changed, so a hold sitting on a bump branch skipped validation and still carried the bump.
+	it('validates only repairs, and publishes through the script that rebases holds onto main', () => {
+		const step = (name) => {
+			const start = stepIndex(name);
+			return lines
+				.slice(
+					start,
+					lines.findIndex((l, i) => i > start && l.trim().startsWith('- name:')),
+				)
+				.join('\n');
+		};
+		expect(step('Classify the change')).toContain('pin-health-classify.mjs');
+		expect(step('Validate')).toContain("if: steps.change.outputs.outcome == 'repair'");
+		expect(step('Publish the result')).toMatch(
+			/OUTCOME: \$\{\{ steps\.change\.outputs\.outcome \}\}/,
+		);
+		expect(step('Publish the result')).toContain(
+			'"$PIN_HEALTH_TOOLING/scripts/pin-health-publish.sh"',
+		);
+		expect(step("Copy the loop's tooling")).toContain('scripts/pin-health-*.sh');
+	});
 });

@@ -43,7 +43,7 @@ jobs:
         run: |
           tooling="$RUNNER_TEMP/pin-health-tooling"
           mkdir -p "$tooling"
-          cp -r --parents scripts/pin-health-*.mjs .claude/skills/repair-pin-bump .github/agent-prompts/pin-health.md .github/agent-memory/pin-health.md "$tooling/"
+          cp -r --parents scripts/pin-health-*.mjs scripts/pin-health-*.sh .claude/skills/repair-pin-bump .github/agent-prompts/pin-health.md .github/agent-memory/pin-health.md "$tooling/"
           echo "PIN_HEALTH_TOOLING=$tooling" >> "$GITHUB_ENV"
 
       # Fail before any install or agent spend, with an error that names the missing secret.
@@ -134,21 +134,16 @@ jobs:
         if: steps.branch.outcome == 'success'
         run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-scope-guard.mjs" --expect-head "${{ steps.branch.outputs.head }}"
 
-      # A hold touches only the memory file and an escalation touches nothing. Neither has code to validate, and an escalation's reproduction is red by definition.
+      # Classified against the target branch's head, before anything commits, so a bump branch's own commits never count. A hold changes only the memory file and gets published from main, so it has no code to validate. An escalation changes nothing, and its reproduction is red by definition.
       - name: Classify the change
         id: change
         if: steps.branch.outcome == 'success'
-        run: |
-          if git status --porcelain --untracked-files=all | grep -qv ' \.github/agent-memory/pin-health\.md$'; then
-            echo "code=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "code=false" >> "$GITHUB_OUTPUT"
-          fi
+        run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-classify.mjs"
 
       # The workflow runs the gate itself. The agent's report says it passed, and this confirms it.
       - name: Validate
         id: validate
-        if: steps.change.outputs.code == 'true'
+        if: steps.change.outputs.outcome == 'repair'
         run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-validate.mjs" all
 
       - name: Publish the result
@@ -156,43 +151,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PIN_BUMP_TOKEN || github.token }}
           PUSH_TOKEN: ${{ secrets.PIN_BUMP_TOKEN || github.token }}
-          TARGET: ${{ steps.controller.outputs.target }}
-          BRANCH: ${{ steps.controller.outputs.branch }}
-        run: |
-          pr=$(jq -r '.pr.number' /tmp/pin-health/target.json)
-          sha=$(jq -r '.pr.headRefOid' /tmp/pin-health/target.json)
-          unit=$(jq -r '.unit' /tmp/pin-health/target.json)
-
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-
-          # No change means an escalation. It goes on the bump PR as a comment, and the marker stops the controller from paying for the same SHA again.
-          if git diff --cached --quiet; then
-            if [ "$TARGET" = "bump-pr" ]; then
-              { cat /tmp/pr-body.md; printf '\n\n<!-- agent-pin-health:escalated sha=%s -->\n' "$sha"; } > /tmp/comment.md
-              gh pr comment "$pr" --body-file /tmp/comment.md
-            fi
-            echo "No changes; reported on #$pr."
-            exit 0
-          fi
-
-          if git diff --cached --name-only | grep -qv '^\.github/agent-memory/pin-health\.md$'; then
-            if [ "$TARGET" = "main-drift" ]; then
-              title="fix(manifest): repair the main-branch drift behind #$pr"
-            else
-              title="fix(manifest): land the $unit pin bump"
-            fi
-          else
-            title="chore(pin-health): recommend holding a $unit pin"
-          fi
-
-          git commit -m "$title" -m "Pin-health loop result for #$pr. See the PR body for the diagnosis."
-          git push --force "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
-
-          { cat /tmp/pr-body.md; printf '\n\nFollows up #%s.\n\n<!-- agent-pin-health -->\n' "$pr"; } > /tmp/pr-body-final.md
-          gh label create "$LOOP_LABEL" --description "Opened by the pin-health control loop" --color 0E8A16 2>/dev/null || true
-          gh pr create --base main --head "$BRANCH" --title "$title" --body-file /tmp/pr-body-final.md --label "$LOOP_LABEL"
+          OUTCOME: ${{ steps.change.outputs.outcome }}
+          PIN_HEALTH_BODY: /tmp/pr-body.md
+        run: bash "$PIN_HEALTH_TOOLING/scripts/pin-health-publish.sh"
 
       - name: Summary
         if: always() && steps.gate.outputs.run == 'true'
