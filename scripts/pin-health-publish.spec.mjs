@@ -7,6 +7,8 @@ import { classifyChange } from './pin-health-classify.mjs';
 import { hasEscalation } from './pin-health-controller.mjs';
 
 const PUBLISH = resolve('scripts/pin-health-publish.sh');
+const BASELINE = resolve('scripts/pin-health-baseline.sh');
+const CLASSIFY = resolve('scripts/pin-health-classify.mjs');
 const MEMORY = '.github/agent-memory/pin-health.md';
 const HOLD =
 	'- `typescript` held at 6 (core-typescript): typescript-eslint has no TS 7 support (#131)';
@@ -15,7 +17,7 @@ const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf-8'
 const write = (path, text) => writeFileSync(path, text);
 
 // A real origin with main and one bump branch, a clone sitting on the loop branch the way "Check out the target branch" leaves it, and a gh stub that logs each call. Assertions read the pushed branch from origin, which is what a PR would carry.
-function fixture({ target = 'bump-pr' } = {}) {
+function fixture({ target = 'bump-pr', oldBump = false } = {}) {
 	const root = mkdtempSync(join(tmpdir(), 'pin-health-publish-'));
 	const origin = join(root, 'origin.git');
 	const seed = join(root, 'seed');
@@ -32,6 +34,8 @@ function fixture({ target = 'bump-pr' } = {}) {
 	git(seed, 'push', '-q', 'origin', 'main');
 	git(seed, 'checkout', '-q', '-b', 'bump/core-typescript');
 	write(join(seed, 'package.json'), '{ "typescript": "7.0.2" }\n');
+	// A bump branch cut before the loop landed has no memory file at all.
+	if (oldBump) git(seed, 'rm', '-q', MEMORY);
 	git(seed, 'commit', '-q', '-am', 'fix(manifest): bump core-typescript pins');
 	git(seed, 'push', '-q', 'origin', 'bump/core-typescript');
 	const bumpSha = git(seed, 'rev-parse', 'HEAD');
@@ -41,6 +45,12 @@ function fixture({ target = 'bump-pr' } = {}) {
 	const base = target === 'main-drift' ? 'origin/main' : 'origin/bump/core-typescript';
 	const branch = target === 'main-drift' ? 'pin-health/main-drift' : 'pin-health/core-typescript';
 	git(work, 'checkout', '-q', '-B', branch, base);
+	const targetHead = git(work, 'rev-parse', 'HEAD');
+
+	// The trusted copy holds main's memory file, the way "Copy the loop's tooling" leaves it.
+	const tooling = join(root, 'tooling');
+	execFileSync('mkdir', ['-p', join(tooling, '.github/agent-memory')]);
+	write(join(tooling, MEMORY), `${git(origin, 'show', `main:${MEMORY}`)}\n`);
 
 	const bin = join(root, 'bin');
 	execFileSync('mkdir', ['-p', bin]);
@@ -84,8 +94,17 @@ function fixture({ target = 'bump-pr' } = {}) {
 				GITHUB_REPOSITORY: 'o/r',
 				PIN_HEALTH_TARGET: targetJson,
 				PIN_HEALTH_BODY: body,
+				TARGET_HEAD: targetHead,
 			},
 		});
+	const baseline = () =>
+		execFileSync('bash', [BASELINE], {
+			cwd: work,
+			encoding: 'utf-8',
+			env: { ...process.env, PIN_HEALTH_TOOLING: tooling },
+		});
+	const classify = () =>
+		execFileSync(process.execPath, [CLASSIFY], { cwd: work, encoding: 'utf-8' }).trim();
 	const pushed = (path) => git(origin, 'show', `${branch}:${path}`);
 	const ghLog = () => {
 		try {
@@ -94,7 +113,7 @@ function fixture({ target = 'bump-pr' } = {}) {
 			return '';
 		}
 	};
-	return { origin, work, branch, bumpSha, run, pushed, ghLog };
+	return { origin, work, branch, bumpSha, run, pushed, ghLog, baseline, classify };
 }
 
 describe('classifyChange', () => {
@@ -151,5 +170,47 @@ describe('pin-health-publish.sh', () => {
 		const comment = log.slice(log.indexOf('## Pin Health'));
 		expect(hasEscalation([{ body: comment }], f.bumpSha)).toBe(true);
 		expect(hasEscalation([{ body: comment }], 'some-later-sha')).toBe(false);
+	});
+
+	// PR #235 review: on a bump branch older than the loop, a hold's diff was a new-file patch, and applying it to main failed with "already exists in index".
+	describe('on a bump branch that predates the memory file', () => {
+		it('publishes a hold from origin/main with only the memory change', () => {
+			const f = fixture({ oldBump: true });
+			f.baseline();
+			write(
+				join(f.work, MEMORY),
+				`${git(f.origin, 'show', `main:${MEMORY}`).replace('- (none yet)', HOLD)}\n`,
+			);
+			expect(f.classify()).toBe('hold');
+			f.run('hold');
+			expect(f.pushed('package.json')).toBe('{ "typescript": "6.0.3" }');
+			expect(f.pushed(MEMORY)).toContain(HOLD);
+			expect(git(f.origin, 'diff', '--name-only', 'main', f.branch)).toBe(MEMORY);
+		});
+
+		it('reads the memory overlay alone as no change, so a quiet run escalates', () => {
+			const f = fixture({ oldBump: true });
+			f.baseline();
+			expect(f.classify()).toBe('escalate');
+		});
+
+		it('publishes a repair on the bump without shipping the overlay', () => {
+			const f = fixture({ oldBump: true });
+			f.baseline();
+			write(join(f.work, 'postcss.config.mjs'), 'export default {};\n');
+			expect(f.classify()).toBe('repair');
+			f.run('repair');
+			expect(git(f.origin, 'rev-parse', `${f.branch}^`)).toBe(f.bumpSha);
+			expect(git(f.origin, 'diff', '--name-only', f.bumpSha, f.branch)).toBe('postcss.config.mjs');
+		});
+	});
+
+	it('keeps a repair from touching the memory file on a current bump branch too', () => {
+		const f = fixture();
+		f.baseline();
+		write(join(f.work, 'postcss.config.mjs'), 'export default {};\n');
+		f.run('repair');
+		expect(git(f.origin, 'rev-parse', `${f.branch}^`)).toBe(f.bumpSha);
+		expect(git(f.origin, 'diff', '--name-only', f.bumpSha, f.branch)).toBe('postcss.config.mjs');
 	});
 });

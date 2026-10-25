@@ -107,6 +107,8 @@ jobs:
           git fetch origin "$BASE_REF"
           git checkout -B "$BRANCH" "origin/$BASE_REF"
           echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          # The agent edits main's memory file even on a bump branch that predates it, and classify, the scope guard, and publish all measure against this baseline commit.
+          bash "$PIN_HEALTH_TOOLING/scripts/pin-health-baseline.sh"
 
       # A bump branch can move package.json and the lockfile, so this installs and builds again from its tree. When the bump is what breaks the install or the build, that failure is the thing to investigate, so the script records it in the target for the agent and the step passes. A failed checkout above stays fatal.
       - name: Set up the target
@@ -135,7 +137,7 @@ jobs:
 
       - name: Scope guard
         if: steps.branch.outcome == 'success'
-        run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-scope-guard.mjs" --expect-head "${{ steps.branch.outputs.head }}"
+        run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-scope-guard.mjs" --expect-head "${{ steps.branch.outputs.baseline }}"
 
       # Classified against the target branch's head, before anything commits, so a bump branch's own commits never count. A hold changes only the memory file and gets published from main, so it has no code to validate. An escalation changes nothing, and its reproduction is red by definition.
       - name: Classify the change
@@ -155,6 +157,7 @@ jobs:
           GH_TOKEN: ${{ secrets.PIN_BUMP_TOKEN || github.token }}
           PUSH_TOKEN: ${{ secrets.PIN_BUMP_TOKEN || github.token }}
           OUTCOME: ${{ steps.change.outputs.outcome }}
+          TARGET_HEAD: ${{ steps.branch.outputs.head }}
           PIN_HEALTH_BODY: /tmp/pr-body.md
         run: bash "$PIN_HEALTH_TOOLING/scripts/pin-health-publish.sh"
 

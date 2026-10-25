@@ -8,6 +8,7 @@
 #   LOOP_LABEL          label for loop PRs (default agent-pin-health)
 #   PIN_HEALTH_TARGET   controller output (default /tmp/pin-health/target.json)
 #   PIN_HEALTH_BODY     the agent's final message (default /tmp/pr-body.md)
+#   TARGET_HEAD         the target branch's head before scripts/pin-health-baseline.sh committed on top of it (default HEAD, for a checkout with no baseline)
 # gh must be on PATH and authenticated through GH_TOKEN.
 set -euo pipefail
 
@@ -46,6 +47,18 @@ case "$OUTCOME" in
 		title="chore(pin-health): recommend holding a $unit pin"
 		;;
 	repair)
+		# The baseline commit is the trusted memory overlay, and it never ships. Drop it, and put the memory file back the way the target branch had it, unless the agent edited it during the repair.
+		target_head=${TARGET_HEAD:-$(git rev-parse HEAD)}
+		if git diff --quiet HEAD -- "$memory"; then memory_edited=false; else memory_edited=true; fi
+		git reset -q --soft "$target_head"
+		if [ "$memory_edited" = false ]; then
+			if git cat-file -e "$target_head:$memory" 2> /dev/null; then
+				git checkout -q "$target_head" -- "$memory"
+			else
+				git rm -q --cached --ignore-unmatch -- "$memory"
+				rm -f -- "$memory"
+			fi
+		fi
 		git add -A
 		if [ "$target" = "main-drift" ]; then
 			title="fix(manifest): repair the main-branch drift behind #$pr"

@@ -86,4 +86,26 @@ describe('agent-pin-health.yml', () => {
 		expect(step('Actuator - run the agent')).toContain("if: steps.branch.outcome == 'success'");
 		expect(step('Actuator - run the agent')).not.toContain('steps.setup');
 	});
+
+	// PR #235 review: a bump branch older than the loop has no memory file, so the agent's hold there couldn't apply to main.
+	it('lays a memory baseline over the target and measures everything against it', () => {
+		const step = (name) => {
+			const start = stepIndex(name);
+			return lines
+				.slice(
+					start,
+					lines.findIndex((l, i) => i > start && l.trim().startsWith('- name:')),
+				)
+				.join('\n');
+		};
+		expect(step('Check out the target branch')).toContain(
+			'"$PIN_HEALTH_TOOLING/scripts/pin-health-baseline.sh"',
+		);
+		expect(step('Scope guard')).toMatch(
+			/--expect-head "\$\{\{ steps\.branch\.outputs\.baseline \}\}"/,
+		);
+		expect(step('Publish the result')).toMatch(
+			/TARGET_HEAD: \$\{\{ steps\.branch\.outputs\.head \}\}/,
+		);
+	});
 });
