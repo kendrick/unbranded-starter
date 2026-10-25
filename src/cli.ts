@@ -213,6 +213,7 @@ if (command === 'doctor') {
 					diff: values.diff,
 					force: values.force,
 					pm: values.pm,
+					onConflict: values['on-conflict'],
 					unitsDir,
 				}),
 			).catch((err: unknown) => {

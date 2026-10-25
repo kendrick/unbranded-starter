@@ -337,6 +337,9 @@ export interface RunDoctorFixOpts {
 	// Rides runInit's existing --pm override channel, mainly so --fix --yes can't
 	// dead-end on the PM prompt in a repo with no lockfile to detect from.
 	pm?: string;
+	// --on-conflict, left as the raw string so resolveConfig validates it exactly
+	// as it does for init (#215).
+	onConflict?: string;
 }
 
 // The bridge from audit to remedy: collect the units that close this run's active
@@ -376,6 +379,7 @@ export async function runDoctorFix(opts: RunDoctorFixOpts = {}): Promise<number>
 				inline: {
 					units: units.join(','),
 					...(opts.pm !== undefined ? { pm: opts.pm } : {}),
+					...(opts.onConflict !== undefined ? { onConflict: opts.onConflict } : {}),
 					yes: true,
 				},
 			})
