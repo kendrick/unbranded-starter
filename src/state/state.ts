@@ -215,9 +215,8 @@ export function writeStateFile(opts: {
 	const attribution: Record<string, string> = {};
 	const modes: Record<string, TrackedFileMode> = {};
 
-	// Defensive: every write runInit passes today exists on disk. User-skips,
-	// the one case that could name a file we didn't write, are dropped before
-	// they get here so the user's own file isn't claimed (#214).
+	// Only hash files present post-apply: a caller may name a dest that never
+	// landed, and there's nothing on our side to hash for it.
 	const landed = opts.writes.filter((w) => existsSync(w.dest));
 	for (const w of landed) {
 		const rel = toPosix(relative(opts.targetDir, w.dest));
