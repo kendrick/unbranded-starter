@@ -5,9 +5,6 @@ on:
   schedule:
     # Tuesdays 06:00 UTC, a day after pin-bumps.yml, so Monday's bump PRs have finished CI.
     - cron: '0 6 * * 2'
-  # TEMPORARY, for the Phase H dry run. A workflow can't be dispatched until it has run once, and a scheduled one only runs from main. Revert this commit before merge.
-  push:
-    branches: [control-loop/pin-health]
   workflow_dispatch:
     inputs:
       agent:
