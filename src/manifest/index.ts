@@ -372,6 +372,8 @@ export const UNITS: Unit[] = [
 		label: 'VS Code workspace',
 		description:
 			'Shared settings.json (merged, not clobbered) plus an extensions.json generated from the units you picked.',
+		// settings.json's lint keys (default formatter, fix-on-save) depend on which
+		// lint unit resolved, so applyVscodeSettings fills them in once the set is known.
 		files: [
 			{ src: 'opt-in/vscode/settings.json', dest: '.vscode/settings.json', mode: 'merge-json' },
 			// No extensions.json here — it's generated at write time from the union

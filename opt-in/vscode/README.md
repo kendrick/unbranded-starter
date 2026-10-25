@@ -9,5 +9,5 @@ Shared VS Code workspace config.
 
 ## Notes
 
-- The settings baseline assumes ESLint drives formatting (format-on-save through the ESLint extension) and Stylelint owns CSS. Tweak it per project.
+- The formatter and fix-on-save action follow your lint unit: the ESLint extension with `core-eslint`, the oxc extension with `core-oxlint`, and neither with no lint unit. Stylelint owns CSS. Tweak the settings per project.
 - extensions.json is computed at scaffold time, so re-running with a different selection folds the new recommendations in without dropping the ones you already had.

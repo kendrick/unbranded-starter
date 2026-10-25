@@ -7,6 +7,7 @@ import { join, posix } from 'node:path';
 import { planFileOp, renderPlanDiff } from '../fs/copy';
 import { loadCatalog, unitsDirsFor } from '../manifest/catalog';
 import { UNITS } from '../manifest/index';
+import { applyVscodeSettings } from '../manifest/vscode-settings';
 import { hashBuffer, readStateFile, STATE_FILENAME, unsupportedStateMessage } from '../state/state';
 import { PKG_ROOT } from '../util/paths';
 
@@ -67,12 +68,21 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 	const byId = new Map<string, AnyUnit>(units.map((u) => [u.id, u]));
 
 	const planByRel = new Map<string, FilePlan>();
+	const installedIds = new Set(opts.state.units.map((u) => u.id));
 	for (const { id } of opts.state.units) {
-		const unit = byId.get(id);
+		const catalogUnit = byId.get(id);
 		// A unit whose definition we can't load leaves its files judged on the user
 		// axis alone: no plan means no template hash, and classify already reads that
 		// as "the template axis can't be judged" rather than as drift.
-		if (!unit) continue;
+		if (!catalogUnit) continue;
+		// Replay the generator init used. The raw catalog op has no lint keys, so
+		// planning it reports template-updated on a clean scaffold, and the generated
+		// op is `content`, which carries no src file and so no template hash, the
+		// same user-axis-only path as lint-staged.config.mjs. Hashing the generated
+		// bytes instead misreads a settings file merged into an existing one, such as
+		// after a lint-unit switch, as template-updated that `update` can't clear
+		// (#227).
+		const unit = applyVscodeSettings(catalogUnit, installedIds);
 		const pkgRoot = opts.catalog?.templateRoots.get(id) ?? fallbackRoot;
 		for (const op of unit.files) {
 			const plan = planFileOp(op, {

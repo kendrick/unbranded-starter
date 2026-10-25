@@ -1,4 +1,4 @@
-import type { FileOp } from '../manifest/types';
+import type { FileOp, RetireEntry } from '../manifest/types';
 import type { WriteJournal } from './journal';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join as joinNative, posix, relative, resolve as resolveNative } from 'node:path';
@@ -72,7 +72,15 @@ export async function copyFileOp(op: FileOp, opts: CopyOptions): Promise<CopyRes
 
 	const mode = op.mode ?? 'copy';
 	if (mode === 'merge-json') {
-		return mergeJsonOp(srcPath, destPath, srcBuf, destBuf, opts.onConflict, opts.journal);
+		return mergeJsonOp(
+			srcPath,
+			destPath,
+			srcBuf,
+			destBuf,
+			opts.onConflict,
+			opts.journal,
+			op.retire,
+		);
 	}
 	if (mode === 'append-if-missing') {
 		return appendIfMissingOp(srcPath, destPath, srcBuf, destBuf, opts.journal);
@@ -124,12 +132,13 @@ async function mergeJsonOp(
 	destBuf: Buffer,
 	onConflict: CopyOptions['onConflict'],
 	journal?: WriteJournal,
+	retire?: readonly RetireEntry[],
 ): Promise<CopyResult> {
 	const existingText = destBuf.toString('utf-8');
 	const existing = JSON.parse(existingText) as unknown;
 	const incoming = JSON.parse(srcBuf.toString('utf-8')) as unknown;
 
-	const { merged, conflict } = deepMergeJson(existing, incoming);
+	const { merged, conflict } = deepMergeJson(retireKeys(existing, retire), incoming);
 
 	// Re-serialize with the destination's own indentation so a merge doesn't
 	// silently reformat the user's file wider than the keys it actually touched.
@@ -211,7 +220,10 @@ export function planFileOp(op: FileOp, opts: CopyOptions): FilePlan {
 	if (mode === 'merge-json') {
 		const existingText = destBuf.toString('utf-8');
 		const existing = JSON.parse(existingText) as unknown;
-		const { merged, conflict } = deepMergeJson(existing, JSON.parse(srcBuf.toString('utf-8')));
+		const { merged, conflict } = deepMergeJson(
+			retireKeys(existing, op.retire),
+			JSON.parse(srcBuf.toString('utf-8')),
+		);
 		if (!conflict && deepEqual(merged, existing)) return { ...base, outcome: 'skip' };
 		const proposed = `${JSON.stringify(merged, null, detectIndent(existingText))}\n`;
 		return {
@@ -344,6 +356,27 @@ function deepMergeJson(existing: unknown, incoming: unknown): MergeResult {
 	// but we flag it so the caller can offer the choice rather than impose it.
 	if (deepEqual(existing, incoming)) return { merged: existing, conflict: false };
 	return { merged: incoming, conflict: true };
+}
+
+// Works on a clone because callers still need the untouched parse to tell a
+// retirement-only change from a no-op. A missing path, or one that runs through
+// a non-object, is skipped, since the key was never there or the user
+// reshaped it.
+function retireKeys(existing: unknown, retire: readonly RetireEntry[] | undefined): unknown {
+	if (retire === undefined || retire.length === 0) return existing;
+	const pruned = structuredClone(existing);
+	for (const { path, value } of retire) {
+		const leaf = path.at(-1);
+		if (leaf === undefined) continue;
+		let parent: unknown = pruned;
+		for (const segment of path.slice(0, -1)) {
+			parent =
+				isPlainObject(parent) && Object.hasOwn(parent, segment) ? parent[segment] : undefined;
+		}
+		if (isPlainObject(parent) && Object.hasOwn(parent, leaf) && deepEqual(parent[leaf], value))
+			delete parent[leaf];
+	}
+	return pruned;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

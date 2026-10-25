@@ -496,6 +496,121 @@ describe('planFileOp (dry-run classification)', () => {
 	});
 });
 
+// merge-json is existing-wins, so without `retire` a key the other lint unit
+// wrote survives every later merge. The paths use a dotted segment because
+// VS Code setting names contain dots.
+describe('merge-json retire', () => {
+	let pkgRoot: string;
+	let targetDir: string;
+	const retire = [{ path: ['a', 'b.c'], value: 'x' }];
+
+	beforeEach(() => {
+		pkgRoot = mkdtempSync(join(tmpdir(), 'unbranded-retire-pkg-'));
+		targetDir = mkdtempSync(join(tmpdir(), 'unbranded-retire-target-'));
+		vi.mocked(select).mockReset();
+	});
+
+	afterEach(() => {
+		rmSync(pkgRoot, { recursive: true, force: true });
+		rmSync(targetDir, { recursive: true, force: true });
+	});
+
+	function seed(dest: unknown, incoming: unknown): void {
+		writeFileSync(join(targetDir, 'c.json'), `${JSON.stringify(dest, null, '\t')}\n`);
+		writeFileSync(join(pkgRoot, 'c.json'), `${JSON.stringify(incoming, null, '\t')}\n`);
+	}
+
+	function readJson(): unknown {
+		return JSON.parse(readFileSync(join(targetDir, 'c.json'), 'utf-8')) as unknown;
+	}
+
+	const op = { src: 'c.json', dest: 'c.json', mode: 'merge-json' as const, retire };
+
+	it('deletes a listed key whose value deep-equals, leaving unlisted keys alone', async () => {
+		seed({ a: { 'b.c': 'x', 'b': { c: 'x' }, 'other': 'x', 'keep': 1 } }, { a: { new: 2 } });
+		const result = await copyFileOp(op, { pkgRoot, targetDir });
+		expect(result.action).toBe('merged');
+		expect(readJson()).toEqual({ a: { b: { c: 'x' }, other: 'x', keep: 1, new: 2 } });
+	});
+
+	it('keeps a listed key whose value differs, giving the plain merge', async () => {
+		seed({ a: { 'b.c': 'user' } }, { a: { new: 2 } });
+		const result = await copyFileOp(op, { pkgRoot, targetDir });
+		expect(result.action).toBe('merged');
+		expect(readJson()).toEqual({ a: { 'b.c': 'user', 'new': 2 } });
+	});
+
+	it('compares structured values deeply rather than by reference or loosely', async () => {
+		seed({ a: { 'b.c': { n: [1, 2] }, 'd': { n: [1] } } }, { z: 1 });
+		await copyFileOp(
+			{
+				...op,
+				retire: [
+					{ path: ['a', 'b.c'], value: { n: [1, 2] } },
+					{ path: ['a', 'd'], value: { n: [1, 2] } },
+				],
+			},
+			{ pkgRoot, targetDir },
+		);
+		expect(readJson()).toEqual({ a: { d: { n: [1] } }, z: 1 });
+	});
+
+	it('equals the plain merge, without error, when the path is missing or crosses a non-object', async () => {
+		seed({ other: 1, s: 'str' }, { a: { new: 2 } });
+		const result = await copyFileOp(
+			{ ...op, retire: [...retire, { path: ['s', 'x'], value: 'x' }, { path: [], value: 'x' }] },
+			{ pkgRoot, targetDir },
+		);
+		expect(result.action).toBe('merged');
+		expect(readJson()).toEqual({ other: 1, s: 'str', a: { new: 2 } });
+	});
+
+	it('takes the incoming value without a conflict when the incoming file sets the retired key', async () => {
+		seed({ a: { 'b.c': 'x' } }, { a: { 'b.c': 'y' } });
+		const result = await copyFileOp(op, { pkgRoot, targetDir });
+		expect(select).not.toHaveBeenCalled();
+		expect(result.action).toBe('merged');
+		expect(readJson()).toEqual({ a: { 'b.c': 'y' } });
+	});
+
+	it('writes a merge whose only effect is a retirement, leaving an emptied parent as {}', async () => {
+		seed({ a: { 'b.c': 'x' }, z: 1 }, { z: 1 });
+		const result = await copyFileOp(op, { pkgRoot, targetDir });
+		expect(result.action).toBe('merged');
+		expect(readJson()).toEqual({ a: {}, z: 1 });
+	});
+
+	it('still skips a byte-identical file, since the incoming file then sets every key it holds', async () => {
+		seed({ a: { 'b.c': 'x' } }, { a: { 'b.c': 'x' } });
+		const result = await copyFileOp(op, { pkgRoot, targetDir });
+		expect(result).toMatchObject({ action: 'skipped', reason: 'identical' });
+		expect(readJson()).toEqual({ a: { 'b.c': 'x' } });
+	});
+
+	it('plans "merge" for a retirement-only change, with the key gone from the proposed side, and writes nothing', () => {
+		seed({ a: { 'b.c': 'x' }, z: 1 }, { z: 1 });
+		const before = readFileSync(join(targetDir, 'c.json'), 'utf-8');
+		const plan = planFileOp(op, { pkgRoot, targetDir });
+		expect(plan.outcome).toBe('merge');
+		expect(JSON.parse(plan.diff?.proposed ?? 'null')).toEqual({ a: {}, z: 1 });
+		expect(readFileSync(join(targetDir, 'c.json'), 'utf-8')).toBe(before);
+	});
+
+	it('plans "merge", not "conflict", when the incoming file sets the retired key', () => {
+		seed({ a: { 'b.c': 'x' } }, { a: { 'b.c': 'y' } });
+		const plan = planFileOp(op, { pkgRoot, targetDir });
+		expect(plan.outcome).toBe('merge');
+		expect(JSON.parse(plan.diff?.proposed ?? 'null')).toEqual({ a: { 'b.c': 'y' } });
+	});
+
+	it('plans like the plain merge when the on-disk value differs', () => {
+		seed({ a: { 'b.c': 'user' }, z: 1 }, { z: 1 });
+		expect(planFileOp(op, { pkgRoot, targetDir }).outcome).toBe('skip');
+		seed({ a: { 'b.c': 'user' } }, { a: { 'b.c': 'y' } });
+		expect(planFileOp(op, { pkgRoot, targetDir }).outcome).toBe('conflict');
+	});
+});
+
 // The journal is optional and every writeBuffer call site threads it through,
 // so this exercises the real createJournal() contract rather than a stub—
 // a mock recordBefore would happily accept a call ordered after the write.
