@@ -129,7 +129,8 @@ describe('classifyChange', () => {
 	});
 });
 
-describe('pin-health-publish.sh', () => {
+// publish.sh and baseline.sh are bash and git, and they run only on agent-pin-health's ubuntu runner.
+describe.skipIf(process.platform === 'win32')('pin-health-publish.sh', () => {
 	// PR #235 review: a hold committed on top of bump/<unit> carried the rejected bump into main.
 	it('publishes a hold from origin/main with only the memory change', () => {
 		const f = fixture();

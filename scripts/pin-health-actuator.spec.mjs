@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
 	allowedCommands,
@@ -42,14 +43,15 @@ describe('missingSecret', () => {
 });
 
 describe('the trusted tooling copy', () => {
-	const tooling = toolingPaths('/runner/tmp/pin-health-tooling');
+	const DIR = '/runner/tmp/pin-health-tooling';
+	const tooling = toolingPaths(DIR);
+	// toolingPaths joins with node:path, so the expected paths are built the same way. That gives backslashes on the Windows checks legs.
+	const at = (p) => join(DIR, p);
 
 	// PR #235 review: the validator the agent may run has to be the trusted copy, not the target branch's.
 	it('points the validator rule at the trusted copy', () => {
 		const args = claudeArgs(POLICY, {}, tooling);
-		expect(args).toContain(
-			'Bash(node /runner/tmp/pin-health-tooling/scripts/pin-health-validate.mjs *)',
-		);
+		expect(args).toContain(`Bash(node ${at('scripts/pin-health-validate.mjs')} *)`);
 		expect(args).not.toContain('Bash(node scripts/pin-health-validate.mjs *)');
 	});
 
@@ -67,10 +69,10 @@ describe('the trusted tooling copy', () => {
 			tooling,
 		});
 		for (const path of [
-			'/runner/tmp/pin-health-tooling/.claude/skills/repair-pin-bump/SKILL.md',
-			'/runner/tmp/pin-health-tooling/.claude/skills/repair-pin-bump/references/',
-			'node /runner/tmp/pin-health-tooling/scripts/pin-health-validate.mjs',
-			'/runner/tmp/pin-health-tooling/scripts/pin-health-scope-guard.mjs',
+			at('.claude/skills/repair-pin-bump/SKILL.md'),
+			`${at('.claude/skills/repair-pin-bump/references')}/`,
+			`node ${at('scripts/pin-health-validate.mjs')}`,
+			at('scripts/pin-health-scope-guard.mjs'),
 		])
 			expect(prompt).toContain(path);
 		expect(prompt.indexOf('## Tooling')).toBeLessThan(prompt.indexOf('## Selected Work'));
