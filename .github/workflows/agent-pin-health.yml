@@ -38,12 +38,20 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # The loop's own files come from this checkout (the ref the workflow runs from) and go outside it, before the target branch replaces the tree. The target branch would otherwise supply its own scope guard, validator, skill, and prompt, and an older bump branch has none of them.
+      - name: Copy the loop's tooling
+        run: |
+          tooling="$RUNNER_TEMP/pin-health-tooling"
+          mkdir -p "$tooling"
+          cp -r --parents scripts/pin-health-*.mjs .claude/skills/repair-pin-bump .github/agent-prompts/pin-health.md .github/agent-memory/pin-health.md "$tooling/"
+          echo "PIN_HEALTH_TOOLING=$tooling" >> "$GITHUB_ENV"
+
       # Fail before any install or agent spend, with an error that names the missing secret.
       - name: Check the agent secret
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: node scripts/pin-health-actuator.mjs --check-secret --agent "$PIN_HEALTH_AGENT"
+        run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-actuator.mjs" --check-secret --agent "$PIN_HEALTH_AGENT"
 
       # Flow control: one open loop PR at a time. A scheduled run stops here when one exists; a manual run goes ahead.
       - name: Check for an open loop PR
@@ -87,7 +95,7 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node scripts/pin-health-controller.mjs --outdated /tmp/pin-health/outdated.json
+        run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-controller.mjs" --outdated /tmp/pin-health/outdated.json --memory "$PIN_HEALTH_TOOLING/.github/agent-memory/pin-health.md"
 
       - name: Check out the target branch
         id: branch
@@ -120,11 +128,11 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: node scripts/pin-health-actuator.mjs --agent "$PIN_HEALTH_AGENT" --out /tmp/pr-body.md
+        run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-actuator.mjs" --agent "$PIN_HEALTH_AGENT" --out /tmp/pr-body.md --tooling "$PIN_HEALTH_TOOLING"
 
       - name: Scope guard
         if: steps.branch.outcome == 'success'
-        run: node scripts/pin-health-scope-guard.mjs --expect-head "${{ steps.branch.outputs.head }}"
+        run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-scope-guard.mjs" --expect-head "${{ steps.branch.outputs.head }}"
 
       # A hold touches only the memory file and an escalation touches nothing. Neither has code to validate, and an escalation's reproduction is red by definition.
       - name: Classify the change
@@ -141,7 +149,7 @@ jobs:
       - name: Validate
         id: validate
         if: steps.change.outputs.code == 'true'
-        run: node scripts/pin-health-validate.mjs all
+        run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-validate.mjs" all
 
       - name: Publish the result
         if: steps.branch.outcome == 'success' && steps.validate.outcome != 'failure'

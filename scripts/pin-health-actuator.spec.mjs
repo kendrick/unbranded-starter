@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	allowedCommands,
 	buildPrompt,
 	claudeArgs,
 	codexArgs,
@@ -9,6 +10,7 @@ import {
 	POLICY,
 	resolveAgent,
 	secretCheck,
+	toolingPaths,
 } from './pin-health-actuator.mjs';
 
 describe('resolveAgent', () => {
@@ -39,6 +41,46 @@ describe('missingSecret', () => {
 	});
 });
 
+describe('the trusted tooling copy', () => {
+	const tooling = toolingPaths('/runner/tmp/pin-health-tooling');
+
+	// PR #235 review: the validator the agent may run has to be the trusted copy, not the target branch's.
+	it('points the validator rule at the trusted copy', () => {
+		const args = claudeArgs(POLICY, {}, tooling);
+		expect(args).toContain(
+			'Bash(node /runner/tmp/pin-health-tooling/scripts/pin-health-validate.mjs *)',
+		);
+		expect(args).not.toContain('Bash(node scripts/pin-health-validate.mjs *)');
+	});
+
+	it('gives Claude read access to the copy, where the skill lives', () => {
+		const args = claudeArgs(POLICY, {}, tooling);
+		const dirs = args.flatMap((a, i) => (a === '--add-dir' ? [args[i + 1]] : []));
+		expect(dirs).toEqual(['/tmp/pin-health', '/runner/tmp/pin-health-tooling']);
+	});
+
+	it('names the skill, references, validator, and scope guard in the prompt', () => {
+		const prompt = buildPrompt({
+			template: '# Context\n',
+			target: { target: 'none' },
+			memory: '',
+			tooling,
+		});
+		for (const path of [
+			'/runner/tmp/pin-health-tooling/.claude/skills/repair-pin-bump/SKILL.md',
+			'/runner/tmp/pin-health-tooling/.claude/skills/repair-pin-bump/references/',
+			'node /runner/tmp/pin-health-tooling/scripts/pin-health-validate.mjs',
+			'/runner/tmp/pin-health-tooling/scripts/pin-health-scope-guard.mjs',
+		])
+			expect(prompt).toContain(path);
+		expect(prompt.indexOf('## Tooling')).toBeLessThan(prompt.indexOf('## Selected Work'));
+	});
+
+	it('stays repo-relative by default, for local runs', () => {
+		expect(toolingPaths('.').validator).toBe('scripts/pin-health-validate.mjs');
+	});
+});
+
 describe('buildPrompt', () => {
 	it('puts the controller target before the memory, after the template', () => {
 		const prompt = buildPrompt({
@@ -63,7 +105,8 @@ describe('claudeArgs', () => {
 	});
 	it('allows exactly the policy commands as Bash rules', () => {
 		const bash = args.filter((a) => a.startsWith('Bash('));
-		expect(bash).toEqual(POLICY.allowedCommands.map((c) => `Bash(${c})`));
+		expect(bash).toEqual(allowedCommands(POLICY, toolingPaths('.')).map((c) => `Bash(${c})`));
+		expect(bash).toContain('Bash(node scripts/pin-health-validate.mjs *)');
 		expect(bash.some((a) => /git (commit|push)|\bgh\b|curl|\bfind\b|\brg\b/.test(a))).toBe(false);
 	});
 	it('lets the agent query the registry read-only, as Bash rules', () => {

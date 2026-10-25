@@ -15,7 +15,8 @@ Every run ends in exactly one **outcome**:
 
 ## Ground Rules
 
-- The scope is `SCOPE` in `scripts/pin-health-scope-guard.mjs`. Read it before you edit. The workflow rejects your whole change if one path falls outside it.
+- The prompt's **Tooling** block gives the path of each loop file this skill names: the scope guard, the validator, and the references. Use those paths. In CI they point outside the checkout you're repairing.
+- The scope is `SCOPE` in the scope guard. Read it before you edit. The workflow rejects your whole change if one path falls outside it.
 - Keep every spec running. A failing e2e is the evidence; delete nothing, and add no skip or env gate. The scope guard rejects those too.
 - Keep the bump's pin values as the bump PR set them. Moving a pin back is a hold, and holds go in memory.
 - The workflow commits, pushes, and opens the PR after you finish. Leave your changes uncommitted.
@@ -31,7 +32,7 @@ Completion criterion: for each failing job, you can name the spec file, its env,
 
 ### 2. Reproduce
 
-Write `/tmp/pin-health/repro.json` as `{ "spec": "test/e2e/<file>.spec.ts", "env": { "UB_…": "…" } }`, taken from that job. Then run `node scripts/pin-health-validate.mjs repro`, which rebuilds and runs that one spec the way CI does.
+Write `/tmp/pin-health/repro.json` as `{ "spec": "test/e2e/<file>.spec.ts", "env": { "UB_…": "…" } }`, taken from that job. Then run the validator with `repro`, which rebuilds and runs that one spec the way CI does.
 
 Completion criterion: the spec fails locally with the error the CI log shows. If it passes, or the job only runs on Windows, go to **escalate** with what you saw.
 
@@ -47,7 +48,7 @@ Completion criterion: one cause, with the log line and file that show it.
 
 ### 4. Act on the outcome
 
-For **bump-caused** and **drift**, make the repair. Follow the shapes in `.claude/skills/repair-pin-bump/references/golden-patterns.md`: fix the shipped file or the generator so the scaffold is correct whatever upstream does, and add a spec assertion that fails without your fix. Touch only the files the diagnosis named.
+For **bump-caused** and **drift**, make the repair. Follow the shapes in `golden-patterns.md` in the skill references: fix the shipped file or the generator so the scaffold is correct whatever upstream does, and add a spec assertion that fails without your fix. Touch only the files the diagnosis named.
 
 For **upstream-incompatible**, record the hold. Add a bullet under `## Held pins` in `.github/agent-memory/pin-health.md` in exactly this form, which the controller parses:
 
@@ -61,13 +62,13 @@ Completion criterion: the diff holds only the repair and its assertion, or only 
 
 ### 5. Validate
 
-For a repair, run `node scripts/pin-health-validate.mjs all`. That runs `pnpm typecheck`, `CI=true pnpm lint`, `pnpm test`, and `pnpm build`, then your reproduction. Fix anything it reports, and run it again until it passes. For a hold or an escalation, skip this step.
+For a repair, run the validator with `all`. That runs `pnpm typecheck`, `CI=true pnpm lint`, `pnpm test`, and `pnpm build`, then your reproduction. Fix anything it reports, and run it again until it passes. For a hold or an escalation, skip this step.
 
 Completion criterion: the last run prints PASS on every line, or your report names the exact command that still fails and why you stopped.
 
 ### 6. Write the report
 
-Read `.claude/skills/repair-pin-bump/references/response-template.md` and write your final message in that format. The workflow uses it as the PR body, or as a comment on the bump PR when you changed nothing.
+Read `response-template.md` in the skill references and write your final message in that format. The workflow uses it as the PR body, or as a comment on the bump PR when you changed nothing.
 
 Completion criterion: the message follows the template, names the outcome, and quotes the log line the diagnosis rests on.
 

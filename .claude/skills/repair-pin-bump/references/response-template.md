@@ -26,7 +26,7 @@ Your final message becomes the PR body when you changed files, or a comment on t
 
 ### Validation
 
-- [PASS/FAIL] `node scripts/pin-health-validate.mjs all`
+- [PASS/FAIL] the validator, `all`
 - [PASS/FAIL] Reproduction: `[UB_…=… pnpm vitest run --config vitest.e2e.config.ts <spec>]`
 - Not run locally: [the Windows legs, or anything else CI covers that you didn't]
 

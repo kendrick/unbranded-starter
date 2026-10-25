@@ -1,19 +1,33 @@
 // The pin-health loop's agent seam: the one file that knows which coding agent runs. The workflow, controller, skill, and scope guard stay agent-neutral, so swapping Claude Code for Codex is a flag change here. Design: .github/control-loops/pin-health.md.
 //
 //   node scripts/pin-health-actuator.mjs --check-secret [--agent claude|codex]
-//   node scripts/pin-health-actuator.mjs [--agent claude|codex] [--target /tmp/pin-health/target.json] [--out /tmp/pr-body.md] [--print] [--local]
+//   node scripts/pin-health-actuator.mjs [--agent claude|codex] [--target /tmp/pin-health/target.json] [--out /tmp/pr-body.md] [--tooling <dir>] [--print] [--local]
+//
+// --tooling (default PIN_HEALTH_TOOLING, then the current directory) names the copy of the loop's own files: the scripts, the skill, the prompt, and the memory. In CI that's a copy taken from the base ref before the target branch is checked out, so the branch under judgment never supplies its own judge. The agent still works in the current directory, which is the target checkout.
 //
 // --local runs Claude on your own login instead of ANTHROPIC_API_KEY, for replaying a target by hand, and refuses to run in CI. --agent defaults to PIN_HEALTH_AGENT, then claude. --print writes the assembled prompt and the agent command to stdout and runs nothing, which is how to check the seam without spending anything. The pure pieces are exported for the spec.
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import process from 'node:process';
 
-export const PROMPT_TEMPLATE = '.github/agent-prompts/pin-health.md';
-export const MEMORY_FILE = '.github/agent-memory/pin-health.md';
 export const WORK_DIR = '/tmp/pin-health';
+
+// Where each of the loop's own files sits inside a tooling directory. A relative `dir` of '.' gives repo-relative paths, which is the local default.
+export function toolingPaths(dir) {
+	const at = (p) => (dir === '.' ? p : join(dir, p));
+	return {
+		dir,
+		skill: at('.claude/skills/repair-pin-bump/SKILL.md'),
+		references: at('.claude/skills/repair-pin-bump/references'),
+		promptTemplate: at('.github/agent-prompts/pin-health.md'),
+		memory: at('.github/agent-memory/pin-health.md'),
+		validator: at('scripts/pin-health-validate.mjs'),
+		scopeGuard: at('scripts/pin-health-scope-guard.mjs'),
+	};
+}
 
 // One agent-neutral policy. Each agent's flags are derived from it, so a policy change is a one-place edit.
 export const POLICY = {
@@ -27,7 +41,8 @@ export const POLICY = {
 		'pnpm install --frozen-lockfile',
 		'pnpm install --lockfile-only',
 		'node dist/cli.js *',
-		'node scripts/pin-health-validate.mjs *',
+		// {validator} is the trusted copy's path, filled in per run by allowedCommands().
+		'node {validator} *',
 		'git status',
 		'git status *',
 		'git diff *',
@@ -64,11 +79,29 @@ export function missingSecret(agent, env) {
 	return `::error::${secret} is not set. Add it as a repository secret before running agent-pin-health with --agent ${agent}.`;
 }
 
-export function buildPrompt({ template, target, memory }) {
-	return `${template.trimEnd()}\n\n## Selected Work\n\n\`\`\`json\n${JSON.stringify(target, null, 2)}\n\`\`\`\n\n## Agent Memory\n\n${memory.trim()}\n`;
+export function allowedCommands(policy, tooling) {
+	return policy.allowedCommands.map((c) => c.replace('{validator}', tooling.validator));
 }
 
-export function claudeArgs(policy, env = {}) {
+// The skill names these by role ("the validator", "the scope guard"), and this block gives each role its path for this run. That keeps the skill correct both in CI, where the paths point into the trusted copy, and locally, where they're repo-relative.
+export function toolingBlock(tooling) {
+	return [
+		'## Tooling',
+		'',
+		`- Skill: \`${tooling.skill}\``,
+		`- Skill references: \`${tooling.references}/\``,
+		`- Validator: \`node ${tooling.validator}\``,
+		`- Scope guard (its \`SCOPE\` list is where you may write): \`${tooling.scopeGuard}\``,
+		'',
+		'Run every command from the current directory, which is the checkout you are repairing.',
+	].join('\n');
+}
+
+export function buildPrompt({ template, target, memory, tooling = toolingPaths('.') }) {
+	return `${template.trimEnd()}\n\n${toolingBlock(tooling)}\n\n## Selected Work\n\n\`\`\`json\n${JSON.stringify(target, null, 2)}\n\`\`\`\n\n## Agent Memory\n\n${memory.trim()}\n`;
+}
+
+export function claudeArgs(policy, env = {}, tooling = toolingPaths('.')) {
 	const args = [
 		'-p',
 		// Project and user settings both carry allow rules for interactive use (this repo's allows curl). Loading only the gitignored local file, which neither a CI checkout nor a fresh worktree has, keeps the allowlist below the whole permission set. Login still works, because auth doesn't come from settings.
@@ -86,9 +119,11 @@ export function claudeArgs(policy, env = {}) {
 		'Read',
 		'Edit',
 		'Write',
-		...policy.allowedCommands.map((c) => `Bash(${c})`),
+		...allowedCommands(policy, tooling).map((c) => `Bash(${c})`),
 		'--add-dir',
 		WORK_DIR,
+		// Read access to the trusted copy, where the skill and its references live in CI.
+		...(tooling.dir === '.' ? [] : ['--add-dir', tooling.dir]),
 		'--max-budget-usd',
 		String(policy.budgetUsd),
 		'--output-format',
@@ -162,9 +197,9 @@ export function secretCheck({ agent, local, env }) {
 	return { ok: true };
 }
 
-function runClaude(prompt, outPath) {
+function runClaude(prompt, outPath, tooling) {
 	// The prompt goes on stdin. As a trailing argument it would sit right after the variadic --allowedTools list, one flag reorder away from being read as a tool name.
-	const proc = spawnSync('claude', claudeArgs(POLICY, process.env), {
+	const proc = spawnSync('claude', claudeArgs(POLICY, process.env, tooling), {
 		input: prompt,
 		encoding: 'utf-8',
 		maxBuffer: 256 * 1024 * 1024,
@@ -219,10 +254,13 @@ function main() {
 
 	const targetPath = opt('--target', join(WORK_DIR, 'target.json'));
 	const outPath = opt('--out', '/tmp/pr-body.md');
+	const toolingDir = opt('--tooling', process.env.PIN_HEALTH_TOOLING ?? '.');
+	const tooling = toolingPaths(toolingDir === '.' ? '.' : resolve(toolingDir));
 	const prompt = buildPrompt({
-		template: readFileSync(PROMPT_TEMPLATE, 'utf-8'),
+		template: readFileSync(tooling.promptTemplate, 'utf-8'),
 		target: JSON.parse(readFileSync(targetPath, 'utf-8')),
-		memory: readFileSync(MEMORY_FILE, 'utf-8'),
+		memory: readFileSync(tooling.memory, 'utf-8'),
+		tooling,
 	});
 	mkdirSync(WORK_DIR, { recursive: true });
 	writeFileSync(join(WORK_DIR, 'prompt.md'), prompt);
@@ -230,7 +268,7 @@ function main() {
 	if (flags.includes('--print')) {
 		const argv =
 			agent === 'claude'
-				? ['claude', ...claudeArgs(POLICY, process.env), '< prompt.md']
+				? ['claude', ...claudeArgs(POLICY, process.env, tooling), '< prompt.md']
 				: ['codex', ...codexArgs(outPath, process.env)];
 		process.stdout.write(`${prompt}\n---\n${argv.join(' ')}\n`);
 		if (agent === 'codex') process.stdout.write(`---\n${codexRules(POLICY)}\n`);
@@ -243,7 +281,7 @@ function main() {
 		process.exit(1);
 	}
 	try {
-		if (agent === 'claude') runClaude(prompt, outPath);
+		if (agent === 'claude') runClaude(prompt, outPath, tooling);
 		else runCodex(prompt, outPath);
 	} catch (err) {
 		process.stderr.write(
