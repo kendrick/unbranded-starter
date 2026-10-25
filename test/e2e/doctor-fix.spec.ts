@@ -48,6 +48,25 @@ function run(args: string[], cwd: string): ReturnType<typeof spawnSync<string>> 
 	return spawnSync('node', [CLI, ...args], { cwd, encoding: 'utf-8' });
 }
 
+// One fixable finding (tsconfig-no-ts-dep) against a tsconfig.json the user owns, so
+// the apply has exactly one conflict for --on-conflict to decide. Returns the
+// user's bytes (#215).
+function conflictRepo(dir: string): string {
+	writeJson(join(dir, 'package.json'), {
+		name: 'x',
+		version: '1.0.0',
+		scripts: { test: 'vitest', lint: 'eslint .' },
+		engines: { node: '>=22' },
+	});
+	const mine = '{ "compilerOptions": { "strict": false, "MINE": true } }\n';
+	writeFileSync(join(dir, 'tsconfig.json'), mine);
+	writeFileSync(join(dir, '.editorconfig'), 'root = true\n');
+	writeFileSync(join(dir, '.gitattributes'), '* text=auto\n');
+	mkdirSync(join(dir, '.github', 'workflows'), { recursive: true });
+	writeFileSync(join(dir, '.github', 'workflows', 'ci.yml'), 'on: push\njobs: {}\n');
+	return mine;
+}
+
 describe('unbranded doctor --fix', () => {
 	let tmp: string;
 
@@ -113,22 +132,35 @@ describe('unbranded doctor --fix', () => {
 	});
 
 	it("keeps the user's tsconfig.json under --on-conflict skip (#215)", () => {
-		writeJson(join(tmp, 'package.json'), {
-			name: 'x',
-			version: '1.0.0',
-			scripts: { test: 'vitest', lint: 'eslint .' },
-			engines: { node: '>=22' },
-		});
-		const mine = '{ "compilerOptions": { "strict": false, "MINE": true } }\n';
-		writeFileSync(join(tmp, 'tsconfig.json'), mine);
-		writeFileSync(join(tmp, '.editorconfig'), 'root = true\n');
-		writeFileSync(join(tmp, '.gitattributes'), '* text=auto\n');
-		mkdirSync(join(tmp, '.github', 'workflows'), { recursive: true });
-		writeFileSync(join(tmp, '.github', 'workflows', 'ci.yml'), 'on: push\njobs: {}\n');
+		const mine = conflictRepo(tmp);
 
 		const fix = run(['doctor', '--fix', '--yes', '--pm', 'null', '--on-conflict', 'skip'], tmp);
 		expect(fix.status, `stdout: ${fix.stdout}\nstderr: ${fix.stderr}`).toBe(0);
+		expect(fix.stdout).toContain('0 overwritten');
 		expect(fix.stdout).toContain('1 skipped');
+		expect(readFileSync(join(tmp, 'tsconfig.json'), 'utf-8')).toBe(mine);
+	});
+
+	it('still replaces tsconfig.json under --on-conflict overwrite (#215)', () => {
+		conflictRepo(tmp);
+
+		const fix = run(
+			['doctor', '--fix', '--yes', '--pm', 'null', '--on-conflict', 'overwrite'],
+			tmp,
+		);
+		expect(fix.status, `stdout: ${fix.stdout}\nstderr: ${fix.stderr}`).toBe(0);
+		expect(readFileSync(join(tmp, 'tsconfig.json'), 'utf-8')).toContain(
+			'"extends": "./tsconfig.base.json"',
+		);
+	});
+
+	it('rejects a bad --on-conflict value and writes nothing (#215)', () => {
+		const mine = conflictRepo(tmp);
+
+		const fix = run(['doctor', '--fix', '--yes', '--pm', 'null', '--on-conflict', 'bogus'], tmp);
+		expect(fix.status).toBe(1);
+		expect(fix.stderr + fix.stdout).toContain('config.onConflict must be "overwrite" or "skip".');
+		expect(existsSync(join(tmp, '.unbranded.json'))).toBe(false);
 		expect(readFileSync(join(tmp, 'tsconfig.json'), 'utf-8')).toBe(mine);
 	});
 });
