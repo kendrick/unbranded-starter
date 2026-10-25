@@ -62,4 +62,28 @@ describe('agent-pin-health.yml', () => {
 		);
 		expect(step("Copy the loop's tooling")).toContain('scripts/pin-health-*.sh');
 	});
+
+	// PR #235 review: a bump that broke its own install or build killed the checkout step, so nothing was investigated and the same target came back every run.
+	it('keeps the target install and build out of the checkout step, and runs the agent on a setup failure', () => {
+		const step = (name) => {
+			const start = stepIndex(name);
+			expect(start, name).toBeGreaterThan(-1);
+			return lines
+				.slice(
+					start,
+					lines.findIndex((l, i) => i > start && l.trim().startsWith('- name:')),
+				)
+				.join('\n');
+		};
+		expect(step('Check out the target branch')).not.toMatch(/\bpnpm\b/);
+		expect(step('Set up the target')).toContain(
+			'"$PIN_HEALTH_TOOLING/scripts/pin-health-setup.mjs"',
+		);
+		expect(stepIndex('Set up the target')).toBeGreaterThan(
+			stepIndex('Check out the target branch'),
+		);
+		expect(stepIndex('Set up the target')).toBeLessThan(stepIndex('Actuator - run the agent'));
+		expect(step('Actuator - run the agent')).toContain("if: steps.branch.outcome == 'success'");
+		expect(step('Actuator - run the agent')).not.toContain('steps.setup');
+	});
 });

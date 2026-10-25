@@ -1,7 +1,7 @@
 // The pin-health loop's validation bar, in one place. The agent runs it before it finishes, and the workflow runs it again before committing, so a PR never rests on the agent's word that the checks passed.
 //
 //   node scripts/pin-health-validate.mjs repro   # only the agent's reproduction of the failing CI job
-//   node scripts/pin-health-validate.mjs all     # the repo gate, then the reproduction
+//   node scripts/pin-health-validate.mjs all     # the repo gate (install, typecheck, lint, test, build), then the reproduction
 //
 // The reproduction comes from a JSON file the agent writes (default /tmp/pin-health/repro.json, or PIN_HEALTH_REPRO): { "spec": "test/e2e/<file>.spec.ts", "env": { "UB_PRESET": "next-app" } }. The agent's allowlist has no way to set env vars or run arbitrary commands, so this file is how it runs one e2e spec the way a CI job does. That's why the spec path and env keys are checked so tightly.
 
@@ -9,7 +9,9 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import process from 'node:process';
 
+// The install comes first because a bump can break it (PR #235 review), and a repair has to leave the tree installable from its lockfile.
 export const GATE = [
+	['pnpm', ['install', '--frozen-lockfile']],
 	['pnpm', ['typecheck']],
 	['pnpm', ['lint'], { CI: 'true' }],
 	['pnpm', ['test']],

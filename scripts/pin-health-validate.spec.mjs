@@ -41,8 +41,14 @@ describe('reproCommand', () => {
 
 describe('the validation gate', () => {
 	// ci.yml's `checks` job is the contract this mirrors; lint runs with CI=true for parity, per AGENTS.md.
-	it('mirrors the checks job order and lints in CI mode', () => {
-		expect(GATE.map(([, args]) => args[0])).toEqual(['typecheck', 'lint', 'test', 'build']);
-		expect(GATE[1][2]).toEqual({ CI: 'true' });
+	it('installs from the lockfile, then mirrors the checks job order and lints in CI mode', () => {
+		expect(GATE.map(([, args]) => args.join(' '))).toEqual([
+			'install --frozen-lockfile',
+			'typecheck',
+			'lint',
+			'test',
+			'build',
+		]);
+		expect(GATE[2][2]).toEqual({ CI: 'true' });
 	});
 });

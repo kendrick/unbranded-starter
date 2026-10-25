@@ -28,13 +28,17 @@ Every run ends in exactly one **outcome**:
 
 The prompt's **Selected Work** block is the controller's JSON: `target`, `pr`, `unit`, `bumps`, and `run.failedJobs`, where each job has a `name` and a `log` path. Read every log file it names, then read the matching job in `.github/workflows/ci.yml` to find the spec file and the `UB_*` env that job sets.
 
-Completion criterion: for each failing job, you can name the spec file, its env, and the first error line from the log.
+If the target has a `setupFailure`, the bump broke this branch's own `pnpm install --frozen-lockfile` or `pnpm build` before any CI job could run its tests. Read the log it names first. It's the same failure the CI jobs show.
+
+Completion criterion: for each failing job, you can name the spec file, its env, and the first error line from the log. For a `setupFailure`, you can name the failing command and its first error line.
 
 ### 2. Reproduce
 
+For a `setupFailure`, skip the repro file and run the validator with `all`. The validator's first two steps are the same install and build.
+
 Write `/tmp/pin-health/repro.json` as `{ "spec": "test/e2e/<file>.spec.ts", "env": { "UB_…": "…" } }`, taken from that job. Then run the validator with `repro`, which rebuilds and runs that one spec the way CI does.
 
-Completion criterion: the spec fails locally with the error the CI log shows. If it passes, or the job only runs on Windows, go to **escalate** with what you saw.
+Completion criterion: the spec (or, for a `setupFailure`, the install or build) fails locally with the error the log shows. If it passes, or the job only runs on Windows, go to **escalate** with what you saw.
 
 ### 3. Diagnose
 
@@ -62,7 +66,7 @@ Completion criterion: the diff holds only the repair and its assertion, or only 
 
 ### 5. Validate
 
-For a repair, run the validator with `all`. That runs `pnpm typecheck`, `CI=true pnpm lint`, `pnpm test`, and `pnpm build`, then your reproduction. Fix anything it reports, and run it again until it passes. For a hold or an escalation, skip this step.
+For a repair, run the validator with `all`. That runs `pnpm install --frozen-lockfile`, `pnpm typecheck`, `CI=true pnpm lint`, `pnpm test`, and `pnpm build`, then your reproduction if you wrote one. Fix anything it reports, and run it again until it passes. For a hold or an escalation, skip this step.
 
 Completion criterion: the last run prints PASS on every line, or your report names the exact command that still fails and why you stopped.
 

@@ -107,9 +107,12 @@ jobs:
           git fetch origin "$BASE_REF"
           git checkout -B "$BRANCH" "origin/$BASE_REF"
           echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          # A bump branch can move package.json and the lockfile, so install and build again from its tree.
-          pnpm install --frozen-lockfile
-          pnpm build
+
+      # A bump branch can move package.json and the lockfile, so this installs and builds again from its tree. When the bump is what breaks the install or the build, that failure is the thing to investigate, so the script records it in the target for the agent and the step passes. A failed checkout above stays fatal.
+      - name: Set up the target
+        id: setup
+        if: steps.branch.outcome == 'success'
+        run: node "$PIN_HEALTH_TOOLING/scripts/pin-health-setup.mjs"
 
       # Pinned to the versions whose flags the actuator seam was written against.
       - name: Install the agent CLI
