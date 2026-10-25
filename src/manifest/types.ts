@@ -56,6 +56,20 @@ export interface FileOp {
 	rename?: string;
 
 	mode?: 'copy' | 'merge-json' | 'append-if-missing';
+
+	// merge-json is existing-wins, so it can't drop a key another unit wrote,
+	// and switching lint units would leave the old unit's editor settings
+	// behind. Before the merge, merge-json deletes each listed key whose on-disk
+	// value still deep-equals `value`, so a key the user changed stays. Paths
+	// are segment arrays because VS Code setting names contain dots. Only
+	// merge-json reads `retire` and only generators set it; validate-unit
+	// rejects it on a user unit.
+	retire?: Array<RetireEntry>;
+}
+
+export interface RetireEntry {
+	path: string[];
+	value: unknown;
 }
 
 export interface PostInstall {

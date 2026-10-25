@@ -181,6 +181,28 @@ describe('validateUnitDefinition', () => {
 			});
 		});
 
+		it('rejects `retire` on a file entry, since only built-in generators may set it', () => {
+			const unit = {
+				...validBase(),
+				files: [
+					{
+						content: '{}',
+						dest: 'out.json',
+						mode: 'merge-json',
+						retire: [{ path: ['a'], value: 1 }],
+					},
+				],
+			};
+			const result = validateUnitDefinition(unit);
+			expect(result.ok).toBe(false);
+			if (result.ok) return;
+			expect(result.issues).toContainEqual({
+				path: 'files[0].retire',
+				expected: 'a recognized property',
+				got: 'unknown key "retire"',
+			});
+		});
+
 		it('rejects an invalid file mode', () => {
 			const unit = { ...validBase(), files: [{ content: 'x', dest: 'out.txt', mode: 'merge' }] };
 			const result = validateUnitDefinition(unit);

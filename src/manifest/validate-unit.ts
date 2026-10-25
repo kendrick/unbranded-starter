@@ -64,6 +64,8 @@ const TOP_LEVEL_KEYS = new Set([
 	'packageJsonPatch',
 	'removeNotes',
 ]);
+// FileOp's `retire` is absent on purpose. It deletes keys from a user's file,
+// so only built-in generators get to set it, never a unit loaded from disk.
 const FILE_KEYS = new Set(['src', 'content', 'dest', 'rename', 'mode']);
 const OPTION_KEYS = new Set(['key', 'label', 'default', 'choices']);
 const OPTION_CHOICE_KEYS = new Set([
