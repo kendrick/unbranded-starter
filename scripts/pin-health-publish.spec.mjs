@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { classifyChange } from './pin-health-classify.mjs';
+import { hasEscalation } from './pin-health-controller.mjs';
 
 const PUBLISH = resolve('scripts/pin-health-publish.sh');
 const MEMORY = '.github/agent-memory/pin-health.md';
@@ -139,5 +140,16 @@ describe('pin-health-publish.sh', () => {
 		expect(f.ghLog()).toContain('gh pr comment 7 --body-file');
 		expect(f.ghLog()).toContain(`<!-- agent-pin-health:escalated sha=${f.bumpSha} -->`);
 		expect(() => git(f.origin, 'rev-parse', '--verify', '--quiet', f.branch)).toThrow();
+	});
+
+	// PR #235 review: a main-drift escalation left no marker, so the next run paid for the same commit again.
+	it('records a main-drift escalation on the bump PR it came through, in a form the controller reads', () => {
+		const f = fixture({ target: 'main-drift' });
+		f.run('escalate');
+		const log = f.ghLog();
+		expect(log).toContain('gh pr comment 7 --body-file');
+		const comment = log.slice(log.indexOf('## Pin Health'));
+		expect(hasEscalation([{ body: comment }], f.bumpSha)).toBe(true);
+		expect(hasEscalation([{ body: comment }], 'some-later-sha')).toBe(false);
 	});
 });

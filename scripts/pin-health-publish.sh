@@ -28,12 +28,10 @@ git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
 case "$OUTCOME" in
 	escalate)
-		# The marker names the head SHA the agent looked at, so the controller doesn't pay for the same commit twice.
-		if [ "$target" = "bump-pr" ]; then
-			{ cat "$body"; printf '\n\n<!-- agent-pin-health:escalated sha=%s -->\n' "$sha"; } > "$work/comment.md"
-			gh pr comment "$pr" --body-file "$work/comment.md"
-		fi
-		echo "No changes; reported on #$pr."
+		# Both targets name a bump PR: main-drift is the one whose failure main shares. The marker goes on that PR with its head SHA, which is what the controller checks before picking it again, so neither kind of escalation gets paid for twice on the same commit.
+		{ cat "$body"; printf '\n\n<!-- agent-pin-health:escalated sha=%s -->\n' "$sha"; } > "$work/comment.md"
+		gh pr comment "$pr" --body-file "$work/comment.md"
+		echo "No changes; reported on #$pr ($target)."
 		exit 0
 		;;
 	hold)
