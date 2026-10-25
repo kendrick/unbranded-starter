@@ -1,6 +1,7 @@
 import type { AnyUnit } from '../../manifest/types';
 import type { PickerOption } from './options';
 import { applyLintStaged } from '../../manifest/lint-staged';
+import { applyVscodeSettings } from '../../manifest/vscode-settings';
 import { applyUnitOptions } from '../../manifest/options';
 import { allowedValues, constrain } from '../../manifest/option-lines';
 import { resolveSelection } from '../../manifest/resolve';
@@ -234,7 +235,12 @@ export function pickerSummary(state: PickerState): { units: number; files: numbe
 	const effective = new Set<string>([...state.selected, ...state.auto]);
 	const units = state.units
 		.filter((u) => effective.has(u.id))
-		.map((u) => applyLintStaged(applyUnitOptions(u, state.flavors), effective));
+		.map((u) =>
+			applyVscodeSettings(
+				applyLintStaged(applyUnitOptions(u, state.flavors), effective),
+				effective,
+			),
+		);
 	return {
 		units: units.length,
 		files: units.reduce((n, u) => n + u.files.length, 0),

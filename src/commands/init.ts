@@ -29,6 +29,7 @@ import { loadCatalog } from '../manifest/catalog';
 import { detectEslintFlavor } from '../manifest/eslint-config';
 import { IMPLIES_ONE_OF, LINE_OPTIONS } from '../manifest/index';
 import { applyLintStaged } from '../manifest/lint-staged';
+import { applyVscodeSettings } from '../manifest/vscode-settings';
 import {
 	allowedValues,
 	constrain,
@@ -306,7 +307,10 @@ export async function runPlanJson(opts: {
 		return 1;
 	}
 	const units = selectedUnits.map((unit) =>
-		applyLintStaged(applyUnitOptions(unit, optionSelections), selectedIds),
+		applyVscodeSettings(
+			applyLintStaged(applyUnitOptions(unit, optionSelections), selectedIds),
+			selectedIds,
+		),
 	);
 
 	// Same precedence as runInit (flag, then recipe).
@@ -588,7 +592,10 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		process.exit(1);
 	}
 	const units = selectedUnits.map((unit) =>
-		applyLintStaged(applyUnitOptions(unit, optionSelections), selectedIds),
+		applyVscodeSettings(
+			applyLintStaged(applyUnitOptions(unit, optionSelections), selectedIds),
+			selectedIds,
+		),
 	);
 
 	note(

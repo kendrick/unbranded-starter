@@ -13,6 +13,7 @@ import { detectIndent } from '../install/run';
 import { loadCatalog, unitsDirsFor } from '../manifest/catalog';
 import { LINE_OPTIONS } from '../manifest/index';
 import { applyLintStaged } from '../manifest/lint-staged';
+import { applyVscodeSettings } from '../manifest/vscode-settings';
 import { legacyTsFlavor, resolveLine } from '../manifest/option-lines';
 import { applyUnitOptions } from '../manifest/options';
 import {
@@ -110,7 +111,10 @@ export function planUpdate(opts: {
 	for (const { id } of state.units) {
 		const catalogUnit = byId.get(id);
 		if (!catalogUnit) continue;
-		const unit = applyLintStaged(applyUnitOptions(catalogUnit, selections), installedIds);
+		const unit = applyVscodeSettings(
+			applyLintStaged(applyUnitOptions(catalogUnit, selections), installedIds),
+			installedIds,
+		);
 		resolved.push(unit);
 		const root = opts.templateRoots?.get(id) ?? opts.pkgRoot;
 		for (const op of unit.files) {
