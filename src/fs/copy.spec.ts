@@ -530,7 +530,6 @@ describe('merge-json retire', () => {
 		seed({ a: { 'b.c': 'x', 'b': { c: 'x' }, 'other': 'x', 'keep': 1 } }, { a: { new: 2 } });
 		const result = await copyFileOp(op, { pkgRoot, targetDir });
 		expect(result.action).toBe('merged');
-		// `b.c` is one segment, so `b: { c }` and the same-valued sibling both stay.
 		expect(readJson()).toEqual({ a: { b: { c: 'x' }, other: 'x', keep: 1, new: 2 } });
 	});
 

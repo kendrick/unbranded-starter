@@ -65,7 +65,7 @@ Before you remove anything, write down which units the project has. Each entry i
    '*.{json,md,mdx,yaml,yml}': ['oxfmt --no-error-on-unmatched-pattern'],
    ```
 
-   If you have `opt-vscode`, add it to step 2's `--units`. The CLI then replaces the ESLint `editor.defaultFormatter`, the `source.fixAll.eslint` fix-on-save action, and `eslint.useFlatConfig` in `.vscode/settings.json` with oxc's formatter and `source.fixAll.oxc`. It only replaces a key whose value is still the one the CLI wrote. If you changed one, it stays, so edit it by hand. The CLI never removes entries from `.vscode/extensions.json`. It adds `oxc.oxc-vscode` and leaves `dbaeumer.vscode-eslint` in place, so delete that line yourself.
+   If you have `opt-vscode`, add it to step 2's `--units`. The CLI then swaps ESLint's `editor.defaultFormatter` and `source.fixAll.eslint` fix-on-save action in `.vscode/settings.json` for oxc's formatter and `source.fixAll.oxc`. It removes `eslint.useFlatConfig`, which oxc has no counterpart for. It touches a key only while the key still holds the value the CLI wrote. If you changed one, it stays, so edit it by hand. The CLI never removes entries from `.vscode/extensions.json`. It adds `oxc.oxc-vscode` and leaves `dbaeumer.vscode-eslint` in place, so delete that line yourself.
 
 3. Format the tree once:
 

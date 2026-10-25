@@ -138,8 +138,6 @@ async function mergeJsonOp(
 	const existing = JSON.parse(existingText) as unknown;
 	const incoming = JSON.parse(srcBuf.toString('utf-8')) as unknown;
 
-	// The no-op check below compares against `existing`, not the pruned copy, so
-	// a merge whose only effect is a retirement still writes.
 	const { merged, conflict } = deepMergeJson(retireKeys(existing, retire), incoming);
 
 	// Re-serialize with the destination's own indentation so a merge doesn't

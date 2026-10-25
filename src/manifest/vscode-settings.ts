@@ -1,16 +1,16 @@
 import type { AnyUnit, FileOp, RetireEntry } from './types';
 
-// opt-vscode's lint keys depend on which lint unit resolved: a static file named
+// opt-vscode's lint keys depend on which lint unit resolved. A static file named
 // ESLint's formatter and fix-on-save action in core-oxlint projects, where the
-// ESLint extension has nothing to run. It stays a merge-json FileOp, so user keys
-// survive and `update` regenerates it for the installed set. `retire` is how a
-// switch between lint units drops the other unit's keys, which merge-json's
+// ESLint extension has nothing to run. The generated op stays merge-json, so user
+// keys survive and `update` regenerates it for the installed set. `retire` is how
+// a switch between lint units drops the other unit's keys, which merge-json's
 // existing-wins rule can't do by itself.
 export const VSCODE_SETTINGS_DEST = '.vscode/settings.json';
 
-// The ids come from the oxc.oxc-vscode 1.64.1 release: the formatter id is
-// publisher.name from its package.json, and the fix-on-save provider is the one
-// its README documents (package.json declares no codeActions contribution).
+// The ids come from the oxc.oxc-vscode 1.64.1 release. The formatter id is
+// publisher.name from its package.json. The fix-on-save provider is the one its
+// README documents, since package.json declares no codeActions contribution.
 const ESLINT_FORMATTER = 'dbaeumer.vscode-eslint';
 const ESLINT_FIX = 'source.fixAll.eslint';
 const OXC_FORMATTER = 'oxc.oxc-vscode';
@@ -33,8 +33,8 @@ export function buildVscodeSettings(selected: ReadonlySet<string>): VscodeSettin
 	else if (eslint) fixOnSave[ESLINT_FIX] = 'explicit';
 	fixOnSave['source.fixAll.stylelint'] = 'explicit';
 
-	// Key order matters: the core-eslint output must stay byte-identical to the
-	// static file this generator replaced.
+	// Key order matters because the core-eslint output must stay byte-identical
+	// to the static file this generator replaced.
 	const settings: Record<string, unknown> = {
 		'editor.formatOnSave': true,
 		[FIX_ON_SAVE]: fixOnSave,
@@ -64,7 +64,7 @@ export function buildVscodeSettings(selected: ReadonlySet<string>): VscodeSettin
 	}
 
 	// A fresh scaffold copies this text verbatim, so the short array stays on one
-	// line as in the formatted static file it replaced.
+	// line as in the formatted static file this generator replaced.
 	const content = `${JSON.stringify(settings, null, '\t')}\n`.replace(
 		/\[\s+"css",\s+"postcss",\s+"scss"\s+\]/,
 		'["css", "postcss", "scss"]',
