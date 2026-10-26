@@ -744,9 +744,10 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 			return { ok: false };
 		}
 
-		// Ctrl-C still leaves the written files behind, so state has to be
-		// recorded anyway. Skipping it would orphan them from `diff` and
-		// `remove`, which is the one thing worse than keeping them.
+		// Unlike the apply-time cancels above, Ctrl-C here keeps the written
+		// files, so state has to be recorded anyway. Skipping it would orphan
+		// them from `diff` and `remove`, which is the one thing worse than
+		// keeping them.
 		if (action === 'cancel') {
 			recordState();
 			return cancelAndExit('Cancelled. Files kept.');

@@ -49,9 +49,9 @@ export function formatKeepLine(pm: Pm, targetDir: string): string {
 }
 
 // Modeled on promptDepConflict (run.ts): same select shape, same isCancel
-// check. Returns 'cancel' rather than calling cancelAndExit—the caller
-// still owes the state file a write before the process can exit, so the exit
-// decision has to stay with the caller rather than happen in here.
+// check. Returns 'cancel' rather than throwing CancelledError, which would make
+// runInit roll the files back—here the caller owes the state file a write and
+// keeps them, so the exit decision has to stay with the caller.
 export async function promptInstallFailure(): Promise<'keep' | 'rollback' | 'cancel'> {
 	const choice = await select<'keep' | 'rollback'>({
 		message: 'Install failed. Keep what this run wrote, or roll back?',

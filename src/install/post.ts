@@ -45,7 +45,8 @@ export async function runPostInstalls(opts: PostInstallOpts): Promise<PostInstal
 					initialValue: pi.default,
 				});
 				// Ctrl-C is a global abort, not a per-hook skip: exit here rather
-				// than quietly moving on to the next hook.
+				// than quietly moving on to the next hook. No `cancelled` flag as
+				// in runOne: nothing is running here to stop first.
 				if (isCancel(answer)) {
 					return cancelAndExit();
 				}

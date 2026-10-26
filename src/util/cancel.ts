@@ -7,7 +7,8 @@ export const CANCEL_EXIT = EXIT_CANCELLED;
 
 // `never` return type so callers can `return cancelAndExit()` in any position
 // without tripping unreachable-code or missing-return lint. Every Ctrl-C in
-// the flow should land here.
+// the flow ends here, some by way of a `CancelledError` that runInit catches
+// first.
 export function cancelAndExit(message = 'Cancelled.'): never {
 	cancel(message);
 	return process.exit(EXIT_CANCELLED);
