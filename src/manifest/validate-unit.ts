@@ -1,6 +1,6 @@
 import type { FileOp, UnitDefinition } from './types';
 import { existsSync } from 'node:fs';
-import { join, posix } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 import { checkContainment } from '../fs/contain';
 
 // The published contract's version. UNIT_SCHEMA_MIN stays separate from
@@ -320,14 +320,17 @@ function validatePackageJsonPatch(value: unknown, path: string, issues: UnitIssu
 // npm pack) reach outside its own definition's directory—the schema's
 // description calls this out as a must, not just a convention. `..` is
 // checked as a path segment rather than a substring so a legitimate
-// `foo..bar.txt` filename doesn't false-positive.
+// `foo..bar.txt` filename doesn't false-positive. Both path flavors are
+// checked because copy.ts joins `src` natively, so on Windows a backslash is a
+// separator, and a unit is installed on hosts other than the one it was
+// written on (#219).
 function validateFileSources(
 	obj: Record<string, unknown>,
 	baseDir: string,
 	issues: UnitIssue[],
 ): void {
 	for (const { path, src } of collectFileSrcs(obj)) {
-		if (posix.isAbsolute(src) || src.split('/').includes('..')) {
+		if (posix.isAbsolute(src) || win32.isAbsolute(src) || src.split(/[\\/]/).includes('..')) {
 			issues.push({
 				path,
 				expected: 'a relative path inside the unit directory',
