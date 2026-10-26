@@ -12,3 +12,13 @@ export function cancelAndExit(message = 'Cancelled.'): never {
 	cancel(message);
 	return process.exit(EXIT_CANCELLED);
 }
+
+// Thrown in place of cancelAndExit() by prompts that run after init has
+// started writing, so runInit gets control back to roll those writes back
+// before it exits 130 (#217).
+export class CancelledError extends Error {
+	constructor() {
+		super('Cancelled.');
+		this.name = 'CancelledError';
+	}
+}

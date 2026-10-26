@@ -254,3 +254,107 @@ describe('runInit real install failure (#114)', () => {
 		expect(existsSync(join(tmp, STATE_FILENAME))).toBe(true);
 	});
 });
+
+const CANCEL = Symbol('test-cancel');
+
+// Cancels only the conflict prompt, whichever position it lands in, and answers
+// every other select with '' (the "Start from a preset?" no-preset choice).
+function cancelAtConflictPrompt(): () => void {
+	const realIsCancel = vi.mocked(isCancel).getMockImplementation();
+	vi.mocked(select).mockImplementation(async (opts) =>
+		opts.message.startsWith('Conflict:') ? CANCEL : '',
+	);
+	vi.mocked(isCancel).mockImplementation((v) => v === CANCEL);
+	return () => {
+		if (realIsCancel) vi.mocked(isCancel).mockImplementation(realIsCancel);
+	};
+}
+
+describe('runInit abort mid-apply (#217)', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		vi.mocked(spawn).mockReset();
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+		vi.mocked(unitPicker).mockReset();
+		vi.mocked(select).mockReset();
+		vi.mocked(confirm).mockReset();
+		vi.mocked(isCancel).mockClear();
+	});
+
+	it('rolls back the copy loop when writeAndInstall throws, then rethrows', async () => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-abort-throw-'));
+		writeFileSync(join(tmp, 'package.json'), '{"name":"x","version":"1.0.0",}\n');
+		mockInstallSpawn(0);
+		const before = snapshot(tmp);
+
+		await expect(
+			runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'npm', yes: true } }),
+		).rejects.toThrow(/JSON/);
+
+		expect(snapshot(tmp)).toBe(before);
+		expect(existsSync(join(tmp, STATE_FILENAME))).toBe(false);
+	});
+
+	it('rolls back and exits 130 when the dependency-conflict prompt is cancelled', async () => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-abort-dep-'));
+		writeFileSync(
+			join(tmp, 'package.json'),
+			JSON.stringify({ name: 'x', version: '0.0.0', devDependencies: { husky: '8.0.0' } }),
+		);
+		vi.mocked(unitPicker).mockResolvedValue({ ids: ['opt-husky'], flavors: {} });
+		vi.mocked(confirm).mockResolvedValue(true); // "Apply?"
+		mockInstallSpawn(0);
+		const restore = cancelAtConflictPrompt();
+		const before = snapshot(tmp);
+		const exit = vi.spyOn(process, 'exit').mockImplementation(() => {
+			throw new Error('process.exit');
+		});
+		try {
+			await expect(runInit({ targetDir: tmp, inline: { pm: 'npm' } })).rejects.toThrow(
+				'process.exit',
+			);
+			expect(exit).toHaveBeenCalledWith(130);
+			expect(snapshot(tmp)).toBe(before);
+			expect(existsSync(join(tmp, '.husky'))).toBe(false);
+			expect(existsSync(join(tmp, STATE_FILENAME))).toBe(false);
+		} finally {
+			exit.mockRestore();
+			restore();
+		}
+	});
+
+	it('rolls back and exits 130 when a later file-conflict prompt is cancelled', async () => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-abort-file-'));
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		// opt-husky writes this; its conflict prompt fires after core-editorconfig
+		// has already written .editorconfig.
+		writeFileSync(join(tmp, 'lint-staged.config.mjs'), '// mine, do not touch\n');
+		vi.mocked(unitPicker).mockResolvedValue({
+			ids: ['core-editorconfig', 'opt-husky'],
+			flavors: {},
+		});
+		vi.mocked(confirm).mockResolvedValue(true);
+		mockInstallSpawn(0);
+		const restore = cancelAtConflictPrompt();
+		const before = snapshot(tmp);
+		const exit = vi.spyOn(process, 'exit').mockImplementation(() => {
+			throw new Error('process.exit');
+		});
+		try {
+			await expect(runInit({ targetDir: tmp, inline: { pm: 'npm' } })).rejects.toThrow(
+				'process.exit',
+			);
+			expect(exit).toHaveBeenCalledWith(130);
+			expect(snapshot(tmp)).toBe(before);
+			expect(existsSync(join(tmp, '.editorconfig'))).toBe(false);
+			expect(existsSync(join(tmp, STATE_FILENAME))).toBe(false);
+		} finally {
+			exit.mockRestore();
+			restore();
+		}
+	});
+});

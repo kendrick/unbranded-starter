@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { isCancel, log, select, spinner } from '@clack/prompts';
 import { collectDepCollisions, depKey, mergePackageJson } from '../fs/merge-json';
-import { cancelAndExit } from '../util/cancel';
+import { CancelledError } from '../util/cancel';
 import { computeNodeVersion, NODE_VERSION_UNIT_ID, queryPmVersion } from './node-version';
 import { seedPnpmWorkspace } from './pnpm-builds';
 import { spawnOptions } from './spawn';
@@ -264,7 +264,7 @@ async function promptDepConflict(collision: DepCollision): Promise<'overwrite' |
 			},
 		],
 	});
-	if (isCancel(choice)) return cancelAndExit();
+	if (isCancel(choice)) throw new CancelledError();
 	return choice;
 }
 
