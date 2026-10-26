@@ -11,7 +11,7 @@ export const ESLINT_FLAVORS: EslintFlavor[] = ['base', 'react', 'next'];
 // (the `formatters` block is on in all three). Deliberately free of any
 // React-ecosystem package so `base` stays lean, per the AC.
 const BASE_DEPS: Record<string, string> = {
-	'@antfu/eslint-config': '9.5.1',
+	'@antfu/eslint-config': '10.0.0',
 	'eslint': '10.13.0',
 	'eslint-plugin-format': '2.0.1',
 };
@@ -19,13 +19,13 @@ const BASE_DEPS: Record<string, string> = {
 // antfu opts into these via `react: true`; jsx-a11y is our own strict a11y pass
 // appended on top. Without them installed the config fails to load.
 const REACT_DEPS: Record<string, string> = {
-	'@eslint-react/eslint-plugin': '5.28.2',
+	'@eslint-react/eslint-plugin': '5.28.8',
 	'eslint-plugin-jsx-a11y': '6.10.2',
 	'eslint-plugin-react-refresh': '0.5.7',
 };
 
 const NEXT_DEPS: Record<string, string> = {
-	'@next/eslint-plugin-next': '16.4.2',
+	'@next/eslint-plugin-next': '16.4.3',
 };
 
 // The exact devDependencies a flavor installs. Pinned like every other unit; the
