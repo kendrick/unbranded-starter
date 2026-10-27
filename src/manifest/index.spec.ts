@@ -4,6 +4,9 @@ import { UNITS } from './index';
 import { resolveSelection } from './resolve';
 import { UNIT_SCHEMA, validateUnitDefinition } from './validate-unit';
 
+// pin-bumps.yml moves these pins weekly and never edits specs, so assert only that each pin is an exact version.
+const EXACT_VERSION: unknown = expect.stringMatching(/^\d+\.\d+\.\d+$/);
+
 describe('manifest', () => {
 	it('unitId values are unique across the manifest', () => {
 		const ids = UNITS.map((u) => u.id);
@@ -54,9 +57,9 @@ describe('manifest', () => {
 		expect(oxlint?.category).toBe('lint');
 		expect(oxlint?.files).toEqual([]);
 		expect(oxlint?.devDependencies).toEqual({
-			'oxlint': '1.86.0',
-			'oxfmt': '0.71.0',
-			'oxlint-tsgolint': '7.0.2004',
+			'oxlint': EXACT_VERSION,
+			'oxfmt': EXACT_VERSION,
+			'oxlint-tsgolint': EXACT_VERSION,
 		});
 		expect(oxlint?.implies).toEqual(['core-typescript']);
 		expect(oxlint?.excludes).toEqual(['core-eslint']);
