@@ -1,5 +1,5 @@
 import type { UnitValidationResult } from './validate-unit';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -437,6 +437,31 @@ describe('validateUnitDefinition', () => {
 				expected: 'a relative path inside the unit directory',
 				got: '"../secret.txt"',
 			});
+		});
+
+		// A unit is authored once and installed on every OS, so a src that escapes
+		// under win32 rules is rejected on every host, not just on Windows (#219).
+		it.each([
+			String.raw`..\..\..\Users\me\.ssh\id_rsa`,
+			String.raw`C:\Users\me\.ssh\id_rsa`,
+			String.raw`\\server\share\x`,
+		])('rejects %s, which escapes under win32 path rules', (src) => {
+			const unit = { ...validBase(), files: [{ src, dest: 'out.txt' }] };
+			const result = validateUnitDefinition(unit, { baseDir });
+			expect(result.ok).toBe(false);
+			if (result.ok) return;
+			expect(result.issues).toContainEqual({
+				path: 'files[0].src',
+				expected: 'a relative path inside the unit directory',
+				got: JSON.stringify(src),
+			});
+		});
+
+		it.each(['foo..bar.txt', 'templates/a.txt'])('still accepts %s', (src) => {
+			mkdirSync(join(baseDir, 'templates'), { recursive: true });
+			writeFileSync(join(baseDir, src), 'hi\n');
+			const unit = { ...validBase(), files: [{ src, dest: 'out.txt' }] };
+			expect(validateUnitDefinition(unit, { baseDir }).ok).toBe(true);
 		});
 
 		it('rejects a src that does not exist on disk', () => {
