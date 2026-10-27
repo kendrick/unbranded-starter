@@ -145,7 +145,12 @@ export function buildEslintConfig(flavor: EslintFlavor): string {
 	lines.push("\t\t\tarrowParens: 'always',");
 	lines.push('\t\t},');
 	lines.push('\t\trules: {');
-	lines.push("\t\t\t'camelcase': ['error', { ignoreImports: true, properties: 'never' }],");
+	// One item per line: antfu 10's `antfu/reasonable-newline` rejects an inline
+	// list holding a non-empty object, and 9's consistent-list-newline accepts both.
+	lines.push("\t\t\t'camelcase': [");
+	lines.push("\t\t\t\t'error',");
+	lines.push("\t\t\t\t{ ignoreImports: true, properties: 'never' },");
+	lines.push('\t\t\t],');
 	lines.push("\t\t\t'import/no-default-export': 'off',");
 	lines.push("\t\t\t'style/multiline-ternary': 'off',");
 	lines.push("\t\t\t'ts/no-explicit-any': 'error',");
