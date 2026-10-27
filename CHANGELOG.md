@@ -1,5 +1,62 @@
 # Changelog
 
+## [3.0.0](https://github.com/kendrick/unbranded-starter/compare/v2.0.5...v3.0.0) (2026-10-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* **core-typescript:** `core-typescript`'s `node` flavor, which the `cli` and `node-lib` presets use, now rejects `undefined` passed to an optional property. Code that did that stops typechecking and has to omit the key instead.
+* **oxlint:** turn on type-aware rules in every `core-oxlint` scaffold ([#206](https://github.com/kendrick/unbranded-starter/issues/206))
+* **state:** store baseline copies under a `.base` suffix so oxfmt and oxlint skip them ([#201](https://github.com/kendrick/unbranded-starter/issues/201))
+* **init:** a non-interactive run with no package-manager signal now exits 1. It used to prompt, and on closed stdin it exited 0 without installing anything. Pass `--pm`.
+* **manifest:** split core-typescript's tsconfig into node and dom lib flavors ([#197](https://github.com/kendrick/unbranded-starter/issues/197))
+* **presets:** `--preset` and `--config presets/<name>.json` now scaffold oxlint and oxfmt on TypeScript 7 instead of ESLint on TypeScript 6. Recorded preset options use `oxlintFlavor`, not `eslintFlavor`.
+
+### Features
+
+* **core-typescript:** set exactOptionalPropertyTypes in the node flavor ([#213](https://github.com/kendrick/unbranded-starter/issues/213)) ([3660e44](https://github.com/kendrick/unbranded-starter/commit/3660e44e6b85f54a8c81f4f2f61fc9856d75ffe9))
+* **list:** show IMPLIES_ONE_OF slots in `list` and `list --json` ([#199](https://github.com/kendrick/unbranded-starter/issues/199)) ([0c11634](https://github.com/kendrick/unbranded-starter/commit/0c11634b69161695a7c698edaa86c503fee7d6d1))
+* **manifest:** add a core-oxlint unit with base/react/next flavors ([#167](https://github.com/kendrick/unbranded-starter/issues/167)) ([bb09f2a](https://github.com/kendrick/unbranded-starter/commit/bb09f2a371da93aa54c69459d7661825b7883624))
+* **manifest:** choose the TypeScript line on core-typescript instead of from the lint unit ([#194](https://github.com/kendrick/unbranded-starter/issues/194)) ([f4a70d2](https://github.com/kendrick/unbranded-starter/commit/f4a70d2b4ff7b27aca3e999efb10f5ce13d71769))
+* **manifest:** generate opt-husky's lint-staged config from the lint unit ([#177](https://github.com/kendrick/unbranded-starter/issues/177)) ([d5542ce](https://github.com/kendrick/unbranded-starter/commit/d5542cef231cc5d10ea1061ee524bac843e7aede))
+* **manifest:** hold a PIN_LINES pin to its major in outdated, bump-pins, and --latest ([#178](https://github.com/kendrick/unbranded-starter/issues/178)) ([578ffa2](https://github.com/kendrick/unbranded-starter/commit/578ffa2127af6b87b0616c1b1e702d19aca4f1e9))
+* **manifest:** pick the TS line and the CI lint unit from the resolved set ([#168](https://github.com/kendrick/unbranded-starter/issues/168)) ([aff40bf](https://github.com/kendrick/unbranded-starter/commit/aff40bff58be665977b4807decae9998e58b2e80))
+* **manifest:** split core-typescript's tsconfig into node and dom lib flavors ([#197](https://github.com/kendrick/unbranded-starter/issues/197)) ([94297f4](https://github.com/kendrick/unbranded-starter/commit/94297f4e9450c282b6fd63fc4a48eba92ee6f74d))
+* **opt-vscode:** generate settings.json lint keys from the lint unit ([#234](https://github.com/kendrick/unbranded-starter/issues/234)) ([6283890](https://github.com/kendrick/unbranded-starter/commit/628389008f01254a4d1bfdca024297744804276c))
+* **oxlint:** turn on type-aware rules in every `core-oxlint` scaffold ([#206](https://github.com/kendrick/unbranded-starter/issues/206)) ([793151d](https://github.com/kendrick/unbranded-starter/commit/793151d2671a846bb25a5f59126db5b9c2c30ac7))
+* **presets:** scaffold core-oxlint and TS 7 from every preset ([#179](https://github.com/kendrick/unbranded-starter/issues/179)) ([e18664f](https://github.com/kendrick/unbranded-starter/commit/e18664fa2ff6bd349ab3e8c8211ee96f6b46d6be))
+
+
+### Bug Fixes
+
+* **doctor:** forward --on-conflict through doctor --fix --yes ([#215](https://github.com/kendrick/unbranded-starter/issues/215)) ([#238](https://github.com/kendrick/unbranded-starter/issues/238)) ([99b3264](https://github.com/kendrick/unbranded-starter/commit/99b3264e56e154d1ff4b2ba523df5f6802634276))
+* **hooks:** lint only tracked files in the pre-push hook ([#200](https://github.com/kendrick/unbranded-starter/issues/200)) ([01315f4](https://github.com/kendrick/unbranded-starter/commit/01315f406042ee0ede27941a4d38a0dbc4d6a55e))
+* **init:** don't track files skipped at the user's request ([#237](https://github.com/kendrick/unbranded-starter/issues/237)) ([3154ab0](https://github.com/kendrick/unbranded-starter/commit/3154ab01bf8926b049ce747193388e7690169ec5))
+* **init:** exit 1 when a non-interactive run can't pick a package manager ([#202](https://github.com/kendrick/unbranded-starter/issues/202)) ([e4e2397](https://github.com/kendrick/unbranded-starter/commit/e4e2397f4a1f8ebc668ce017d07d4ad3465f857d))
+* **init:** roll back written files when the apply throws or is cancelled ([#217](https://github.com/kendrick/unbranded-starter/issues/217)) ([#243](https://github.com/kendrick/unbranded-starter/issues/243)) ([71aa83c](https://github.com/kendrick/unbranded-starter/commit/71aa83ce449970f2734bd743860cce5763218842))
+* **manifest:** bump core-eslint pins ([#169](https://github.com/kendrick/unbranded-starter/issues/169)) ([d6ea667](https://github.com/kendrick/unbranded-starter/commit/d6ea6676e9fe088f197a1740612e77bc5aaab8da))
+* **manifest:** bump core-eslint pins ([#189](https://github.com/kendrick/unbranded-starter/issues/189)) ([2d88a88](https://github.com/kendrick/unbranded-starter/commit/2d88a88db253f194d4ba5c1ee72006ce1d0ca65b))
+* **manifest:** bump core-eslint pins ([#208](https://github.com/kendrick/unbranded-starter/issues/208)) ([2663085](https://github.com/kendrick/unbranded-starter/commit/2663085d45deba820508f5e4c05d2c31587cc82f))
+* **manifest:** bump core-oxlint pins ([#240](https://github.com/kendrick/unbranded-starter/issues/240)) ([22380a5](https://github.com/kendrick/unbranded-starter/commit/22380a5f2b505c2e10c213be008fbfd9756524bc))
+* **manifest:** bump core-stylelint pins ([#172](https://github.com/kendrick/unbranded-starter/issues/172)) ([3691b38](https://github.com/kendrick/unbranded-starter/commit/3691b38b4a8ab8715208f0a31f2534d7baa9e69b))
+* **manifest:** bump core-typescript pins ([#170](https://github.com/kendrick/unbranded-starter/issues/170)) ([36dde69](https://github.com/kendrick/unbranded-starter/commit/36dde698b23c2c4bd6d4bf4232ef4f1b62cc7401))
+* **manifest:** bump core-typescript pins ([#191](https://github.com/kendrick/unbranded-starter/issues/191)) ([01d2bc8](https://github.com/kendrick/unbranded-starter/commit/01d2bc8abdf7f635d6c8a7a55390f51712e773eb))
+* **manifest:** bump core-vitest pins ([#171](https://github.com/kendrick/unbranded-starter/issues/171)) ([8d07174](https://github.com/kendrick/unbranded-starter/commit/8d07174b21a0bfd505cfaf6b36025462e51161a3))
+* **manifest:** bump core-vitest pins ([#192](https://github.com/kendrick/unbranded-starter/issues/192)) ([f2daab0](https://github.com/kendrick/unbranded-starter/commit/f2daab0c862617524053b97eacb236cfec1b2a51))
+* **manifest:** bump core-vitest pins ([#209](https://github.com/kendrick/unbranded-starter/issues/209)) ([07af136](https://github.com/kendrick/unbranded-starter/commit/07af1361a0e464ac450f2b3c653a09b116d26480))
+* **manifest:** bump opt-monorepo pins ([#173](https://github.com/kendrick/unbranded-starter/issues/173)) ([d4907de](https://github.com/kendrick/unbranded-starter/commit/d4907decdf82178c589b22f978e640be58073b88))
+* **manifest:** bump opt-monorepo pins ([#210](https://github.com/kendrick/unbranded-starter/issues/210)) ([465a52c](https://github.com/kendrick/unbranded-starter/commit/465a52c9e5a76880086faf1dfef5467734610573))
+* **manifest:** bump opt-monorepo pins ([#241](https://github.com/kendrick/unbranded-starter/issues/241)) ([e80bb7f](https://github.com/kendrick/unbranded-starter/commit/e80bb7f7a486815304a3cedd8571c62d5ca584a4))
+* **manifest:** bump opt-playwright pins ([#190](https://github.com/kendrick/unbranded-starter/issues/190)) ([ca20998](https://github.com/kendrick/unbranded-starter/commit/ca209980a4c4439d279ddcd2929df988e6a0c647))
+* **manifest:** bump opt-playwright pins ([#207](https://github.com/kendrick/unbranded-starter/issues/207)) ([c8d21ea](https://github.com/kendrick/unbranded-starter/commit/c8d21ea5d2d2b273d720eb879581dc1ef63238f1))
+* **manifest:** keep scaffolded projects' lint green on typescript-eslint 8.71.1 ([#174](https://github.com/kendrick/unbranded-starter/issues/174)) ([e1b098b](https://github.com/kendrick/unbranded-starter/commit/e1b098bc6b75c4f08ced236b82932fcb9590cf9f))
+* **manifest:** land the core-eslint pin bump ([#245](https://github.com/kendrick/unbranded-starter/issues/245)) ([0c95c20](https://github.com/kendrick/unbranded-starter/commit/0c95c20bff2e26d0f95c755c9e7d9f0bda73aabf))
+* **manifest:** pin TypeScript to 6.0.3 instead of 7 ([#165](https://github.com/kendrick/unbranded-starter/issues/165)) ([7896583](https://github.com/kendrick/unbranded-starter/commit/7896583be2d7ae5ec9bf88fd1199da0b78798e2f))
+* **opt-vscode:** leave a .vscode JSON file that isn't strict JSON alone ([#216](https://github.com/kendrick/unbranded-starter/issues/216)) ([#244](https://github.com/kendrick/unbranded-starter/issues/244)) ([72d4744](https://github.com/kendrick/unbranded-starter/commit/72d4744b3de6b5d6cc1638edf08074f299f5c4a9))
+* **state:** store baseline copies under a `.base` suffix so oxfmt and oxlint skip them ([#201](https://github.com/kendrick/unbranded-starter/issues/201)) ([5d3970d](https://github.com/kendrick/unbranded-starter/commit/5d3970de6dbbea3efffa8a134914cd0ff49c218a))
+* **validate-unit:** reject a src that escapes under win32 path rules ([#219](https://github.com/kendrick/unbranded-starter/issues/219)) ([#242](https://github.com/kendrick/unbranded-starter/issues/242)) ([314d1bb](https://github.com/kendrick/unbranded-starter/commit/314d1bbbc2b891c2a5893084dd64f99524f21a7f))
+* **vscode:** pin oxc.oxc-vscode as the YAML formatter ([#196](https://github.com/kendrick/unbranded-starter/issues/196)) ([e525b5f](https://github.com/kendrick/unbranded-starter/commit/e525b5f2239b4c9b7193afd7e28aea8210c3e662))
+
 ## [2.0.5](https://github.com/kendrick/unbranded-starter/compare/v2.0.4...v2.0.5) (2026-09-28)
 
 
