@@ -97,6 +97,20 @@ describe('buildEslintConfig', () => {
 	});
 });
 
+describe('buildEslintConfig rule options', () => {
+	// antfu 10's `antfu/reasonable-newline` fails a fresh scaffold's lint when a
+	// rule's options list sits on one line next to a non-empty object.
+	it('breaks every rule with an options object across lines, for every flavor', () => {
+		for (const flavor of ESLINT_FLAVORS) {
+			const src = buildEslintConfig(flavor);
+			expect(src).not.toMatch(/\[[^\]\n]*\{[^}\n]+\}[^\]\n]*\]/);
+			expect(src).toContain(
+				"\t\t\t'camelcase': [\n\t\t\t\t'error',\n\t\t\t\t{ ignoreImports: true, properties: 'never' },\n\t\t\t],",
+			);
+		}
+	});
+});
+
 describe('buildEslintConfig ignores', () => {
 	it('skips the .unbranded sidecar for every flavor', () => {
 		for (const flavor of ESLINT_FLAVORS)

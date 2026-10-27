@@ -11,7 +11,7 @@ export const ESLINT_FLAVORS: EslintFlavor[] = ['base', 'react', 'next'];
 // (the `formatters` block is on in all three). Deliberately free of any
 // React-ecosystem package so `base` stays lean, per the AC.
 const BASE_DEPS: Record<string, string> = {
-	'@antfu/eslint-config': '9.5.1',
+	'@antfu/eslint-config': '10.0.0',
 	'eslint': '10.13.0',
 	'eslint-plugin-format': '2.0.1',
 };
@@ -19,13 +19,13 @@ const BASE_DEPS: Record<string, string> = {
 // antfu opts into these via `react: true`; jsx-a11y is our own strict a11y pass
 // appended on top. Without them installed the config fails to load.
 const REACT_DEPS: Record<string, string> = {
-	'@eslint-react/eslint-plugin': '5.28.2',
+	'@eslint-react/eslint-plugin': '5.28.8',
 	'eslint-plugin-jsx-a11y': '6.10.2',
 	'eslint-plugin-react-refresh': '0.5.7',
 };
 
 const NEXT_DEPS: Record<string, string> = {
-	'@next/eslint-plugin-next': '16.4.2',
+	'@next/eslint-plugin-next': '16.4.3',
 };
 
 // The exact devDependencies a flavor installs. Pinned like every other unit; the
@@ -145,7 +145,12 @@ export function buildEslintConfig(flavor: EslintFlavor): string {
 	lines.push("\t\t\tarrowParens: 'always',");
 	lines.push('\t\t},');
 	lines.push('\t\trules: {');
-	lines.push("\t\t\t'camelcase': ['error', { ignoreImports: true, properties: 'never' }],");
+	// One item per line: antfu 10's `antfu/reasonable-newline` rejects an inline
+	// list holding a non-empty object, and 9's consistent-list-newline accepts both.
+	lines.push("\t\t\t'camelcase': [");
+	lines.push("\t\t\t\t'error',");
+	lines.push("\t\t\t\t{ ignoreImports: true, properties: 'never' },");
+	lines.push('\t\t\t],');
 	lines.push("\t\t\t'import/no-default-export': 'off',");
 	lines.push("\t\t\t'style/multiline-ternary': 'off',");
 	lines.push("\t\t\t'ts/no-explicit-any': 'error',");
