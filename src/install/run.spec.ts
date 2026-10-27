@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { isCancel, select } from '@clack/prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createJournal } from '../fs/journal';
+import { CancelledError } from '../util/cancel';
 import { collectAddedScripts, formatDepResolutions, writeAndInstall } from './run';
 
 // `select` is the one TTY prompt a dependency collision drives, so it's the only
@@ -329,7 +330,7 @@ describe('writeAndInstall dependency conflicts (#113)', () => {
 		]);
 	});
 
-	it('exits 130 and writes nothing when the conflict prompt is cancelled', async () => {
+	it('throws CancelledError and writes nothing when the conflict prompt is cancelled', async () => {
 		const original = JSON.stringify({ name: 'x', devDependencies: { typescript: '^6.0.3' } });
 		writeFileSync(join(tmp, 'package.json'), original);
 
@@ -338,28 +339,12 @@ describe('writeAndInstall dependency conflicts (#113)', () => {
 		// fallback for exercising the cancel path without a TTY.
 		vi.mocked(isCancel).mockReturnValueOnce(true);
 
-		// Unlike detectTarget's cancel test, this collision loop doesn't `return` on
-		// cancel—resolveDepConflict's resolved value just flows on as data—so a
-		// non-throwing exit stub would let the loop fall through and still write
-		// package.json. Throwing reproduces process.exit's real never-returns
-		// behavior, which is what actually stops the write in production.
-		const exit = vi.spyOn(process, 'exit').mockImplementation(() => {
-			throw new Error('process.exit');
-		});
-
-		// Restore in `finally`: this suite has no restoreMocks, so a failed
-		// assertion here would otherwise leave process.exit throwing for the
-		// rest of the file.
-		try {
-			await expect(writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT] })).rejects.toThrow(
-				'process.exit',
-			);
-
-			expect(exit).toHaveBeenCalledWith(130);
-			expect(readFileSync(join(tmp, 'package.json'), 'utf-8')).toBe(original);
-		} finally {
-			exit.mockRestore();
-		}
+		// The throw is what stops the write: the collision loop's resolved value
+		// would otherwise flow on as data. runInit catches it, rolls back, exits 130.
+		await expect(
+			writeAndInstall({ targetDir: tmp, pm: null, units: [UNIT] }),
+		).rejects.toBeInstanceOf(CancelledError);
+		expect(readFileSync(join(tmp, 'package.json'), 'utf-8')).toBe(original);
 	});
 
 	it('auto-resolves every existing pin to overwrite under --latest, no prompt', async () => {

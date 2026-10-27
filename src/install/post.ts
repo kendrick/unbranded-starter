@@ -20,10 +20,11 @@ export interface PostInstallSummary {
 	ran: string[];
 	skipped: string[];
 	failed: { id: string; error: string }[];
+	cancelled: boolean;
 }
 
 export async function runPostInstalls(opts: PostInstallOpts): Promise<PostInstallSummary> {
-	const summary: PostInstallSummary = { ran: [], skipped: [], failed: [] };
+	const summary: PostInstallSummary = { ran: [], skipped: [], failed: [], cancelled: false };
 
 	for (const unit of opts.units) {
 		if (!unit.postInstall?.length) continue;
@@ -44,7 +45,8 @@ export async function runPostInstalls(opts: PostInstallOpts): Promise<PostInstal
 					initialValue: pi.default,
 				});
 				// Ctrl-C is a global abort, not a per-hook skip: exit here rather
-				// than quietly moving on to the next hook.
+				// than quietly moving on to the next hook. No `cancelled` flag as
+				// in runOne: nothing is running here to stop first.
 				if (isCancel(answer)) {
 					return cancelAndExit();
 				}
@@ -56,6 +58,9 @@ export async function runPostInstalls(opts: PostInstallOpts): Promise<PostInstal
 			}
 
 			const result = await runOne(opts.targetDir, opts.pm, pi);
+			// The interrupt was aimed at the run, not this one hook. Under auto: 'all'
+			// the next hook would otherwise start with no prompt to stop it (#217).
+			if (result.cancelled) return { ...summary, cancelled: true };
 			if (result.ok) summary.ran.push(pi.id);
 			else summary.failed.push({ id: pi.id, error: result.error });
 		}
@@ -83,6 +88,7 @@ export function buildCommand(pm: Pm, command: readonly string[]): { bin: string;
 interface RunResult {
 	ok: boolean;
 	error: string;
+	cancelled: boolean;
 }
 
 async function runOne(cwd: string, pm: Pm, pi: PostInstall): Promise<RunResult> {
@@ -94,11 +100,13 @@ async function runOne(cwd: string, pm: Pm, pi: PostInstall): Promise<RunResult> 
 
 	return new Promise((resolve) => {
 		const child = spawn(bin, args, spawnOptions(cwd));
+		let cancelled = false;
 
 		// Same SIGINT discipline as install/run.ts: SIGTERM first, escalate
 		// to SIGKILL after 5s if the child ignores it. .unref() lets us exit
 		// cleanly if the child shuts down before the timer fires.
 		const onSigint = (): void => {
+			cancelled = true;
 			child.kill('SIGTERM');
 			setTimeout(() => {
 				if (!child.killed) child.kill('SIGKILL');
@@ -108,12 +116,12 @@ async function runOne(cwd: string, pm: Pm, pi: PostInstall): Promise<RunResult> 
 
 		child.on('exit', (code) => {
 			process.off('SIGINT', onSigint);
-			resolve({ ok: code === 0, error: code === 0 ? '' : `exit ${code}` });
+			resolve({ ok: code === 0, error: code === 0 ? '' : `exit ${code}`, cancelled });
 		});
 
 		child.on('error', (err) => {
 			process.off('SIGINT', onSigint);
-			resolve({ ok: false, error: err.message });
+			resolve({ ok: false, error: err.message, cancelled });
 		});
 	});
 }

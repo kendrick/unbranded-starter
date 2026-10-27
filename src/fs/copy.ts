@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join as joinNative, posix, relative, resolve as resolveNative } from 'node:path';
 import { isCancel, log, select } from '@clack/prompts';
 import { createPatch } from 'diff';
-import { cancelAndExit } from '../util/cancel';
+import { CancelledError } from '../util/cancel';
 import { colorEnabled } from '../util/color';
 import { checkContainment } from './contain';
 
@@ -290,7 +290,7 @@ async function promptConflict(
 		],
 	});
 	if (isCancel(firstChoice)) {
-		return cancelAndExit();
+		throw new CancelledError();
 	}
 	if (firstChoice !== 'diff') return firstChoice;
 
@@ -313,7 +313,7 @@ async function promptConflict(
 		],
 	});
 	if (isCancel(secondChoice)) {
-		return cancelAndExit();
+		throw new CancelledError();
 	}
 	return secondChoice;
 }

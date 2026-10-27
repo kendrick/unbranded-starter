@@ -30,4 +30,4 @@
 
 - Throw `Error` with an actionable message. `src/cli.ts` has a top-level catch that renders it via `clack log.error` and exits 1 — no raw stack traces reach users.
 - Fail loudly on ambiguity that would confuse later: `detectPm` throws for a malformed `package.json` and for `workspace-leaf`; `validate()` throws for bad recipes.
-- User aborts route through `cancelAndExit()` (`src/util/cancel.ts`): it prints the cancel banner and exits 130 (the SIGINT convention, 128 + 2), never an error. Every `isCancel()` branch calls it. Answering No at the Apply prompt exits 0, since that's a choice rather than an abort.
+- User aborts route through `cancelAndExit()` (`src/util/cancel.ts`): it prints the cancel banner and exits 130 (the SIGINT convention, 128 + 2), never an error. Every `isCancel()` branch ends there, but prompts that run after `runInit` has started writing (`promptConflict`, `promptDepConflict`) throw `CancelledError` instead, so `runInit` can roll the journal back before it calls `cancelAndExit()`; an exit from inside them would strand the written files (#217). Answering No at the Apply prompt exits 0, since that's a choice rather than an abort.

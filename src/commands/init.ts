@@ -1,6 +1,7 @@
 import type { Config, InlineFlags } from '../config/load';
 import type { Pm } from '../detect/pm';
 import type { CopyResult, FilePlan, PlanOutcome } from '../fs/copy';
+import type { WriteAndInstallResult } from '../install/run';
 import type { Catalog } from '../manifest/catalog';
 import type { AnyUnit, UnitOption } from '../manifest/types';
 import type { StateUnit, TrackedWrite } from '../state/state';
@@ -43,7 +44,7 @@ import { applyUnitOptions } from '../manifest/options';
 import { exclusionAgainstTracked, resolveSelection } from '../manifest/resolve';
 import { unitPicker } from '../prompts/unit-picker/prompt';
 import { readStateFile, unsupportedStateMessage, writeStateFile } from '../state/state';
-import { cancelAndExit } from '../util/cancel';
+import { cancelAndExit, CancelledError } from '../util/cancel';
 import { EXIT_ERROR } from '../util/exit-codes';
 import { declaredSpecs, readPackageJson } from '../util/package-json';
 import { PKG_ROOT } from '../util/paths';
@@ -640,50 +641,66 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// then be undone exactly, rather than leaving the user with config for a
 	// toolchain that never installed (#114).
 	const journal = createJournal();
+	const rollBack = (): void => {
+		const rollback = rollbackJournal(journal);
+		const rolledBack = formatRollbackReport(rollback, target.dir);
+		if (rollback.failures.length > 0) log.warn(rolledBack);
+		else log.success(rolledBack);
+	};
 
 	const copyResults: CopyResult[] = [];
 	// This loop is the one place that knows which unit each write belongs to, so
 	// attribution and the file's mode are captured here for the state file.
 	const writes: TrackedWrite[] = [];
-	for (const unit of units) {
-		for (const file of unit.files) {
-			const result = await copyFileOp(file, {
-				pkgRoot: templateRoot(catalog, unit.id),
-				targetDir: target.dir,
-				...(projectName !== undefined ? { projectName } : {}),
-				...(config?.onConflict !== undefined ? { onConflict: config.onConflict } : {}),
-				journal,
-			});
-			copyResults.push(result);
-			// A user-skip leaves the user's own file in place; tracking it would hand
-			// it to remove and update as template output (#214). An identical skip is
-			// the template's bytes, so it stays tracked.
-			if (result.reason !== 'user-skip') {
-				writes.push({ dest: result.dest, unit: unit.id, mode: file.mode ?? 'copy' });
+	let installResult: WriteAndInstallResult;
+	try {
+		for (const unit of units) {
+			for (const file of unit.files) {
+				const result = await copyFileOp(file, {
+					pkgRoot: templateRoot(catalog, unit.id),
+					targetDir: target.dir,
+					...(projectName !== undefined ? { projectName } : {}),
+					...(config?.onConflict !== undefined ? { onConflict: config.onConflict } : {}),
+					journal,
+				});
+				copyResults.push(result);
+				// A user-skip leaves the user's own file in place; tracking it would hand
+				// it to remove and update as template output (#214). An identical skip is
+				// the template's bytes, so it stays tracked.
+				if (result.reason !== 'user-skip') {
+					writes.push({ dest: result.dest, unit: unit.id, mode: file.mode ?? 'copy' });
+				}
 			}
 		}
+
+		const count = (action: CopyResult['action']): number =>
+			copyResults.filter((r) => r.action === action).length;
+		log.success(
+			`Files: ${count('copied')} written, ${count('overwrote')} overwritten, ` +
+				`${count('merged')} merged, ${count('appended')} appended, ${count('skipped')} skipped.`,
+		);
+
+		// Only package.json takes the --latest specs; the plan note and post-installs
+		// keep the manifest's `units`.
+		installResult = await writeAndInstall({
+			targetDir: target.dir,
+			pm,
+			units: specsToWrite(units, heldPins(selectedUnits, optionSelections), latest),
+			latest,
+			// Undefined on an interactive run, which is what makes dependency
+			// collisions prompt. resolveConfig defaults it to 'overwrite' on every
+			// non-interactive path, so a --yes run never reaches a picker.
+			...(config?.onConflict !== undefined ? { onConflict: config.onConflict } : {}),
+			journal,
+		});
+	} catch (err) {
+		// Anything that stops the run here lands after the first write and before
+		// recordState, so no later command could find these files. Undo them before
+		// the error or the cancel surfaces (#217).
+		if (journal.entries().length > 0) rollBack();
+		if (err instanceof CancelledError) return cancelAndExit();
+		throw err;
 	}
-
-	const count = (action: CopyResult['action']): number =>
-		copyResults.filter((r) => r.action === action).length;
-	log.success(
-		`Files: ${count('copied')} written, ${count('overwrote')} overwritten, ` +
-			`${count('merged')} merged, ${count('appended')} appended, ${count('skipped')} skipped.`,
-	);
-
-	// Only package.json takes the --latest specs; the plan note and post-installs
-	// keep the manifest's `units`.
-	const installResult = await writeAndInstall({
-		targetDir: target.dir,
-		pm,
-		units: specsToWrite(units, heldPins(selectedUnits, optionSelections), latest),
-		latest,
-		// Undefined on an interactive run, which is what makes dependency
-		// collisions prompt. resolveConfig defaults it to 'overwrite' on every
-		// non-interactive path, so a --yes run never reaches a picker.
-		...(config?.onConflict !== undefined ? { onConflict: config.onConflict } : {}),
-		journal,
-	});
 
 	// Record what landed so `unbranded diff` can later tell a user's edits from a
 	// stale template. Runs after writeAndInstall so the files it computes outside
@@ -722,17 +739,15 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		const action = await resolveInstallFailure(config === null ? undefined : 'rollback');
 
 		if (action === 'rollback') {
-			const rollback = rollbackJournal(journal);
-			const rolledBack = formatRollbackReport(rollback, target.dir);
-			if (rollback.failures.length > 0) log.warn(rolledBack);
-			else log.success(rolledBack);
+			rollBack();
 			outro('Rolled back.');
 			return { ok: false };
 		}
 
-		// Ctrl-C still leaves the written files behind, so state has to be
-		// recorded anyway. Skipping it would orphan them from `diff` and
-		// `remove`, which is the one thing worse than keeping them.
+		// Unlike the apply-time cancels above, Ctrl-C here keeps the written
+		// files, so state has to be recorded anyway. Skipping it would orphan
+		// them from `diff` and `remove`, which is the one thing worse than
+		// keeping them.
 		if (action === 'cancel') {
 			recordState();
 			return cancelAndExit('Cancelled. Files kept.');
@@ -764,12 +779,15 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// Post-installs only make sense if the install step actually ran. Without
 	// node_modules the husky/playwright binaries aren't on PATH yet.
 	if (pm && installResult.installed) {
-		await runPostInstalls({
+		const post = await runPostInstalls({
 			targetDir: target.dir,
 			pm,
 			units,
 			...(config?.postInstall !== undefined ? { auto: config.postInstall } : {}),
 		});
+		// State is already recorded, so the files stay tracked; this exits the way
+		// every other Ctrl-C in the run does.
+		if (post.cancelled) return cancelAndExit();
 	}
 
 	// Explore interactively once, then replay everywhere: offer to freeze this run
