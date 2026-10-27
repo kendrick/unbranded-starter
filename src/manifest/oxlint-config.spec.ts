@@ -7,6 +7,9 @@ import {
 	oxlintPlugins,
 } from './oxlint-config';
 
+// pin-bumps.yml moves these pins weekly and never edits specs, so assert only that each pin is an exact version.
+const EXACT_VERSION: unknown = expect.stringMatching(/^\d+\.\d+\.\d+$/);
+
 interface Parsed {
 	plugins: string[];
 	categories: Record<string, string>;
@@ -80,9 +83,9 @@ describe('oxlint flavors', () => {
 
 	it('pins the three binaries exactly', () => {
 		expect(OXC_DEV_DEPENDENCIES).toEqual({
-			'oxlint': '1.86.0',
-			'oxfmt': '0.71.0',
-			'oxlint-tsgolint': '7.0.2004',
+			'oxlint': EXACT_VERSION,
+			'oxfmt': EXACT_VERSION,
+			'oxlint-tsgolint': EXACT_VERSION,
 		});
 	});
 
