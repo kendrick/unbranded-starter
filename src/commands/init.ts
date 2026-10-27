@@ -20,7 +20,7 @@ import { buildRecipe, serializeRecipe } from '../config/recipe';
 import { detectInstalledUnits } from '../detect/installed';
 import { detectPm } from '../detect/pm';
 import { detectTarget } from '../detect/target';
-import { copyFileOp, planFileOp, renderPlanDiff } from '../fs/copy';
+import { copyFileOp, formatUnparseableSkip, planFileOp, renderPlanDiff } from '../fs/copy';
 import { createJournal, formatRollbackReport, rollbackJournal } from '../fs/journal';
 import { formatInstallFailure, formatKeepLine, resolveInstallFailure } from '../install/failure';
 import { isDirtyGitTree, maybeInitGit } from '../install/git';
@@ -620,6 +620,9 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 			),
 		);
 		note(formatDryRun(plans, opts.diff ?? false), 'Dry run (no files written)');
+		for (const plan of plans) {
+			if (plan.unparseable) log.warn(formatUnparseableSkip(plan.rel.split(sep).join('/')));
+		}
 		log.success(formatDryRunSummary(plans));
 		outro('Dry run: nothing written.');
 		return { ok: true };
@@ -1005,6 +1008,8 @@ export function formatPlan(
 // Left-padded verbs so the paths line up in a column, matching the tone of the
 // real run's per-file reporting. Order follows the plan list, not the outcome,
 // so the report reads top-to-bottom the way the files were resolved.
+const UNPARSEABLE_LABEL = 'left as is';
+
 const PLAN_LABELS: Record<PlanOutcome, string> = {
 	create: 'would create',
 	merge: 'would merge',
@@ -1014,11 +1019,15 @@ const PLAN_LABELS: Record<PlanOutcome, string> = {
 };
 
 function formatDryRun(plans: FilePlan[], withDiff: boolean): string {
-	const width = Math.max(...Object.values(PLAN_LABELS).map((l) => l.length));
+	const width = Math.max(
+		UNPARSEABLE_LABEL.length,
+		...Object.values(PLAN_LABELS).map((l) => l.length),
+	);
 	const lines: string[] = [];
 
 	for (const plan of plans) {
-		lines.push(`${PLAN_LABELS[plan.outcome].padEnd(width)}  ${plan.rel}`);
+		const label = plan.unparseable ? UNPARSEABLE_LABEL : PLAN_LABELS[plan.outcome];
+		lines.push(`${label.padEnd(width)}  ${plan.rel}`);
 		if (withDiff) {
 			const diff = renderPlanDiff(plan);
 			if (diff) lines.push(diff);
@@ -1029,13 +1038,16 @@ function formatDryRun(plans: FilePlan[], withDiff: boolean): string {
 }
 
 function formatDryRunSummary(plans: FilePlan[]): string {
-	const count = (outcome: PlanOutcome): number => plans.filter((p) => p.outcome === outcome).length;
+	const count = (outcome: PlanOutcome): number =>
+		plans.filter((p) => p.outcome === outcome && !p.unparseable).length;
+	const unparseable = plans.filter((p) => p.unparseable).length;
 	// Mirrors the real run's `Files: N written…` line, swapped to would-phrasing.
 	// Conflicts get their own tail count since dry-run reports them instead of
 	// resolving them into a write or a skip.
+	const tail = unparseable > 0 ? `, ${unparseable} left as is (not strict JSON).` : '.';
 	return (
 		`Would: ${count('create')} written, ${count('merge')} merged, ` +
-		`${count('append')} appended, ${count('skip')} skipped, ${count('conflict')} conflicts.`
+		`${count('append')} appended, ${count('skip')} skipped, ${count('conflict')} conflicts${tail}`
 	);
 }
 

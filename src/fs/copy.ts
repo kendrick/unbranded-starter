@@ -38,7 +38,7 @@ export function formatUnparseableSkip(rel: string): string {
 
 // Only the existing file's parse is guarded: the incoming side is our own
 // template or computed content, so a failure there is a bug to surface.
-function parseExistingJson(text: string): { ok: true; value: unknown } | { ok: false } {
+export function parseExistingJson(text: string): { ok: true; value: unknown } | { ok: false } {
 	try {
 		return { ok: true, value: JSON.parse(text) as unknown };
 	} catch (error) {
@@ -158,14 +158,14 @@ async function mergeJsonOp(
 	srcBuf: Buffer,
 	destBuf: Buffer,
 	onConflict: CopyOptions['onConflict'],
-	journal?: WriteJournal,
-	retire?: readonly RetireEntry[],
-	rel?: string,
+	journal: WriteJournal | undefined,
+	retire: readonly RetireEntry[] | undefined,
+	rel: string,
 ): Promise<CopyResult> {
 	const existingText = destBuf.toString('utf-8');
 	const parsed = parseExistingJson(existingText);
 	if (!parsed.ok) {
-		log.warn(formatUnparseableSkip(rel ?? destPath));
+		log.warn(formatUnparseableSkip(rel));
 		return { src: srcPath, dest: destPath, action: 'skipped', reason: 'unparseable' };
 	}
 	const existing = parsed.value;
@@ -220,6 +220,8 @@ function appendIfMissingOp(
 // The would-do verdicts for --dry-run. 'conflict' has no run-time analogue —
 // a real run resolves it into an overwrite/merge or a skip — but the plan
 // surfaces it so the user can see every collision before committing to a run.
+// The exception is a non-strict-JSON merge-json file (`FilePlan.unparseable`):
+// a real run skips it outright instead of resolving it.
 export type PlanOutcome = 'create' | 'merge' | 'append' | 'skip' | 'conflict';
 
 export interface FilePlan {
@@ -232,6 +234,11 @@ export interface FilePlan {
 	// The before/after text, when a file exists and would change. Lets --diff
 	// render the unified patch without re-deriving the proposed content.
 	diff?: { existing: string; proposed: string };
+	// A merge-json destination that isn't strict JSON: outcome is 'conflict' with
+	// no diff, but the cause is the file's syntax, not a key clash. Callers that
+	// report to a user read this, since planFileOp itself stays silent (a clack
+	// warn would land on stdout and break `plan --json`).
+	unparseable?: true;
 }
 
 // The read-only twin of copyFileOp: same dispatch, same merge/append math, but
@@ -253,7 +260,7 @@ export function planFileOp(op: FileOp, opts: CopyOptions): FilePlan {
 	if (mode === 'merge-json') {
 		const existingText = destBuf.toString('utf-8');
 		const parsed = parseExistingJson(existingText);
-		if (!parsed.ok) return { ...base, outcome: 'conflict' };
+		if (!parsed.ok) return { ...base, outcome: 'conflict', unparseable: true };
 		const existing = parsed.value;
 		const { merged, conflict } = deepMergeJson(
 			retireKeys(existing, op.retire),

@@ -777,6 +777,32 @@ describe('runInit onConflict threading (#113)', () => {
 		expect(state.modes ?? {}).not.toHaveProperty('.vscode/settings.json');
 	});
 
+	it('--dry-run names a .vscode/settings.json that is not strict JSON instead of calling it a key clash (#216)', async () => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-dry-unparseable-'));
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		mkdirSync(join(tmp, '.vscode'));
+		writeFileSync(join(tmp, '.vscode', 'settings.json'), '{\n  // mine\n  "a": 1\n}\n');
+		const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+		const out: string[] = [];
+		vi.spyOn(process.stdout, 'write').mockImplementation(((m: string) => {
+			out.push(String(m));
+			return true;
+		}) as typeof process.stdout.write);
+
+		await runInit({
+			targetDir: tmp,
+			dryRun: true,
+			inline: { units: 'core-editorconfig,opt-vscode', pm: 'pnpm', yes: true },
+		});
+
+		const text = out.join('');
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining('.vscode/settings.json as is'));
+		expect(text).toContain('left as is');
+		expect(text).not.toMatch(/conflict\s+\.vscode/);
+		expect(text).toContain('1 left as is (not strict JSON)');
+		vi.restoreAllMocks();
+	});
+
 	it('still tracks a file skipped because it already matches the template (#214)', async () => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-identical-skip-'));
 		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));

@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { isCancel, log, select, spinner } from '@clack/prompts';
-import { formatUnparseableSkip } from '../fs/copy';
+import { formatUnparseableSkip, parseExistingJson } from '../fs/copy';
 import { collectDepCollisions, depKey, mergePackageJson } from '../fs/merge-json';
 import { CancelledError } from '../util/cancel';
 import { computeNodeVersion, NODE_VERSION_UNIT_ID, queryPmVersion } from './node-version';
@@ -366,13 +366,12 @@ function writeVscodeExtensions(
 	let indent = '\t';
 	if (existsSync(path)) {
 		const raw = readFileSync(path, 'utf-8');
-		try {
-			base = JSON.parse(raw) as Record<string, unknown>;
-		} catch (error) {
-			if (!(error instanceof SyntaxError)) throw error;
+		const parsed = parseExistingJson(raw);
+		if (!parsed.ok) {
 			log.warn(formatUnparseableSkip('.vscode/extensions.json'));
 			return undefined;
 		}
+		base = parsed.value as Record<string, unknown>;
 		if (Array.isArray(base.recommendations))
 			existing = base.recommendations.filter((v): v is string => typeof v === 'string');
 		indent = detectIndent(raw);

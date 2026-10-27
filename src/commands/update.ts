@@ -5,7 +5,7 @@ import { join, posix } from 'node:path';
 import { cancel, confirm, intro, isCancel, log, note, outro, select } from '@clack/prompts';
 import { createPatch } from 'diff';
 import { effectiveDest } from '../detect/signals';
-import { colorizeDiff, planFileOp } from '../fs/copy';
+import { colorizeDiff, formatUnparseableSkip, planFileOp } from '../fs/copy';
 import { computeUpdate } from '../fs/merge3';
 import { mergePackageJson } from '../fs/merge-json';
 import { isDirtyGitTree } from '../install/git';
@@ -40,6 +40,7 @@ export type UpdateFileStatus =
 	| 'merged'
 	| 'conflict'
 	| 'needs-choice'
+	| 'unparseable'
 	| 'template-gone'
 	| 'user-deleted'
 	| 'computed';
@@ -156,7 +157,11 @@ export function planUpdate(opts: {
 
 		if (mode === 'merge-json' || mode === 'append-if-missing') {
 			const plan = planFileOp(entry.op, { pkgRoot: entry.root, targetDir });
-			if (plan.outcome === 'skip' || !plan.diff) {
+			if (plan.unparseable) {
+				// Not strict JSON, so nothing can be merged. Reporting it up-to-date
+				// would hide that the template's keys never reached the file.
+				files.push({ rel, status: 'unparseable' });
+			} else if (plan.outcome === 'skip' || !plan.diff) {
 				files.push({ rel, status: 'up-to-date' });
 			} else if (plan.outcome === 'conflict') {
 				// Same key, different value. With no base there's no telling a user
@@ -253,6 +258,7 @@ const STATUS_LABELS: Record<UpdateFileStatus, string> = {
 	'merged': 'merge',
 	'conflict': 'conflict',
 	'needs-choice': 'needs choice',
+	'unparseable': 'left as is',
 	'template-gone': 'template gone',
 	'user-deleted': 'deleted by you',
 	'computed': 'computed',
@@ -334,6 +340,8 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 		templateRoots: catalog.templateRoots,
 	});
 	note(formatUpdateReport(plan), 'Update plan');
+	const unparseable = plan.files.filter((f) => f.status === 'unparseable');
+	for (const f of unparseable) log.warn(formatUnparseableSkip(f.rel));
 
 	if (opts.diff) {
 		for (const f of plan.files) {
@@ -372,7 +380,7 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 		// a stray. With nothing to move, nothing is written. Every other path migrates
 		// in its own refreshTrackedFiles call below, after the user confirms.
 		if (legacyBaselinesPending(cwd, state)) refreshTrackedFiles({ targetDir: cwd, entries: {} });
-		outro('Everything up to date.');
+		outro(unparseable.length > 0 ? 'Nothing to update.' : 'Everything up to date.');
 		return 0;
 	}
 
