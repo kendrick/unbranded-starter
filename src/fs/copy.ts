@@ -1,7 +1,14 @@
 import type { FileOp, RetireEntry } from '../manifest/types';
 import type { WriteJournal } from './journal';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join as joinNative, posix, relative, resolve as resolveNative } from 'node:path';
+import {
+	dirname,
+	join as joinNative,
+	posix,
+	relative,
+	resolve as resolveNative,
+	sep,
+} from 'node:path';
 import { isCancel, log, select } from '@clack/prompts';
 import { createPatch } from 'diff';
 import { CancelledError } from '../util/cancel';
@@ -18,7 +25,26 @@ export interface CopyResult {
 	src: string;
 	dest: string;
 	action: CopyAction;
-	reason?: 'identical' | 'user-skip';
+	reason?: 'identical' | 'user-skip' | 'unparseable';
+}
+
+// VS Code writes .vscode/*.json as JSONC, so a user's file can carry comments
+// or trailing commas that JSON.parse rejects. We have no JSONC parser, so we
+// leave such a file alone and say so. Shared with install/run.ts so both sites
+// print one message.
+export function formatUnparseableSkip(rel: string): string {
+	return `Left ${rel} as is: it isn't strict JSON (a comment or a trailing comma?), so nothing was merged into it.`;
+}
+
+// Only the existing file's parse is guarded: the incoming side is our own
+// template or computed content, so a failure there is a bug to surface.
+function parseExistingJson(text: string): { ok: true; value: unknown } | { ok: false } {
+	try {
+		return { ok: true, value: JSON.parse(text) as unknown };
+	} catch (error) {
+		if (error instanceof SyntaxError) return { ok: false };
+		throw error;
+	}
 }
 
 export interface CopyOptions {
@@ -80,6 +106,7 @@ export async function copyFileOp(op: FileOp, opts: CopyOptions): Promise<CopyRes
 			opts.onConflict,
 			opts.journal,
 			op.retire,
+			relative(opts.targetDir, destPath).split(sep).join(posix.sep),
 		);
 	}
 	if (mode === 'append-if-missing') {
@@ -133,9 +160,15 @@ async function mergeJsonOp(
 	onConflict: CopyOptions['onConflict'],
 	journal?: WriteJournal,
 	retire?: readonly RetireEntry[],
+	rel?: string,
 ): Promise<CopyResult> {
 	const existingText = destBuf.toString('utf-8');
-	const existing = JSON.parse(existingText) as unknown;
+	const parsed = parseExistingJson(existingText);
+	if (!parsed.ok) {
+		log.warn(formatUnparseableSkip(rel ?? destPath));
+		return { src: srcPath, dest: destPath, action: 'skipped', reason: 'unparseable' };
+	}
+	const existing = parsed.value;
 	const incoming = JSON.parse(srcBuf.toString('utf-8')) as unknown;
 
 	const { merged, conflict } = deepMergeJson(retireKeys(existing, retire), incoming);
@@ -219,7 +252,9 @@ export function planFileOp(op: FileOp, opts: CopyOptions): FilePlan {
 	const mode = op.mode ?? 'copy';
 	if (mode === 'merge-json') {
 		const existingText = destBuf.toString('utf-8');
-		const existing = JSON.parse(existingText) as unknown;
+		const parsed = parseExistingJson(existingText);
+		if (!parsed.ok) return { ...base, outcome: 'conflict' };
+		const existing = parsed.value;
 		const { merged, conflict } = deepMergeJson(
 			retireKeys(existing, op.retire),
 			JSON.parse(srcBuf.toString('utf-8')),

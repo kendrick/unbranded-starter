@@ -231,6 +231,24 @@ describe('writeAndInstall vscode extensions', () => {
 		expect(ext.unwantedRecommendations).toEqual(['bad.ext']);
 	});
 
+	it('leaves an extensions.json that is not strict JSON alone and still writes package.json (#216)', async () => {
+		const commented =
+			'{\n\t// See https://go.microsoft.com/fwlink/?LinkId=827846 to learn about workspace recommendations.\n\t"recommendations": []\n}\n';
+		mkdirSync(join(tmp, '.vscode'), { recursive: true });
+		writeFileSync(join(tmp, '.vscode', 'extensions.json'), commented);
+		const result = await writeAndInstall({
+			targetDir: tmp,
+			pm: null,
+			units: [VSCODE_UNIT, ESLINT_REC],
+		});
+		expect(result.wrote).toBe(true);
+		expect(existsSync(join(tmp, 'package.json'))).toBe(true);
+		expect(readFileSync(join(tmp, '.vscode', 'extensions.json'), 'utf-8')).toBe(commented);
+		expect(result.computedWrites.map((w) => w.path)).not.toContain(
+			join(tmp, '.vscode', 'extensions.json'),
+		);
+	});
+
 	it('writes nothing when opt-vscode is not selected', async () => {
 		const result = await writeAndInstall({ targetDir: tmp, pm: null, units: [ESLINT_REC] });
 		expect(existsSync(join(tmp, '.vscode', 'extensions.json'))).toBe(false);

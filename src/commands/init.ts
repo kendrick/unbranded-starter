@@ -666,8 +666,9 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 				copyResults.push(result);
 				// A user-skip leaves the user's own file in place; tracking it would hand
 				// it to remove and update as template output (#214). An identical skip is
-				// the template's bytes, so it stays tracked.
-				if (result.reason !== 'user-skip') {
+				// the template's bytes, so it stays tracked. An unparseable skip is the
+				// same: the file is the user's and unbranded never wrote it.
+				if (result.reason !== 'user-skip' && result.reason !== 'unparseable') {
 					writes.push({ dest: result.dest, unit: unit.id, mode: file.mode ?? 'copy' });
 				}
 			}
