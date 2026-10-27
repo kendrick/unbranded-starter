@@ -1,10 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildStateFile, builtinUnits, hashBuffer } from '../state/state';
 import { PKG_ROOT } from '../util/paths';
-import { classify, computeDiff } from './diff';
+import { classify, computeDiff, runDiff } from './diff';
 
 describe('classify', () => {
 	it('unchanged when disk and template both still match the record', () => {
@@ -117,5 +117,52 @@ describe('computeDiff', () => {
 		// planFileOp compares on-disk against the current template, which is the
 		// patch `unbranded diff --diff` renders for a drifted file.
 		expect(entry?.plan?.diff).toBeDefined();
+	});
+});
+
+describe('runDiff on a commented .vscode/settings.json (#216)', () => {
+	let tmp: string;
+	const commented = '{\n  // note\n  "editor.tabSize": 4\n}\n';
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-diff-jsonc-'));
+		mkdirSync(join(tmp, '.vscode'));
+		writeFileSync(join(tmp, '.vscode', 'settings.json'), commented);
+		const state = buildStateFile({
+			version: '1.0.0',
+			units: builtinUnits(['opt-vscode']),
+			files: { '.vscode/settings.json': hashBuffer(Buffer.from('{}\n')) },
+		});
+		writeFileSync(join(tmp, '.unbranded.json'), JSON.stringify(state));
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	function capture(opts: { json?: boolean }): { code: number; text: string } {
+		const out: string[] = [];
+		vi.spyOn(process.stdout, 'write').mockImplementation(((m: string) => {
+			out.push(String(m));
+			return true;
+		}) as typeof process.stdout.write);
+		const code = runDiff({ cwd: tmp, ...opts });
+		return { code, text: out.join('') };
+	}
+
+	it('names the file it cannot merge into, keeping user-modified and the exit code', () => {
+		const { code, text } = capture({});
+		expect(code).toBe(1);
+		expect(text).toMatch(/user-modified\s+\.vscode\/settings\.json/);
+		expect(text).toContain('Left .vscode/settings.json as is');
+	});
+
+	it('keeps --json parseable and free of the warning', () => {
+		const { code, text } = capture({ json: true });
+		expect(code).toBe(1);
+		const report = JSON.parse(text) as { files: { path: string; status: string }[] };
+		expect(report.files).toEqual([{ path: '.vscode/settings.json', status: 'user-modified' }]);
+		expect(text).not.toContain('Left ');
 	});
 });

@@ -1,5 +1,5 @@
 import type { Unit, UnitId } from '../manifest/types';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { log } from '@clack/prompts';
@@ -755,6 +755,52 @@ describe('runInit onConflict threading (#113)', () => {
 		expect(state.files).not.toHaveProperty('.editorconfig');
 		expect(state.attribution ?? {}).not.toHaveProperty('.editorconfig');
 		expect(state.modes ?? {}).not.toHaveProperty('.editorconfig');
+	});
+
+	it('does not track a .vscode/settings.json that is not strict JSON (#216)', async () => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-unparseable-'));
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		mkdirSync(join(tmp, '.vscode'));
+		const commented = '{\n  // my settings\n  "editor.tabSize": 4\n}\n';
+		writeFileSync(join(tmp, '.vscode', 'settings.json'), commented);
+		mockInstall();
+
+		await runInit({
+			targetDir: tmp,
+			inline: { units: 'core-editorconfig,opt-vscode', pm: 'pnpm', yes: true },
+		});
+
+		expect(readFileSync(join(tmp, '.vscode', 'settings.json'), 'utf-8')).toBe(commented);
+		const state = readState(tmp);
+		expect(state.files).not.toHaveProperty('.vscode/settings.json');
+		expect(state.attribution ?? {}).not.toHaveProperty('.vscode/settings.json');
+		expect(state.modes ?? {}).not.toHaveProperty('.vscode/settings.json');
+	});
+
+	it('--dry-run names a .vscode/settings.json that is not strict JSON instead of calling it a key clash (#216)', async () => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-dry-unparseable-'));
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		mkdirSync(join(tmp, '.vscode'));
+		writeFileSync(join(tmp, '.vscode', 'settings.json'), '{\n  // mine\n  "a": 1\n}\n');
+		const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+		const out: string[] = [];
+		vi.spyOn(process.stdout, 'write').mockImplementation(((m: string) => {
+			out.push(String(m));
+			return true;
+		}) as typeof process.stdout.write);
+
+		await runInit({
+			targetDir: tmp,
+			dryRun: true,
+			inline: { units: 'core-editorconfig,opt-vscode', pm: 'pnpm', yes: true },
+		});
+
+		const text = out.join('');
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining('.vscode/settings.json as is'));
+		expect(text).toContain('left as is');
+		expect(text).not.toMatch(/conflict\s+\.vscode/);
+		expect(text).toContain('1 left as is (not strict JSON)');
+		vi.restoreAllMocks();
 	});
 
 	it('still tracks a file skipped because it already matches the template (#214)', async () => {

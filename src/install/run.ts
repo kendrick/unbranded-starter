@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { isCancel, log, select, spinner } from '@clack/prompts';
+import { formatUnparseableSkip, parseExistingJson } from '../fs/copy';
 import { collectDepCollisions, depKey, mergePackageJson } from '../fs/merge-json';
 import { CancelledError } from '../util/cancel';
 import { computeNodeVersion, NODE_VERSION_UNIT_ID, queryPmVersion } from './node-version';
@@ -140,11 +141,11 @@ export async function writeAndInstall(opts: WriteAndInstallOpts): Promise<WriteA
 	// recommendation set only makes sense relative to the units actually picked,
 	// so it can't be a static template. Generate it here and union it into any
 	// file the user already has.
-	if (opts.units.some((u) => u.id === VSCODE_UNIT_ID))
-		computedWrites.push({
-			path: writeVscodeExtensions(opts.targetDir, opts.units, opts.journal),
-			unit: VSCODE_UNIT_ID,
-		});
+	if (opts.units.some((u) => u.id === VSCODE_UNIT_ID)) {
+		const extensionsPath = writeVscodeExtensions(opts.targetDir, opts.units, opts.journal);
+		if (extensionsPath !== undefined)
+			computedWrites.push({ path: extensionsPath, unit: VSCODE_UNIT_ID });
+	}
 
 	// A pnpm scaffold that pulls a native-build dependency (esbuild, via Vitest)
 	// has to allowlist the build or `pnpm install` fails on pnpm 11. Seed the
@@ -349,12 +350,14 @@ export function detectIndent(content: string): string {
 // defaults to tab indent so it matches the settings.json opt-vscode ships;
 // when the user already has one we detect their indent, keep their existing
 // `recommendations` (and any sibling keys like unwantedRecommendations), and
-// only fold our additions in. Returns the path written so the caller can record it.
+// only fold our additions in. Returns the path written so the caller can record
+// it, or undefined when the existing file isn't strict JSON (VS Code writes it
+// as JSONC) and was left untouched.
 function writeVscodeExtensions(
 	targetDir: string,
 	units: AnyUnit[],
 	journal?: WriteJournal,
-): string {
+): string | undefined {
 	const dir = join(targetDir, '.vscode');
 	const path = join(dir, 'extensions.json');
 
@@ -363,7 +366,12 @@ function writeVscodeExtensions(
 	let indent = '\t';
 	if (existsSync(path)) {
 		const raw = readFileSync(path, 'utf-8');
-		base = JSON.parse(raw) as Record<string, unknown>;
+		const parsed = parseExistingJson(raw);
+		if (!parsed.ok) {
+			log.warn(formatUnparseableSkip('.vscode/extensions.json'));
+			return undefined;
+		}
+		base = parsed.value as Record<string, unknown>;
 		if (Array.isArray(base.recommendations))
 			existing = base.recommendations.filter((v): v is string => typeof v === 'string');
 		indent = detectIndent(raw);

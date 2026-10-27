@@ -188,6 +188,18 @@ describe('copyFileOp mode: merge-json', () => {
 		expect(readJson(join(targetDir, 'c.json'))).toEqual({ a: 1 });
 	});
 
+	it('leaves a destination that is not strict JSON alone and reports "unparseable" (#216)', async () => {
+		const commented = '{\n  // my settings\n  "editor.tabSize": 4\n}\n';
+		writeFileSync(join(pkgRoot, 'c.json'), JSON.stringify({ 'editor.formatOnSave': true }));
+		writeFileSync(join(targetDir, 'c.json'), commented);
+		const result = await copyFileOp(
+			{ src: 'c.json', dest: 'c.json', mode: 'merge-json' },
+			{ pkgRoot, targetDir },
+		);
+		expect(result).toMatchObject({ action: 'skipped', reason: 'unparseable' });
+		expect(readFileSync(join(targetDir, 'c.json'), 'utf-8')).toBe(commented);
+	});
+
 	it('deep-merges disjoint keys and reports "merged"', async () => {
 		writeFileSync(
 			join(pkgRoot, 'c.json'),
@@ -455,6 +467,27 @@ describe('planFileOp (dry-run classification)', () => {
 		expect(readFileSync(join(targetDir, 'c.json'), 'utf-8')).toBe(
 			`${JSON.stringify({ a: 1 }, null, 2)}\n`,
 		);
+	});
+
+	it('reports "conflict" with no diff for a merge-json destination that is not strict JSON (#216)', () => {
+		writeFileSync(join(pkgRoot, 'c.json'), JSON.stringify({ b: 2 }));
+		writeFileSync(join(targetDir, 'c.json'), '{\n  // my settings\n  "a": 1\n}\n');
+		const plan = planFileOp(
+			{ src: 'c.json', dest: 'c.json', mode: 'merge-json' },
+			{ pkgRoot, targetDir },
+		);
+		expect(plan.outcome).toBe('conflict');
+		expect(plan.diff).toBeUndefined();
+		expect(plan.unparseable).toBe(true);
+	});
+
+	it('leaves `unparseable` unset for a real same-key collision', () => {
+		writeFileSync(join(pkgRoot, 'c.json'), JSON.stringify({ license: 'Apache-2.0' }));
+		writeFileSync(join(targetDir, 'c.json'), `${JSON.stringify({ license: 'MIT' }, null, 2)}\n`);
+		expect(
+			planFileOp({ src: 'c.json', dest: 'c.json', mode: 'merge-json' }, { pkgRoot, targetDir })
+				.unparseable,
+		).toBeUndefined();
 	});
 
 	it('reports "skip" for a merge-json overlay that adds nothing', () => {

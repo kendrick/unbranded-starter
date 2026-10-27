@@ -4,7 +4,7 @@ import type { AnyUnit } from '../manifest/types';
 import type { StateFile } from '../state/state';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
-import { planFileOp, renderPlanDiff } from '../fs/copy';
+import { formatUnparseableSkip, planFileOp, renderPlanDiff } from '../fs/copy';
 import { loadCatalog, unitsDirsFor } from '../manifest/catalog';
 import { UNITS } from '../manifest/index';
 import { applyVscodeSettings } from '../manifest/vscode-settings';
@@ -202,6 +202,9 @@ function formatDiff(report: DiffReport, withDiff: boolean): string {
 
 	for (const file of report.files) {
 		lines.push(`${STATUS_LABELS[file.status].padEnd(width)}  ${file.path}`);
+		// Plain text, not clack: the status stays user-modified (they did edit it),
+		// but a reader needs to know why unbranded can't merge into it.
+		if (file.plan?.unparseable) lines.push(`  ${formatUnparseableSkip(file.path)}`);
 		if (withDiff && file.status !== 'unchanged' && file.plan) {
 			const patch = renderPlanDiff(file.plan);
 			if (patch) lines.push(patch);

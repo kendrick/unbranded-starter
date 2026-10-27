@@ -3,7 +3,8 @@ import type { StateFile } from '../state/state';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { log } from '@clack/prompts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildTsconfigBase } from '../manifest/tsconfig-base';
 import {
 	baselinePath,
@@ -166,6 +167,23 @@ describe('planUpdate', () => {
 		expect(JSON.parse(files[0]?.proposed ?? '')).toEqual({ a: 1, user: true, b: 2 });
 	});
 
+	it('reports a merge-json file that is not strict JSON as unparseable, not up-to-date (#216)', () => {
+		const jsonCatalog = [
+			unit('opt-vscode', {
+				files: [{ content: '{\n\t"a": 2\n}\n', dest: 'settings.json', mode: 'merge-json' }],
+			}),
+		];
+		writeFileSync(join(tmp, 'settings.json'), '{\n\t// note\n\t"a": 1\n}\n');
+		const s = state({
+			units: builtinUnits(['opt-vscode']),
+			files: { 'settings.json': h('irrelevant') },
+			attribution: { 'settings.json': 'opt-vscode' },
+			modes: { 'settings.json': 'merge-json' },
+		});
+		const { files } = planUpdate({ targetDir: tmp, state: s, units: jsonCatalog, pkgRoot: tmp });
+		expect(files[0]?.status).toBe('unparseable');
+	});
+
 	it('surfaces a merge-json value collision as needs-choice', () => {
 		const jsonCatalog = [
 			unit('opt-vscode', {
@@ -303,5 +321,49 @@ describe('runUpdate on a pre-#117 core-typescript', () => {
 		const updated = readFileSync(join(tmp, 'tsconfig.base.json'), 'utf-8');
 		expect(updated).toContain('"DOM"');
 		expect(updated).toBe(buildTsconfigBase('dom'));
+	});
+});
+
+describe('runUpdate on a commented .vscode/settings.json (#216)', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-update-jsonc-'));
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	it('names the file it left alone and does not report everything up to date', async () => {
+		const commented = '{\n  // note\n  "editor.tabSize": 4\n}\n';
+		mkdirSync(join(tmp, '.vscode'));
+		writeFileSync(join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0' }));
+		writeFileSync(join(tmp, '.vscode', 'settings.json'), commented);
+		const state: StateFile = {
+			_tool: 'x',
+			schema: STATE_SCHEMA,
+			version: '2.0.0',
+			units: builtinUnits(['opt-vscode']),
+			files: { '.vscode/settings.json': hashBuffer(Buffer.from('{}\n')) },
+			attribution: { '.vscode/settings.json': 'opt-vscode' },
+			modes: { '.vscode/settings.json': 'merge-json' },
+		};
+		writeFileSync(join(tmp, '.unbranded.json'), JSON.stringify(state));
+		const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+		const out: string[] = [];
+		vi.spyOn(process.stdout, 'write').mockImplementation(((m: string) => {
+			out.push(String(m));
+			return true;
+		}) as typeof process.stdout.write);
+
+		expect(await runUpdate({ cwd: tmp, dryRun: true })).toBe(0);
+
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining('.vscode/settings.json as is'));
+		const text = out.join('');
+		expect(text).toContain('left as is');
+		expect(text).not.toMatch(/up-to-date\s+\.vscode/);
+		expect(readFileSync(join(tmp, '.vscode', 'settings.json'), 'utf-8')).toBe(commented);
 	});
 });
