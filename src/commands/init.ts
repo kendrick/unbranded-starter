@@ -383,6 +383,16 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 		pmOverride = parsePmFlag(inline.pm);
 	}
 
+	// Fail fast, like --pm. On a picker run the flag never reaches
+	// resolveConfig's validate(), so a typo would otherwise go unnoticed.
+	let postInstallAnswer: 'all' | 'none' | undefined;
+	if (inline.postInstall !== undefined) {
+		if (inline.postInstall !== 'all' && inline.postInstall !== 'none') {
+			throw new Error('`--post-install` must be "all" or "none".');
+		}
+		postInstallAnswer = inline.postInstall;
+	}
+
 	// Loading config first means we fail with a clear error before prompting,
 	// rather than mid-flow after the user already started picking things. The
 	// catalog comes with it, since a recipe may be what names the units directory.
@@ -783,11 +793,14 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	// Post-installs only make sense if the install step actually ran. Without
 	// node_modules the husky/playwright binaries aren't on PATH yet.
 	if (pm && installResult.installed) {
+		// A recipe or --units run already merged the flag into config. On a picker
+		// run, the flag answers only these prompts (#105).
+		const auto = config?.postInstall ?? postInstallAnswer;
 		const post = await runPostInstalls({
 			targetDir: target.dir,
 			pm,
 			units,
-			...(config?.postInstall !== undefined ? { auto: config.postInstall } : {}),
+			...(auto !== undefined ? { auto } : {}),
 		});
 		// State is already recorded, so the files stay tracked; this exits the way
 		// every other Ctrl-C in the run does.
