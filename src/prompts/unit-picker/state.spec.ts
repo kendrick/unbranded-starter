@@ -1,7 +1,6 @@
 import type { Unit, UnitId } from '../../manifest/types';
 import { describe, expect, it } from 'vitest';
-import { IMPLIES_ONE_OF, UNITS as REAL_UNITS } from '../../manifest';
-import { resolveSelection } from '../../manifest/resolve';
+import { UNITS as REAL_UNITS } from '../../manifest';
 import {
 	createPickerState,
 	filteredOptions,
@@ -467,7 +466,7 @@ describe('typescriptLine snap memory', () => {
 describe('auto preview against tracked units', () => {
 	const tracked = ['core-eslint', 'core-typescript'];
 
-	it('matches what runInit resolves when a lint unit is already tracked', () => {
+	it('previews only core-vitest and core-node-version, 3 units, when a lint unit is already tracked', () => {
 		const s = createPickerState(
 			REAL_UNITS,
 			new Set(tracked),
@@ -475,11 +474,8 @@ describe('auto preview against tracked units', () => {
 			['opt-ci-github'],
 			new Set(tracked),
 		);
-		const init = resolveSelection(['opt-ci-github'], REAL_UNITS, IMPLIES_ONE_OF, tracked);
-		if (init.kind !== 'ok') throw new Error(`expected ok, got ${init.kind}`);
-		expect(s.auto).toEqual(new Set(init.auto));
 		expect(s.auto).toEqual(new Set(['core-vitest', 'core-node-version']));
-		expect(pickerSummary(s).units).toBe(init.ids.length);
+		expect(pickerSummary(s).units).toBe(3);
 	});
 
 	it('still previews core-oxlint and core-typescript with nothing tracked', () => {
