@@ -133,22 +133,31 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 	// comment) — enforced here since it's a cross-unit property no single
 	// definition's own validation can see. Skip the whole unit rather than the
 	// one option: a partially-loaded unit whose colliding option silently
-	// vanished would be a worse surprise than the unit not loading at all.
+	// vanished would be a worse surprise than the unit not loading at all. The
+	// same holds inside one unit: a recipe's flat `options` map can't tell two
+	// options sharing a key apart, and claimedOptionKeys sees only earlier units.
 	const claimedOptionKeys = new Set<string>();
 	const survivors: Validated[] = [];
 	for (const v of validated) {
 		const keys = (v.unit.options ?? []).map((o) => o.key);
+		const repeated = keys.find((k, i) => keys.indexOf(k) !== i);
 		const collision = keys.find((k) => BUILTIN_OPTION_KEYS.has(k) || claimedOptionKeys.has(k));
-		if (collision !== undefined) {
+		if (collision !== undefined || repeated !== undefined) {
 			skipped.push({
 				path: v.file,
 				id: v.unit.id,
 				issues: [
-					{
-						path: 'options',
-						expected: 'option keys not claimed by a built-in or a sibling unit',
-						got: `key "${collision}" already claimed`,
-					},
+					collision !== undefined
+						? {
+								path: 'options',
+								expected: 'option keys not claimed by a built-in or a sibling unit',
+								got: `key "${collision}" already claimed`,
+							}
+						: {
+								path: 'options',
+								expected: 'each option key declared once within a unit',
+								got: `key "${repeated}" declared twice in this unit`,
+							},
 				],
 			});
 			continue;
@@ -157,31 +166,24 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 		survivors.push(v);
 	}
 
-	const localBareIds = new Set(survivors.map((v) => v.unit.id));
-	const units: AnyUnit[] = [];
-	const baseDirs = new Map<string, string>();
-
-	for (const v of survivors) {
-		const bare = v.unit.id;
-		const ctx: UnitRefContext = { builtinIds, namespace, localBareIds };
-
-		// Rewritten here, once, at the load boundary — not in resolve.ts — so
-		// resolveSelection and dependentsOf stay pure over one array of units
-		// whose ids and relations are already canonical, whichever catalog they
-		// came from. A resolver that re-derived qualification per lookup would
-		// have to carry namespace context through every call site.
-		const implies = resolveAll(v.unit.implies, ctx);
-		const requires = resolveAll(v.unit.requires, ctx);
-		const excludes = resolveAll(v.unit.excludes, ctx);
-		if (implies === undefined || requires === undefined || excludes === undefined) {
-			// validateUnitDefinition already checked every relation against
-			// knownIds, so this only fires when a referenced sibling was itself
-			// dropped after that check (a duplicate id or an option-key
-			// collision). Rare, but emitting the unit anyway would hand
-			// resolveSelection a dangling reference it has no way to detect.
+	// Dropping a unit can orphan a sibling that relates to it, so re-resolve
+	// against the surviving ids until a pass drops nothing. One pass would let a
+	// chain (a implies b implies c, c dropped) emit `a` pointing at the dropped
+	// `b`, which resolveSelection would then add as a phantom unit.
+	let alive = survivors;
+	for (;;) {
+		const ctx: UnitRefContext = {
+			builtinIds,
+			namespace,
+			localBareIds: new Set(alive.map((v) => v.unit.id)),
+		};
+		const next = alive.filter((v) => resolveRelations(v.unit, ctx) !== undefined);
+		if (next.length === alive.length) break;
+		for (const v of alive) {
+			if (next.includes(v)) continue;
 			skipped.push({
 				path: v.file,
-				id: bare,
+				id: v.unit.id,
 				issues: [
 					{
 						path: '(relations)',
@@ -190,8 +192,23 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 					},
 				],
 			});
-			continue;
 		}
+		alive = next;
+	}
+
+	const localBareIds = new Set(alive.map((v) => v.unit.id));
+	const ctx: UnitRefContext = { builtinIds, namespace, localBareIds };
+	const units: AnyUnit[] = [];
+	const baseDirs = new Map<string, string>();
+
+	for (const v of alive) {
+		const bare = v.unit.id;
+		// Rewritten here, once, at the load boundary — not in resolve.ts — so
+		// resolveSelection and dependentsOf stay pure over one array of units
+		// whose ids and relations are already canonical, whichever catalog they
+		// came from. A resolver that re-derived qualification per lookup would
+		// have to carry namespace context through every call site.
+		const { implies, requires, excludes } = resolveRelations(v.unit, ctx)!;
 
 		// A local id equal to a built-in's is not a collision — `my-units/core-eslint`
 		// and `core-eslint` are distinct units and qualify() keeps them so. Still
@@ -222,6 +239,14 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 	}
 
 	return { namespace, units, baseDirs, skipped, warnings };
+}
+
+function resolveRelations(unit: UnitDefinition, ctx: UnitRefContext) {
+	const implies = resolveAll(unit.implies, ctx);
+	const requires = resolveAll(unit.requires, ctx);
+	const excludes = resolveAll(unit.excludes, ctx);
+	if (implies === undefined || requires === undefined || excludes === undefined) return undefined;
+	return { implies, requires, excludes };
 }
 
 function resolveAll(refs: string[] | undefined, ctx: UnitRefContext): string[] | undefined {

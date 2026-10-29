@@ -119,6 +119,76 @@ describe('loadUnitsDir', () => {
 		expect(loaded.skipped[0]?.id).toBe('clashing');
 	});
 
+	const option = (key: string) => ({
+		key,
+		label: key,
+		default: 'x',
+		choices: [{ value: 'x', label: 'x' }],
+	});
+
+	it('drops every unit in an implies chain whose tail was dropped for an option-key collision', () => {
+		writeUnit(dir, 'a', { implies: ['b'] });
+		writeUnit(dir, 'b', { implies: ['c'] });
+		writeUnit(dir, 'c', { options: [option('eslintFlavor')] });
+
+		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
+		expect(loaded.units).toEqual([]);
+		expect(loaded.skipped.map((s) => s.id).sort()).toEqual(['a', 'b', 'c']);
+		for (const id of ['a', 'b']) {
+			const entry = loaded.skipped.find((s) => s.id === id);
+			expect(entry?.issues[0]?.path).toBe('(relations)');
+		}
+	});
+
+	it('keeps the whole chain when nothing in it collides', () => {
+		writeUnit(dir, 'a', { implies: ['b'] });
+		writeUnit(dir, 'b', { implies: ['c'] });
+		writeUnit(dir, 'c', { options: [option('unclaimedKey')] });
+
+		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
+		expect(loaded.skipped).toEqual([]);
+		expect(loaded.units.map((u) => u.id).sort()).toEqual([
+			'my-units/a',
+			'my-units/b',
+			'my-units/c',
+		]);
+		expect(loaded.units.find((u) => u.id === 'my-units/a')?.implies).toEqual(['my-units/b']);
+	});
+
+	it('drops a chain three deep, and follows requires and excludes the same way', () => {
+		writeUnit(dir, 'a', { implies: ['b'] });
+		writeUnit(dir, 'b', { requires: ['c'] });
+		writeUnit(dir, 'c', { excludes: ['d'] });
+		writeUnit(dir, 'd', { options: [option('eslintFlavor')] });
+
+		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
+		expect(loaded.units).toEqual([]);
+		expect(loaded.skipped.map((s) => s.id).sort()).toEqual(['a', 'b', 'c', 'd']);
+		for (const id of ['a', 'b', 'c']) {
+			const entry = loaded.skipped.find((s) => s.id === id);
+			expect(entry?.issues[0]?.path).toBe('(relations)');
+		}
+	});
+
+	it('skips a unit that declares the same option key twice, naming the key', () => {
+		writeUnit(dir, 'dup', { options: [option('flavor'), option('flavor')] });
+
+		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
+		expect(loaded.units).toEqual([]);
+		expect(loaded.skipped).toHaveLength(1);
+		const issue = loaded.skipped[0]?.issues[0];
+		expect(issue?.path).toBe('options');
+		expect(issue?.got).toBe('key "flavor" declared twice in this unit');
+	});
+
+	it('still loads a unit whose options use different keys', () => {
+		writeUnit(dir, 'two', { options: [option('flavorA'), option('flavorB')] });
+
+		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
+		expect(loaded.skipped).toEqual([]);
+		expect(loaded.units.map((u) => u.id)).toEqual(['my-units/two']);
+	});
+
 	it('warns when a local bare id shadows a built-in, but still loads it under the qualified id', () => {
 		writeUnit(dir, 'core-eslint');
 
