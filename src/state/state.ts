@@ -336,13 +336,12 @@ export type StateRead =
 	| { kind: 'malformed' }
 	| { kind: 'unsupported'; schema: number };
 
-// Four outcomes, because "written by a newer unbranded", "not tracked here" and
-// "present but unreadable" must not share an answer. `diff` reads absent state as an
+// `unsupported` stays apart from `none` because `diff` reads absent state as an
 // untracked project and exits 0 clean, so a CI gate would report no drift on a repo
 // it can't read. `malformed` (bad JSON, or JSON that isn't an object) stays apart
-// from `none` because every writer merges onto the prior state: a scaffold that read
-// a merge-conflicted file as absent wrote a fresh envelope over it and pruned every
-// baseline (#220). Read-only callers may still treat `malformed` as `none`.
+// because every writer merges onto the prior state: reading a merge-conflicted file
+// as absent wrote a fresh envelope over it and pruned every baseline (#220).
+// Read-only callers, `diff` included, still degrade `malformed` to `none` for now.
 export function readStateFile(dir: string): StateRead {
 	const path = join(dir, STATE_FILENAME);
 	if (!existsSync(path)) return { kind: 'none' };

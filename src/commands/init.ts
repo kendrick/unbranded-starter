@@ -169,8 +169,9 @@ function openCatalog(opts: { configPath?: string; preset?: string; unitsDir?: st
 }
 
 // Refusing here, ahead of the first write, matters because writeStateFile throws on
-// a newer-schema envelope only after files are written and the install has run,
-// which strands a half-applied scaffold.
+// a newer-schema or malformed envelope only after files are written and the install
+// has run, which strands a half-applied scaffold. Refusing early also leaves a malformed
+// file and its baselines untouched.
 function readTracked(
 	dir: string,
 ):
