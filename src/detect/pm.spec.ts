@@ -141,6 +141,55 @@ describe('inspectPm', () => {
 		writeFileSync(join(dir, 'pnpm-lock.yaml'), '');
 		expect(inspectPm(sub, {})).toMatchObject({ kind: 'detected', pm: 'pnpm', source: 'lockfile' });
 	});
+
+	describe('project signals vs an ancestor lockfile', () => {
+		let proj: string;
+
+		beforeEach(() => {
+			proj = join(dir, 'proj');
+			mkdirSync(proj);
+			writeFileSync(
+				join(proj, 'package.json'),
+				'{"name":"proj","version":"0.0.0","packageManager":"pnpm@10.0.0"}',
+			);
+		});
+
+		it("prefers the project's packageManager field over an ancestor lockfile", () => {
+			writeFileSync(join(dir, 'package-lock.json'), '{}');
+			expect(inspectPm(proj, {})).toEqual({
+				kind: 'detected',
+				pm: 'pnpm',
+				source: 'packageManager',
+				packageManagerField: 'pnpm@10.0.0',
+			});
+		});
+
+		it('still lets a lockfile in the project dir beat its packageManager field', () => {
+			writeFileSync(join(proj, 'package-lock.json'), '{}');
+			expect(inspectPm(proj, {})).toEqual({
+				kind: 'detected',
+				pm: 'npm',
+				source: 'lockfile',
+				lockfilePath: join(proj, 'package-lock.json'),
+			});
+		});
+
+		it('falls back to the ancestor lockfile when the project has no packageManager field', () => {
+			writeFileSync(join(dir, 'package-lock.json'), '{}');
+			writeFileSync(join(proj, 'package.json'), '{"name":"proj","version":"0.0.0"}');
+			expect(inspectPm(proj, {})).toEqual({
+				kind: 'detected',
+				pm: 'npm',
+				source: 'lockfile',
+				lockfilePath: join(dir, 'package-lock.json'),
+			});
+		});
+
+		it('still refuses a workspace leaf that declares packageManager', () => {
+			writeFileSync(join(dir, 'pnpm-workspace.yaml'), '');
+			expect(inspectPm(proj, {})).toMatchObject({ kind: 'workspace-leaf', workspaceRoot: dir });
+		});
+	});
 });
 
 // New-project mode runs against a freshly created, empty directory: no

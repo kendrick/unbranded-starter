@@ -100,34 +100,32 @@ export function inspectPm(
 		return { kind: 'needs-prompt' };
 	}
 
-	// Walk up looking for either a workspace marker (refuse) or a lockfile
-	// (strongest install-target signal). The workspace check fires on every
-	// ancestor *except cwd itself* — being at the workspace root is fine;
-	// being in a leaf is what we refuse.
+	// Check every ancestor for a workspace marker before reading packageManager,
+	// or a leaf that declares the field slips past the refusal. The walk skips
+	// cwd itself, since running at the workspace root is fine and only a leaf
+	// is refused.
 	for (const dir of walkUp(cwd)) {
 		if (dir !== cwd && existsSync(join(dir, 'pnpm-workspace.yaml'))) {
 			return { kind: 'workspace-leaf', workspaceRoot: dir };
 		}
-		const sig = lockfileSignal(dir);
-		if (sig) {
-			return {
-				kind: 'detected',
-				pm: sig.pm,
-				source: 'lockfile',
-				lockfilePath: join(dir, sig.file),
-			};
-		}
 	}
 
-	// No lockfile anywhere up the tree. Fall back to cwd's package.json.
+	const lockfileResult = (dir: string, sig: { pm: Pm; file: string }): PmInspection => ({
+		kind: 'detected',
+		pm: sig.pm,
+		source: 'lockfile',
+		lockfilePath: join(dir, sig.file),
+	});
+
+	const ownSig = lockfileSignal(cwd);
+	if (ownSig) return lockfileResult(cwd, ownSig);
+
+	// The project's own packageManager field outranks an ancestor's lockfile, so
+	// a stray ~/package-lock.json can't turn a pnpm project into an npm one.
+	// Corepack treats the field as the project's stated intent, which is also
+	// why it beats the user-agent.
 	const pkg = readPackageJson(cwd);
-	if (pkg === null) {
-		return { kind: 'no-pkg' };
-	}
-
-	// Corepack-authoritative: a packageManager field beats user-agent because
-	// it's the project's stated intent, regardless of what shell invoked us.
-	const pmField = parsePackageManagerField(pkg);
+	const pmField = pkg && parsePackageManagerField(pkg);
 	if (pmField) {
 		return {
 			kind: 'detected',
@@ -135,6 +133,17 @@ export function inspectPm(
 			source: 'packageManager',
 			packageManagerField: pmField.field,
 		};
+	}
+
+	// A target with no package.json still takes an ancestor's lockfile; no-pkg
+	// waits until the whole walk comes up empty.
+	for (const dir of walkUp(dirname(resolve(cwd)))) {
+		const sig = lockfileSignal(dir);
+		if (sig) return lockfileResult(dir, sig);
+	}
+
+	if (pkg === null) {
+		return { kind: 'no-pkg' };
 	}
 
 	const uaPm = userAgentSignal(env);
