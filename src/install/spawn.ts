@@ -5,7 +5,9 @@ import type { SpawnOptions } from 'node:child_process';
 // shell (it throws EINVAL). Running through the shell lets cmd.exe resolve the
 // shim via PATHEXT. POSIX spawns the bare binary directly. The subcommands we
 // pass (`install`, `exec husky init`, ...) carry no shell metacharacters, so
-// shell mode needs no extra quoting here.
+// shell mode needs no extra quoting here. Only package-manager callers (run.ts,
+// post.ts, node-version.ts) use this. git.ts builds its own options because the
+// shell would re-split a commit message with spaces.
 export function spawnOptions(
 	cwd: string,
 	platform: NodeJS.Platform = process.platform,
