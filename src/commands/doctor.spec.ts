@@ -12,6 +12,7 @@ import {
 	KNOWN_FINDING_IDS,
 	partitionFixable,
 	readDoctorIgnore,
+	runDoctor,
 	runDoctorFix,
 } from './doctor';
 import { runInit } from './init';
@@ -424,5 +425,33 @@ describe('readDoctorIgnore', () => {
 		expect(
 			readDoctorIgnore({ doctor: { ignore: 'missing-editorconfig' } } as unknown as StateFile),
 		).toEqual([]);
+	});
+});
+
+describe('runDoctor on an .unbranded.json that does not parse (#231)', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-doctor-malformed-'));
+		cleanRepo(tmp);
+		writeFileSync(join(tmp, '.unbranded.json'), '<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>> theirs\n');
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	it('warns on stderr that the accept-list was dropped, and stdout stays valid JSON', () => {
+		const out: string[] = [];
+		vi.spyOn(process.stdout, 'write').mockImplementation(((m: string) => {
+			out.push(String(m));
+			return true;
+		}) as typeof process.stdout.write);
+		const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+		runDoctor({ cwd: tmp, json: true });
+		expect(String(err.mock.calls[0]?.[0])).toMatch(/\.unbranded\.json.*accept-list/);
+		const parse = (): unknown => JSON.parse(out.join(''));
+		expect(parse).not.toThrow();
 	});
 });

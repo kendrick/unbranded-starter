@@ -131,6 +131,19 @@ describe('unbranded diff', () => {
 		expect(existsSync(join(tmp, '.unbranded.json'))).toBe(false);
 	});
 
+	it('refuses with stderr only and exit 1 when .unbranded.json does not parse (#231)', () => {
+		scaffold(tmp);
+		const conflicted = '<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>> theirs\n';
+		writeFileSync(join(tmp, '.unbranded.json'), conflicted);
+		for (const args of [['diff'], ['diff', '--json']]) {
+			const result = spawnSync('node', [CLI, ...args], { cwd: tmp, encoding: 'utf-8' });
+			expect(result.status).toBe(1);
+			expect(result.stdout).toBe('');
+			expect(result.stderr).toContain('.unbranded.json');
+		}
+		expect(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')).toBe(conflicted);
+	});
+
 	it('documents `unbranded diff` distinctly from the --dry-run preview in --help', () => {
 		const result = spawnSync('node', [CLI, '--help'], { encoding: 'utf-8' });
 		expect(result.status).toBe(0);

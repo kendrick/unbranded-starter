@@ -341,7 +341,8 @@ export type StateRead =
 // it can't read. `malformed` (bad JSON, or JSON that isn't an object) stays apart
 // because every writer merges onto the prior state: reading a merge-conflicted file
 // as absent wrote a fresh envelope over it and pruned every baseline (#220).
-// Read-only callers, `diff` included, still degrade `malformed` to `none` for now.
+// diff, update and remove refuse it too, and doctor warns. CI runs diff as a drift
+// check, and "no drift" for a file diff can't parse would pass a repo it never read.
 export function readStateFile(dir: string): StateRead {
 	const path = join(dir, STATE_FILENAME);
 	if (!existsSync(path)) return { kind: 'none' };

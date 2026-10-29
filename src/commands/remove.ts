@@ -14,6 +14,7 @@ import { dependentsOf } from '../manifest/resolve';
 import {
 	applyRemovalToState,
 	hashBuffer,
+	malformedStateMessage,
 	readStateFile,
 	unsupportedStateMessage,
 } from '../state/state';
@@ -188,6 +189,10 @@ export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promi
 	const read = readStateFile(cwd);
 	if (read.kind === 'unsupported') {
 		process.stderr.write(`unbranded remove: ${unsupportedStateMessage(read.schema)}\n`);
+		return 1;
+	}
+	if (read.kind === 'malformed') {
+		process.stderr.write(`unbranded remove: ${malformedStateMessage()}\n`);
 		return 1;
 	}
 	const state = read.kind === 'ok' ? read.state : undefined;

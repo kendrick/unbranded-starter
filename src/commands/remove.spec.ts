@@ -3,7 +3,7 @@ import type { StateFile } from '../state/state';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	builtinUnits,
 	hashBuffer,
@@ -389,5 +389,29 @@ describe('runRemove', () => {
 
 	it('errors when there is no state file at all', async () => {
 		expect(await runRemove('core-tailwind', { cwd: tmp, yes: true })).toBe(1);
+	});
+});
+
+describe('runRemove on an .unbranded.json that does not parse (#231)', () => {
+	let tmp: string;
+	const conflicted = '<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>> theirs\n';
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-remove-malformed-'));
+		writeFileSync(join(tmp, '.unbranded.json'), conflicted);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	it("exits 1 saying the file doesn't parse, not that it is missing", async () => {
+		const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+		expect(await runRemove('core-eslint', { cwd: tmp, yes: true, force: true })).toBe(1);
+		const msg = String(err.mock.calls[0]?.[0]);
+		expect(msg).toContain("doesn't parse");
+		expect(msg).not.toContain('no .unbranded.json found');
+		expect(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')).toBe(conflicted);
 	});
 });

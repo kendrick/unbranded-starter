@@ -166,3 +166,27 @@ describe('runDiff on a commented .vscode/settings.json (#216)', () => {
 		expect(text).not.toContain('Left ');
 	});
 });
+
+describe('runDiff on an .unbranded.json that does not parse (#231)', () => {
+	let tmp: string;
+	const conflicted = '<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>> theirs\n';
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-diff-malformed-'));
+		writeFileSync(join(tmp, '.unbranded.json'), conflicted);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	it.each([false, true])('refuses with stderr only and exit 1 (json: %s)', (json) => {
+		const out = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+		const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+		expect(runDiff({ cwd: tmp, json })).toBe(1);
+		expect(out).not.toHaveBeenCalled();
+		expect(String(err.mock.calls[0]?.[0])).toContain('.unbranded.json');
+		expect(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')).toBe(conflicted);
+	});
+});
