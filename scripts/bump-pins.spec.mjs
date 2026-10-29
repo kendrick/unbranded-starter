@@ -291,9 +291,8 @@ describe('skipLoopUnits', () => {
 	});
 });
 
-// The fake gh sits ahead of the real one on PATH and origin is a local bare
-// repo, so nothing here can reach GitHub.
-describe('bump-pins main()', () => {
+// The fake gh is a sh script and PATH joins on ':', and bump-pins.mjs runs only on the pin-bumps workflow's ubuntu runner. A local bare origin and the fake gh keep it off GitHub.
+describe.skipIf(process.platform === 'win32')('bump-pins main()', () => {
 	const SCRIPT = resolve(import.meta.dirname, 'bump-pins.mjs');
 	const scratch = [];
 	afterEach(() => {
