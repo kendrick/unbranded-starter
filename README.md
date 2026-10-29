@@ -142,7 +142,7 @@ The oxlint + oxfmt unit installs `oxlint-tsgolint` and turns on type-aware rules
 
 **Git hooks**
 
-- **Husky + lint-staged** — a pre-commit hook that runs lint-staged on changed files.
+- **Husky + lint-staged** — a pre-commit hook that runs lint-staged on changed files. Yarn Berry Plug'n'Play is unsupported, because it has no `node_modules/.bin` for the hook to resolve `lint-staged` from.
 
 **Editor**
 

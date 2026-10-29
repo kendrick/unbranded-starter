@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { PKG_ROOT } from '../../src/util/paths';
 
@@ -93,7 +93,10 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main' || process.platform === 'win32
 			// lint-staged needs a HEAD to diff against, so the scaffold lands first, unhooked.
 			expect(git('add', '-A').status).toBe(0);
 			expect(git('commit', '-q', '--no-verify', '-m', 'scaffold').status).toBe(0);
-			const husky = spawnSync('pnpm', ['exec', 'husky'], { cwd: tmp, encoding: 'utf-8' });
+			const husky = spawnSync('pnpm', ['exec', 'husky'], {
+				cwd: tmp,
+				encoding: 'utf-8',
+			});
 			expect(husky.status, `${husky.stdout}${husky.stderr}`).toBe(0);
 
 			mkdirSync(join(tmp, 'src'), { recursive: true });
@@ -108,3 +111,66 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main' || process.platform === 'win32
 		});
 	},
 );
+
+// #222: the shipped hook once named `pnpm`, so npm, yarn, and bun projects
+// without pnpm on PATH failed every commit. Only the commit runs under the
+// narrowed PATH; the scaffold's install needs the normal one.
+const NODE_BIN = dirname(process.execPath);
+const COMMIT_PATH = `${NODE_BIN}:/usr/bin:/bin`;
+
+describe.skipIf(
+	process.env.UB_E2E_LEG === 'main' ||
+		process.platform === 'win32' ||
+		existsSync(join(NODE_BIN, 'pnpm')),
+)('opt-husky commit under npm with no pnpm on PATH (#222, e2e, real install)', () => {
+	let tmp: string;
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-lint-staged-npm-'));
+	});
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	it('commits through lint-staged', () => {
+		const git = (args: string[], env?: NodeJS.ProcessEnv) =>
+			spawnSync('git', ['-c', 'user.name=e2e', '-c', 'user.email=e2e@example.com', ...args], {
+				cwd: tmp,
+				encoding: 'utf-8',
+				env,
+			});
+		expect(git(['init', '-q']).status).toBe(0);
+		writeFileSync(
+			join(tmp, 'package.json'),
+			JSON.stringify({ name: 'staged-npm', version: '0.0.0', private: true }, null, 2),
+		);
+		expect(git(['add', '-A']).status).toBe(0);
+		expect(git(['commit', '-q', '-m', 'init']).status).toBe(0);
+
+		// A pnpm user agent inherited from the runner would steer PM detection.
+		const { npm_config_user_agent: _agent, ...env } = process.env;
+		const scaffold = spawnSync(
+			'node',
+			[
+				CLI,
+				'--units',
+				'core-typescript,core-oxlint,opt-husky',
+				'--pm',
+				'npm',
+				'--post-install',
+				'none',
+				'--yes',
+			],
+			{ cwd: tmp, encoding: 'utf-8', env, stdin: 'ignore' } as Parameters<typeof spawnSync>[2],
+		);
+		expect(scaffold.status, `${scaffold.stdout}${scaffold.stderr}`).toBe(0);
+
+		writeFileSync(join(tmp, 'a.ts'), 'export const x = 1;\n');
+		expect(git(['add', '-A']).status).toBe(0);
+		const commit = git(['commit', '-m', 'test'], {
+			...process.env,
+			PATH: COMMIT_PATH,
+		});
+		expect(commit.status, `${commit.stdout}${commit.stderr}`).toBe(0);
+		expect(git(['log', '--format=%s', '-1']).stdout.trim()).toBe('test');
+	});
+});
