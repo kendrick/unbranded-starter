@@ -83,7 +83,7 @@ export function buildVscodeSettings(selected: ReadonlySet<string>): VscodeSettin
 	// A fresh scaffold copies this text verbatim, so every string array goes on
 	// one line, the way the formatter leaves the base file's one array.
 	const content = `${JSON.stringify(settings, null, '\t')}\n`.replace(
-		/\[\s*((?:"(?:[^"\\]|\\.)*"\s*,?\s*)+)\]/g,
+		/\[\s*("(?:[^"\\]|\\.)*"(?:\s*,\s*"(?:[^"\\]|\\.)*")*)\s*\]/g,
 		(_, body: string) => `[${(body.match(/"(?:[^"\\]|\\.)*"/g) ?? []).join(', ')}]`,
 	);
 	return { content, retire };
