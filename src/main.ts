@@ -158,7 +158,9 @@ export async function main(): Promise<void> {
 
 	// Each Run*Opts falls back to process.cwd() when cwd is unset, so a branch that
 	// omits cwd reads the wrong repo, and remove, update and doctor --fix write to it (#223).
-	const cwd = values.target ? resolve(values.target) : undefined;
+	// Resolved now, before any detection runs, so the dir is stable even though a
+	// relative --config path is still read from here.
+	const targetDir = values.target ? resolve(values.target) : undefined;
 
 	const command = positionals[0];
 
@@ -186,7 +188,9 @@ export async function main(): Promise<void> {
 	// Read-only drift check against .unbranded.json. No target, no TTY; exit code
 	// carries the verdict (non-zero on drift) so CI can gate on it directly.
 	if (command === 'diff') {
-		process.exit(runDiff(omitUnset({ json: values.json, diff: values.diff, unitsDir, cwd })));
+		process.exit(
+			runDiff(omitUnset({ json: values.json, diff: values.diff, unitsDir, cwd: targetDir })),
+		);
 	}
 
 	// Read-only repo audit: guaranteed zero writes. Default exit is 0 so a report
@@ -211,7 +215,7 @@ export async function main(): Promise<void> {
 						pm: values.pm,
 						onConflict: values['on-conflict'],
 						unitsDir,
-						cwd,
+						cwd: targetDir,
 					}),
 				).catch((err: unknown) => {
 					log.error(err instanceof Error ? err.message : String(err));
@@ -219,7 +223,9 @@ export async function main(): Promise<void> {
 				}),
 			);
 		}
-		process.exit(runDoctor(omitUnset({ json: values.json, strict: values.strict, cwd })));
+		process.exit(
+			runDoctor(omitUnset({ json: values.json, strict: values.strict, cwd: targetDir })),
+		);
 	}
 
 	// Backing a unit out is an apply-shaped verb (it writes), so it reuses the same
@@ -241,7 +247,7 @@ export async function main(): Promise<void> {
 					force: values.force,
 					cascade: values.cascade,
 					unitsDir,
-					cwd,
+					cwd: targetDir,
 				}),
 			).catch((err: unknown) => {
 				log.error(err instanceof Error ? err.message : String(err));
@@ -290,7 +296,7 @@ export async function main(): Promise<void> {
 					force: values.force,
 					strategy,
 					unitsDir,
-					cwd,
+					cwd: targetDir,
 				}),
 			).catch((err: unknown) => {
 				log.error(err instanceof Error ? err.message : String(err));
@@ -316,7 +322,7 @@ export async function main(): Promise<void> {
 					preset: values.preset,
 					unitsDir,
 					latest: values.latest,
-					targetDir: values.target ? resolve(values.target) : undefined,
+					targetDir,
 					inline: omitUnset({
 						units: values.units,
 						pm: values.pm,
@@ -337,9 +343,7 @@ export async function main(): Promise<void> {
 			configPath: values.config,
 			preset: values.preset,
 			unitsDir,
-			// Resolve against the invocation cwd now, before any detection runs, so the
-			// dir is stable even though a relative --config path is still read from here.
-			targetDir: values.target ? resolve(values.target) : undefined,
+			targetDir,
 			latest: values.latest,
 			force: values.force,
 			dryRun: values['dry-run'],

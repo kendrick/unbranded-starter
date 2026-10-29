@@ -125,6 +125,8 @@ describe('cli --target on subcommands', () => {
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		expect(result.stdout + result.stderr).not.toContain('nothing is tracked');
 		expect(existsSync(join(b, '.unbranded.json'))).toBe(true);
+		// A's only change is the deletion this test made; update wrote nothing there.
+		expect(git(a, 'status', '--short').stdout.trim()).toBe('D .unbranded.json');
 	});
 
 	it('doctor --json audits the target', () => {
