@@ -460,20 +460,28 @@ interface AppendResult {
 // carry, order-preserving. Built for ignore-style files where duplicate rules
 // are noise, so a rerun after the lines land is a no-op. Blank lines are never
 // appended — they'd otherwise accumulate on every run — and the trailing newline
-// is preserved so the file stays POSIX-clean.
+// is preserved so the file stays POSIX-clean. Lines compare without a trailing
+// `\r` because a Windows checkout with core.autocrlf writes CRLF, and a CRLF
+// line never equals the same line in an LF template, or the reverse. Appended
+// lines take the existing file's ending so the file doesn't end up mixed.
 function appendMissingLines(existing: Buffer, incoming: Buffer): AppendResult {
 	const existingText = existing.toString('utf-8');
-	const present = new Set(existingText.split('\n'));
+	const stripCr = (line: string) => (line.endsWith('\r') ? line.slice(0, -1) : line);
+	const present = new Set(existingText.split('\n').map(stripCr));
 
 	const missing = incoming
 		.toString('utf-8')
 		.split('\n')
+		.map(stripCr)
 		.filter((line) => line !== '' && !present.has(line));
 	if (missing.length === 0) return { content: existing, changed: false };
 
+	const eol = existingText.includes('\r\n') ? '\r\n' : '\n';
 	const base =
-		existingText.length > 0 && !existingText.endsWith('\n') ? `${existingText}\n` : existingText;
-	return { content: Buffer.from(`${base}${missing.join('\n')}\n`, 'utf-8'), changed: true };
+		existingText.length > 0 && !existingText.endsWith('\n')
+			? `${existingText}${eol}`
+			: existingText;
+	return { content: Buffer.from(`${base}${missing.join(eol)}${eol}`, 'utf-8'), changed: true };
 }
 
 // The plain patch already carries +/-/@@ prefixes, so "no color" just means

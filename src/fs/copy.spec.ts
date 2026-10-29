@@ -345,6 +345,39 @@ describe('copyFileOp mode: append-if-missing', () => {
 		expect(first.action).toBe('appended');
 		expect(second).toMatchObject({ action: 'skipped', reason: 'identical' });
 	});
+
+	it('treats a CRLF file as already holding the LF template lines', async () => {
+		writeFileSync(join(pkgRoot, '.gitignore'), 'node_modules\ndist\n');
+		writeFileSync(join(targetDir, '.gitignore'), 'node_modules\r\ndist\r\n');
+		const result = await copyFileOp(
+			{ src: '.gitignore', dest: '.gitignore', mode: 'append-if-missing' },
+			{ pkgRoot, targetDir },
+		);
+		expect(result).toMatchObject({ action: 'skipped', reason: 'identical' });
+		expect(readFileSync(join(targetDir, '.gitignore'), 'utf-8')).toBe('node_modules\r\ndist\r\n');
+	});
+
+	it('appends missing lines to a CRLF file with CRLF endings', async () => {
+		writeFileSync(join(pkgRoot, '.gitignore'), 'node_modules\ndist\n');
+		writeFileSync(join(targetDir, '.gitignore'), 'node_modules\r\n');
+		const result = await copyFileOp(
+			{ src: '.gitignore', dest: '.gitignore', mode: 'append-if-missing' },
+			{ pkgRoot, targetDir },
+		);
+		expect(result.action).toBe('appended');
+		expect(readFileSync(join(targetDir, '.gitignore'), 'utf-8')).toBe('node_modules\r\ndist\r\n');
+	});
+
+	it('leaves an LF file alone when the template lines carry CRLF', async () => {
+		writeFileSync(join(pkgRoot, '.gitignore'), 'node_modules\r\n');
+		writeFileSync(join(targetDir, '.gitignore'), 'node_modules\n');
+		const result = await copyFileOp(
+			{ src: '.gitignore', dest: '.gitignore', mode: 'append-if-missing' },
+			{ pkgRoot, targetDir },
+		);
+		expect(result).toMatchObject({ action: 'skipped', reason: 'identical' });
+		expect(readFileSync(join(targetDir, '.gitignore'), 'utf-8')).toBe('node_modules\n');
+	});
 });
 
 // Computed content: a FileOp can carry its payload inline (`content`) instead of
