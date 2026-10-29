@@ -9,8 +9,8 @@
 //   node scripts/bump-pins.mjs /tmp/outdated.json [--dry-run]
 //
 // The pure pieces (planBumps, groupByUnit, rewritePins, rewritePackageJson)
-// are unit-tested; main() is thin git/gh glue that --dry-run bypasses
-// entirely.
+// are unit-tested directly; main() is covered by running the script against a
+// scratch repo with a fake gh. --dry-run bypasses the git/gh glue entirely.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -213,10 +213,14 @@ function main() {
 		const branch = `bump/${unit}`;
 		sh('git', ['checkout', '-B', branch, base]);
 
+		// Rewrite in memory and write only once nothing is missed: `git checkout`
+		// carries uncommitted edits, so a refused unit's partial bump on disk would
+		// ride into the next unit's `commit -am` (#218).
 		const missed = new Set(bumps.map((b) => b.name));
+		const rewrites = [];
 		for (const path of MANIFEST_FILES) {
 			const result = rewritePins(readFileSync(path, 'utf-8'), bumps);
-			writeFileSync(path, result.source);
+			rewrites.push([path, result.source]);
 			for (const name of result.applied) missed.delete(name);
 		}
 		if (missed.size > 0) {
@@ -227,6 +231,7 @@ function main() {
 			sh('git', ['checkout', base]);
 			continue;
 		}
+		for (const [path, source] of rewrites) writeFileSync(path, source);
 
 		// package.json is an opportunistic extra target, not a manifest source:
 		// its misses are expected (turbo, husky, @playwright/test carry no
@@ -260,9 +265,17 @@ function main() {
 			process.stdout.write(
 				`Opened PR for ${branch} (${bumps.length} pin${bumps.length === 1 ? '' : 's'}).\n`,
 			);
-		} catch {
-			// Branch force-pushed into an existing PR: the PR is already refreshed.
-			process.stdout.write(`PR for ${branch} already open; branch refreshed.\n`);
+		} catch (err) {
+			// Only gh's own "already exists" means the force-push refreshed an open PR;
+			// a bad token or an outage must fail the job, not read as success (#218).
+			if (/already exists/.test(String(err.stderr))) {
+				process.stdout.write(`PR for ${branch} already open; branch refreshed.\n`);
+			} else {
+				process.stderr.write(
+					`${branch}: gh pr create failed: ${String(err.stderr ?? err.message).trim()}\n`,
+				);
+				missedAny = true;
+			}
 		}
 		sh('git', ['checkout', base]);
 	}
