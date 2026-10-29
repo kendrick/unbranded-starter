@@ -462,3 +462,33 @@ describe('typescriptLine snap memory', () => {
 		expect(s.flavors.typescriptLine).toBe('6');
 	});
 });
+
+describe('auto preview against tracked units', () => {
+	const tracked = ['core-eslint', 'core-typescript'];
+
+	it('previews only core-vitest and core-node-version, 3 units, when a lint unit is already tracked', () => {
+		const s = createPickerState(
+			REAL_UNITS,
+			new Set(tracked),
+			{},
+			['opt-ci-github'],
+			new Set(tracked),
+		);
+		expect(s.auto).toEqual(new Set(['core-vitest', 'core-node-version']));
+		expect(pickerSummary(s).units).toBe(3);
+	});
+
+	it('still previews core-oxlint and core-typescript with nothing tracked', () => {
+		const s = createPickerState(REAL_UNITS, new Set(), {}, ['opt-ci-github']);
+		expect(s.auto.has('core-oxlint')).toBe(true);
+		expect(s.auto.has('core-typescript')).toBe(true);
+	});
+
+	it('keeps the preview in step after a toggle', () => {
+		let s = createPickerState(REAL_UNITS, new Set(tracked), {}, [], new Set(tracked));
+		const idx = filteredOptions(s).findIndex((o) => o.value === 'opt-ci-github');
+		s = reducePicker({ ...s, cursor: idx }, { type: 'toggle' });
+		expect(s.auto.has('core-oxlint')).toBe(false);
+		expect(s.auto.has('core-typescript')).toBe(false);
+	});
+});

@@ -10,9 +10,10 @@ export type ResolveResult =
 // `requires` and `excludes`. Returns either the resolved set (with separate
 // visibility on which units got auto-added) or the first violation encountered.
 //
-// `present` is units the project already tracks. They satisfy a slot without
-// joining the plan, so a project on core-eslint adding opt-ci-github doesn't get
-// core-oxlint too. Only the slot check reads it: exclusions against tracked
+// `present` is units the project already tracks. They satisfy a `requires` entry
+// or a slot without joining the plan. So a project on core-eslint adding
+// opt-ci-github doesn't get core-oxlint too, and a local unit that requires a
+// tracked built-in doesn't make the user re-select it. Exclusions against tracked
 // units are exclusionAgainstTracked's job.
 //
 // Pure — no prompting, no side effects. Caller decides how to surface errors.
@@ -87,7 +88,7 @@ export function resolveSelection(
 	for (const id of selected) {
 		const unit = byId.get(id);
 		if (!unit?.requires) continue;
-		const missing = unit.requires.filter((r) => !selected.has(r));
+		const missing = unit.requires.filter((r) => !selected.has(r) && !present.includes(r));
 		if (missing.length > 0) {
 			return { kind: 'missing-required', unit: id, needs: missing };
 		}

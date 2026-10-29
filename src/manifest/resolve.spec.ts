@@ -107,6 +107,21 @@ describe('resolveSelection', () => {
 		expect(resolveSelection(['opt-shadcn', 'core-tailwind'], units)).toMatchObject({ kind: 'ok' });
 	});
 
+	it('passes requires when the dependency is tracked, without adding it to the plan', () => {
+		const units = [unit('core-typescript'), unit('opt-shadcn', { requires: ['core-typescript'] })];
+		const result = resolveSelection(['opt-shadcn'], units, [], ['core-typescript']);
+		expect(result).toMatchObject({ kind: 'ok', ids: ['opt-shadcn'], auto: [] });
+	});
+
+	it('still flags missing-required when nothing is tracked', () => {
+		const units = [unit('core-typescript'), unit('opt-shadcn', { requires: ['core-typescript'] })];
+		expect(resolveSelection(['opt-shadcn'], units, [], [])).toEqual({
+			kind: 'missing-required',
+			unit: 'opt-shadcn',
+			needs: ['core-typescript'],
+		});
+	});
+
 	it('detects a one-sided exclude (treats it as symmetric)', () => {
 		const units = [unit('core-eslint', { excludes: ['core-stylelint'] }), unit('core-stylelint')];
 		const result = resolveSelection(['core-eslint', 'core-stylelint'], units);
