@@ -93,10 +93,7 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main' || process.platform === 'win32
 			// lint-staged needs a HEAD to diff against, so the scaffold lands first, unhooked.
 			expect(git('add', '-A').status).toBe(0);
 			expect(git('commit', '-q', '--no-verify', '-m', 'scaffold').status).toBe(0);
-			const husky = spawnSync('pnpm', ['exec', 'husky'], {
-				cwd: tmp,
-				encoding: 'utf-8',
-			});
+			const husky = spawnSync('pnpm', ['exec', 'husky'], { cwd: tmp, encoding: 'utf-8' });
 			expect(husky.status, `${husky.stdout}${husky.stderr}`).toBe(0);
 
 			mkdirSync(join(tmp, 'src'), { recursive: true });
@@ -112,8 +109,9 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main' || process.platform === 'win32
 	},
 );
 
-// #222: the shipped hook once named `pnpm`, so npm, yarn, and bun projects
-// without pnpm on PATH failed every commit. Only the commit runs under the
+// #222: the hook must resolve lint-staged through husky's `node_modules/.bin`
+// PATH entry, not a package manager binary, or an npm, yarn, or bun project
+// without pnpm on PATH fails every commit. Only the commit runs under the
 // narrowed PATH; the scaffold's install needs the normal one.
 const NODE_BIN = dirname(process.execPath);
 const COMMIT_PATH = `${NODE_BIN}:/usr/bin:/bin`;
@@ -160,17 +158,24 @@ describe.skipIf(
 				'none',
 				'--yes',
 			],
-			{ cwd: tmp, encoding: 'utf-8', env, stdin: 'ignore' } as Parameters<typeof spawnSync>[2],
+			{ cwd: tmp, encoding: 'utf-8', env, stdio: ['ignore', 'pipe', 'pipe'] },
 		);
 		expect(scaffold.status, `${scaffold.stdout}${scaffold.stderr}`).toBe(0);
+		// npm's `prepare: husky` wires the hooks; a skipped wiring would let any commit exit 0.
+		expect(git(['config', 'core.hooksPath']).stdout.trim()).toBe('.husky/_');
 
-		writeFileSync(join(tmp, 'a.ts'), 'export const x = 1;\n');
-		expect(git(['add', '-A']).status).toBe(0);
-		const commit = git(['commit', '-m', 'test'], {
-			...process.env,
-			PATH: COMMIT_PATH,
-		});
+		mkdirSync(join(tmp, 'src'), { recursive: true });
+		writeFileSync(join(tmp, 'src', 'a.ts'), 'export const a = (x: number[]) => [...[...x]];\n');
+		expect(git(['add', 'src/a.ts']).status).toBe(0);
+		// HUSKY=0 would skip the hook and exit 0 without running lint-staged.
+		const { HUSKY: _husky, ...commitEnv } = process.env;
+		const commit = git(['commit', '-m', 'test'], { ...commitEnv, PATH: COMMIT_PATH });
 		expect(commit.status, `${commit.stdout}${commit.stderr}`).toBe(0);
 		expect(git(['log', '--format=%s', '-1']).stdout.trim()).toBe('test');
+
+		// Only a lint-staged run rewrites the staged file before it is committed.
+		const committed = git(['show', 'HEAD:src/a.ts']).stdout;
+		expect(committed).toContain('[...x]');
+		expect(committed).not.toContain('[...[...x]]');
 	});
 });
