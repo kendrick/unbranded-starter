@@ -6,9 +6,11 @@ import { defineConfig } from 'tsdown';
 // tsdown defaults to fixedExtension (.mjs) on platform: 'node', and package.json's
 // bin/exports name .js, so both configs turn it off. Leaving it on renames the
 // outputs with no error and breaks the published entry points.
+//
+// main is a named entry so the CLI body lands at dist/main.js. Without it, tsdown names the chunk by content hash, and test/fixtures/expected-pack.txt would change with every edit to the CLI. The banner applies to the whole config, so dist/main.js gets the shebang too, which Node accepts at the top of an imported module.
 export default defineConfig([
 	{
-		entry: { cli: 'src/cli.ts' },
+		entry: { cli: 'src/cli.ts', main: 'src/main.ts' },
 		format: 'esm',
 		target: 'node22',
 		platform: 'node',
