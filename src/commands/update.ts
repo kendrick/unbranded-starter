@@ -295,7 +295,7 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 		process.stderr.write(`unbranded update: ${unsupportedStateMessage(read.schema)}\n`);
 		return 1;
 	}
-	if (read.kind === 'none') {
+	if (read.kind === 'none' || read.kind === 'malformed') {
 		process.stdout.write(
 			'unbranded update: nothing is tracked in this directory (no .unbranded.json).\n',
 		);

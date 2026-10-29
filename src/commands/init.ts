@@ -43,7 +43,12 @@ import {
 import { applyUnitOptions } from '../manifest/options';
 import { exclusionAgainstTracked, resolveSelection } from '../manifest/resolve';
 import { unitPicker } from '../prompts/unit-picker/prompt';
-import { readStateFile, unsupportedStateMessage, writeStateFile } from '../state/state';
+import {
+	malformedStateMessage,
+	readStateFile,
+	unsupportedStateMessage,
+	writeStateFile,
+} from '../state/state';
 import { cancelAndExit, CancelledError } from '../util/cancel';
 import { EXIT_ERROR } from '../util/exit-codes';
 import { declaredSpecs, readPackageJson } from '../util/package-json';
@@ -173,6 +178,7 @@ function readTracked(
 	| { unsupported: string } {
 	const read = readStateFile(dir);
 	if (read.kind === 'unsupported') return { unsupported: unsupportedStateMessage(read.schema) };
+	if (read.kind === 'malformed') return { unsupported: malformedStateMessage() };
 	if (read.kind !== 'ok') return { ids: [], options: {} };
 	return { ids: read.state.units.map((u) => u.id), options: read.state.options ?? {} };
 }

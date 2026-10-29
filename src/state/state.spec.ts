@@ -21,6 +21,7 @@ import {
 	readStateFile,
 	refreshTrackedFiles,
 	serializeState,
+	SIDECAR_DIR,
 	STATE_FILENAME,
 	STATE_SCHEMA,
 	writeStateFile,
@@ -464,10 +465,56 @@ describe('writeStateFile / readStateFile', () => {
 		).toThrow(/newer unbranded/);
 	});
 
-	it('reports no state for an untracked directory and never throws on malformed state', () => {
+	it('reports no state for an untracked directory and malformed for an unparseable file', () => {
 		expect(readStateFile(tmp).kind).toBe('none');
 		writeFileSync(join(tmp, STATE_FILENAME), '{ not json');
-		expect(readStateFile(tmp).kind).toBe('none');
+		expect(readStateFile(tmp).kind).toBe('malformed');
+	});
+
+	it.each(['null', '[]', '42', '"s"'])(
+		'reports malformed, without throwing, when the whole file is %s',
+		(body) => {
+			writeFileSync(join(tmp, STATE_FILENAME), body);
+			expect(readStateFile(tmp).kind).toBe('malformed');
+		},
+	);
+
+	it('refuses to write over a malformed file and leaves it and the baselines alone', () => {
+		writeFileSync(join(tmp, 'a.txt'), 'a\n');
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('a.txt')],
+		});
+		const conflicted = `<<<<<<< HEAD\n${readFileSync(join(tmp, STATE_FILENAME), 'utf-8')}=======\n>>>>>>> theirs\n`;
+		writeFileSync(join(tmp, STATE_FILENAME), conflicted);
+		const baselines = readdirSync(join(tmp, SIDECAR_DIR, 'baseline'));
+		expect(baselines.length).toBeGreaterThan(0);
+
+		expect(() =>
+			writeStateFile({
+				targetDir: tmp,
+				units: builtinUnits(['core-vitest']),
+				writes: [write('a.txt')],
+			}),
+		).toThrow(STATE_FILENAME);
+		expect(() =>
+			applyRemovalToState({ targetDir: tmp, removeUnits: ['core-eslint'], removeFiles: [] }),
+		).toThrow(STATE_FILENAME);
+		expect(() => refreshTrackedFiles({ targetDir: tmp, entries: {} })).toThrow(STATE_FILENAME);
+
+		expect(readFileSync(join(tmp, STATE_FILENAME), 'utf-8')).toBe(conflicted);
+		expect(readdirSync(join(tmp, SIDECAR_DIR, 'baseline'))).toEqual(baselines);
+	});
+
+	it('still writes a fresh envelope when no state file exists', () => {
+		writeFileSync(join(tmp, 'a.txt'), 'a\n');
+		writeStateFile({
+			targetDir: tmp,
+			units: builtinUnits(['core-eslint']),
+			writes: [write('a.txt')],
+		});
+		expect(readStateFile(tmp).kind).toBe('ok');
 	});
 
 	it('stores each copy-mode baseline under a `.base` suffix, never its real name', () => {
