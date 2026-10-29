@@ -1,15 +1,17 @@
 import type { AnyUnit } from './types';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { PKG_ROOT } from '../util/paths';
 import { UNITS } from './index';
 import { applyVscodeSettings, buildVscodeSettings, VSCODE_SETTINGS_DEST } from './vscode-settings';
 
-// opt-in/vscode/settings.json at 3660e44, before the lint keys moved into the
-// generator. core-eslint projects must keep it byte for byte.
+// What a scaffold writes for each lint selection, pinned byte for byte so a
+// change to the base file or the splice shows up here.
 const LEGACY =
 	'{\n\t"editor.formatOnSave": true,\n\t"editor.codeActionsOnSave": {\n\t\t"source.fixAll.eslint": "explicit",\n\t\t"source.fixAll.stylelint": "explicit"\n\t},\n\t"editor.defaultFormatter": "dbaeumer.vscode-eslint",\n\t"editor.insertSpaces": false,\n\t"eslint.useFlatConfig": true,\n\t"stylelint.validate": ["css", "postcss", "scss"],\n\t"[css]": {\n\t\t"editor.defaultFormatter": "stylelint.vscode-stylelint"\n\t},\n\t"typescript.tsdk": "node_modules/typescript/lib",\n\t"typescript.enablePromptUseWorkspaceTsdk": true,\n\t"search.exclude": {\n\t\t"**/node_modules": true,\n\t\t"**/dist": true\n\t}\n}\n';
+
+const OXLINT =
+	'{\n\t"editor.formatOnSave": true,\n\t"editor.codeActionsOnSave": {\n\t\t"source.fixAll.oxc": "explicit",\n\t\t"source.fixAll.stylelint": "explicit"\n\t},\n\t"editor.defaultFormatter": "oxc.oxc-vscode",\n\t"editor.insertSpaces": false,\n\t"stylelint.validate": ["css", "postcss", "scss"],\n\t"[css]": {\n\t\t"editor.defaultFormatter": "stylelint.vscode-stylelint"\n\t},\n\t"typescript.tsdk": "node_modules/typescript/lib",\n\t"typescript.enablePromptUseWorkspaceTsdk": true,\n\t"search.exclude": {\n\t\t"**/node_modules": true,\n\t\t"**/dist": true\n\t}\n}\n';
+const NO_LINT =
+	'{\n\t"editor.formatOnSave": true,\n\t"editor.codeActionsOnSave": {\n\t\t"source.fixAll.stylelint": "explicit"\n\t},\n\t"editor.insertSpaces": false,\n\t"stylelint.validate": ["css", "postcss", "scss"],\n\t"[css]": {\n\t\t"editor.defaultFormatter": "stylelint.vscode-stylelint"\n\t},\n\t"typescript.tsdk": "node_modules/typescript/lib",\n\t"typescript.enablePromptUseWorkspaceTsdk": true,\n\t"search.exclude": {\n\t\t"**/node_modules": true,\n\t\t"**/dist": true\n\t}\n}\n';
 
 describe('buildVscodeSettings (#184)', () => {
 	it('names the oxc extension and no eslint for core-oxlint', () => {
@@ -47,6 +49,11 @@ describe('buildVscodeSettings (#184)', () => {
 		expect(content).not.toContain('oxc');
 		expect(retire).toEqual([]);
 	});
+
+	it('keeps the core-oxlint and no-lint files byte for byte (#236)', () => {
+		expect(buildVscodeSettings(new Set(['core-oxlint', 'opt-vscode'])).content).toBe(OXLINT);
+		expect(buildVscodeSettings(new Set(['opt-vscode'])).content).toBe(NO_LINT);
+	});
 });
 
 describe('applyVscodeSettings (#184)', () => {
@@ -70,15 +77,5 @@ describe('applyVscodeSettings (#184)', () => {
 	it('carries an empty retire list when no lint unit is selected', () => {
 		const out = applyVscodeSettings(vscode, new Set(['opt-vscode']));
 		expect(out.files.find((f) => f.dest === VSCODE_SETTINGS_DEST)?.retire).toEqual([]);
-	});
-
-	// The static file is still the catalog op's `src` and ships in the pack, so it
-	// must not drift from the generator's lint-free base.
-	it('keeps opt-in/vscode/settings.json equal to the lint-free generator output', () => {
-		const onDisk = JSON.parse(
-			readFileSync(join(PKG_ROOT, 'opt-in/vscode/settings.json'), 'utf8'),
-		) as unknown;
-		const generated = JSON.parse(buildVscodeSettings(new Set()).content) as unknown;
-		expect(onDisk).toEqual(generated);
 	});
 });

@@ -1,4 +1,7 @@
 import type { AnyUnit, FileOp, RetireEntry } from './types';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { PKG_ROOT } from '../util/paths';
 
 // opt-vscode's lint keys depend on which lint unit resolved. A static file named
 // ESLint's formatter and fix-on-save action in core-oxlint projects, where the
@@ -16,6 +19,9 @@ const ESLINT_FIX = 'source.fixAll.eslint';
 const OXC_FORMATTER = 'oxc.oxc-vscode';
 const OXC_FIX = 'source.fixAll.oxc';
 
+// Same path as the opt-vscode catalog op's `src`, which the pack ships.
+const BASE_SETTINGS_SRC = 'opt-in/vscode/settings.json';
+
 const FIX_ON_SAVE = 'editor.codeActionsOnSave';
 const FORMATTER = 'editor.defaultFormatter';
 
@@ -28,26 +34,27 @@ export function buildVscodeSettings(selected: ReadonlySet<string>): VscodeSettin
 	const oxlint = selected.has('core-oxlint');
 	const eslint = !oxlint && selected.has('core-eslint');
 
-	const fixOnSave: Record<string, string> = {};
-	if (oxlint) fixOnSave[OXC_FIX] = 'explicit';
-	else if (eslint) fixOnSave[ESLINT_FIX] = 'explicit';
-	fixOnSave['source.fixAll.stylelint'] = 'explicit';
-
-	// Key order matters because the core-eslint output must stay byte-identical
-	// to the static file this generator replaced.
-	const settings: Record<string, unknown> = {
-		'editor.formatOnSave': true,
-		[FIX_ON_SAVE]: fixOnSave,
-	};
-	if (oxlint) settings[FORMATTER] = OXC_FORMATTER;
-	else if (eslint) settings[FORMATTER] = ESLINT_FORMATTER;
-	settings['editor.insertSpaces'] = false;
-	if (eslint) settings['eslint.useFlatConfig'] = true;
-	settings['stylelint.validate'] = ['css', 'postcss', 'scss'];
-	settings['[css]'] = { [FORMATTER]: 'stylelint.vscode-stylelint' };
-	settings['typescript.tsdk'] = 'node_modules/typescript/lib';
-	settings['typescript.enablePromptUseWorkspaceTsdk'] = true;
-	settings['search.exclude'] = { '**/node_modules': true, '**/dist': true };
+	// A scaffold writes this text verbatim and the spec pins it byte for byte, so
+	// each lint key keeps a fixed slot among the base keys rather than going at
+	// the end.
+	const base = JSON.parse(readFileSync(join(PKG_ROOT, BASE_SETTINGS_SRC), 'utf8')) as Record<
+		string,
+		unknown
+	>;
+	const settings: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(base)) {
+		if (key === FIX_ON_SAVE) {
+			const fixOnSave: Record<string, unknown> = {};
+			if (oxlint) fixOnSave[OXC_FIX] = 'explicit';
+			else if (eslint) fixOnSave[ESLINT_FIX] = 'explicit';
+			settings[key] = Object.assign(fixOnSave, value);
+			if (oxlint) settings[FORMATTER] = OXC_FORMATTER;
+			else if (eslint) settings[FORMATTER] = ESLINT_FORMATTER;
+		} else {
+			settings[key] = value;
+			if (key === 'editor.insertSpaces' && eslint) settings['eslint.useFlatConfig'] = true;
+		}
+	}
 
 	const retire: RetireEntry[] = [];
 	if (oxlint) {
@@ -64,7 +71,7 @@ export function buildVscodeSettings(selected: ReadonlySet<string>): VscodeSettin
 	}
 
 	// A fresh scaffold copies this text verbatim, so the short array stays on one
-	// line as in the formatted static file this generator replaced.
+	// line, as the formatter leaves it in the base file.
 	const content = `${JSON.stringify(settings, null, '\t')}\n`.replace(
 		/\[\s+"css",\s+"postcss",\s+"scss"\s+\]/,
 		'["css", "postcss", "scss"]',
