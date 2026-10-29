@@ -131,6 +131,37 @@ describe('unbranded diff', () => {
 		expect(existsSync(join(tmp, '.unbranded.json'))).toBe(false);
 	});
 
+	it('refuses with stderr only and exit 1 when .unbranded.json does not parse (#231)', () => {
+		scaffold(tmp);
+		const conflicted = '<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>> theirs\n';
+		writeFileSync(join(tmp, '.unbranded.json'), conflicted);
+		const baseline = join(tmp, '.unbranded', 'baseline', '.editorconfig.base');
+		expect(existsSync(baseline)).toBe(true);
+		for (const args of [['diff'], ['diff', '--json']]) {
+			const result = spawnSync('node', [CLI, ...args], { cwd: tmp, encoding: 'utf-8' });
+			expect(result.status).toBe(1);
+			expect(result.stdout).toBe('');
+			expect(result.stderr).toContain('.unbranded.json');
+		}
+		const update = spawnSync('node', [CLI, 'update', '--yes', '--strategy', 'theirs'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
+		expect(update.status).toBe(1);
+		expect(update.stderr).toContain('.unbranded.json');
+		const remove = spawnSync('node', [CLI, 'remove', 'core-editorconfig', '--yes', '--force'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+		});
+		expect(remove.status).toBe(1);
+		expect(remove.stderr).toContain("doesn't parse");
+		const doctor = spawnSync('node', [CLI, 'doctor', '--json'], { cwd: tmp, encoding: 'utf-8' });
+		expect(doctor.stderr).toContain('.unbranded.json');
+		expect(() => JSON.parse(doctor.stdout) as unknown).not.toThrow();
+		expect(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')).toBe(conflicted);
+		expect(existsSync(baseline)).toBe(true);
+	});
+
 	it('documents `unbranded diff` distinctly from the --dry-run preview in --help', () => {
 		const result = spawnSync('node', [CLI, '--help'], { encoding: 'utf-8' });
 		expect(result.status).toBe(0);

@@ -2,7 +2,7 @@ import type { InlineFlags } from '../config/load';
 import type { UnitId } from '../manifest/types';
 import type { StateFile } from '../state/state';
 import type { Finding } from './doctor';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +12,7 @@ import {
 	KNOWN_FINDING_IDS,
 	partitionFixable,
 	readDoctorIgnore,
+	runDoctor,
 	runDoctorFix,
 } from './doctor';
 import { runInit } from './init';
@@ -424,5 +425,35 @@ describe('readDoctorIgnore', () => {
 		expect(
 			readDoctorIgnore({ doctor: { ignore: 'missing-editorconfig' } } as unknown as StateFile),
 		).toEqual([]);
+	});
+});
+
+describe('runDoctor on an .unbranded.json that does not parse (#231)', () => {
+	let tmp: string;
+	const conflicted = '<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>> theirs\n';
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-doctor-malformed-'));
+		cleanRepo(tmp);
+		writeFileSync(join(tmp, '.unbranded.json'), conflicted);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	it('warns on stderr that the accept-list was dropped, and stdout stays valid JSON', () => {
+		const out: string[] = [];
+		vi.spyOn(process.stdout, 'write').mockImplementation(((m: string) => {
+			out.push(String(m));
+			return true;
+		}) as typeof process.stdout.write);
+		const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+		runDoctor({ cwd: tmp, json: true });
+		expect(String(err.mock.calls[0]?.[0])).toMatch(/\.unbranded\.json.*accept-list/);
+		const report = JSON.parse(out.join('')) as { suppressed: unknown[] };
+		expect(report.suppressed).toEqual([]);
+		expect(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')).toBe(conflicted);
 	});
 });

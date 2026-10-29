@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { note } from '@clack/prompts';
 import { inspectPm } from '../detect/pm';
 import { effectiveDest, engines, hasDep, hasNodeVersionPin, hasScript } from '../detect/signals';
-import { readStateFile, unsupportedStateMessage } from '../state/state';
+import { malformedStateMessage, readStateFile, unsupportedStateMessage } from '../state/state';
 import { readPackageJson } from '../util/package-json';
 import { runInit } from './init';
 import { buildCatalog } from './list';
@@ -90,6 +90,12 @@ function readIgnoreOrWarn(cwd: string): string[] {
 	if (read.kind === 'unsupported') {
 		process.stderr.write(
 			`unbranded doctor: ${unsupportedStateMessage(read.schema)} Ignoring the accept-list for this run.\n`,
+		);
+		return [];
+	}
+	if (read.kind === 'malformed') {
+		process.stderr.write(
+			`unbranded doctor: ${malformedStateMessage()} Ignoring the accept-list for this run.\n`,
 		);
 		return [];
 	}

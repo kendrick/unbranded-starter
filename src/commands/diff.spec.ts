@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -164,5 +164,33 @@ describe('runDiff on a commented .vscode/settings.json (#216)', () => {
 		const report = JSON.parse(text) as { files: { path: string; status: string }[] };
 		expect(report.files).toEqual([{ path: '.vscode/settings.json', status: 'user-modified' }]);
 		expect(text).not.toContain('Left ');
+	});
+});
+
+describe('runDiff on an .unbranded.json that does not parse (#231)', () => {
+	let tmp: string;
+	const BASELINE = '.unbranded/baseline/eslint.config.mjs.base';
+	const conflicted = '<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>> theirs\n';
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-diff-malformed-'));
+		writeFileSync(join(tmp, '.unbranded.json'), conflicted);
+		mkdirSync(join(tmp, '.unbranded', 'baseline'), { recursive: true });
+		writeFileSync(join(tmp, BASELINE), 'base\n');
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	it.each([false, true])('refuses with stderr only and exit 1 (json: %s)', (json) => {
+		const out = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+		const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+		expect(runDiff({ cwd: tmp, json })).toBe(1);
+		expect(out).not.toHaveBeenCalled();
+		expect(String(err.mock.calls[0]?.[0])).toContain('.unbranded.json');
+		expect(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')).toBe(conflicted);
+		expect(existsSync(join(tmp, BASELINE))).toBe(true);
 	});
 });

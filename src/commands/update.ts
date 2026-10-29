@@ -21,6 +21,7 @@ import {
 	hashBuffer,
 	legacyBaselinePath,
 	legacyBaselinesPending,
+	malformedStateMessage,
 	readStateFile,
 	refreshTrackedFiles,
 	unsupportedStateMessage,
@@ -295,7 +296,11 @@ export async function runUpdate(opts: RunUpdateOpts = {}): Promise<number> {
 		process.stderr.write(`unbranded update: ${unsupportedStateMessage(read.schema)}\n`);
 		return 1;
 	}
-	if (read.kind === 'none' || read.kind === 'malformed') {
+	if (read.kind === 'malformed') {
+		process.stderr.write(`unbranded update: ${malformedStateMessage()}\n`);
+		return 1;
+	}
+	if (read.kind === 'none') {
 		process.stdout.write(
 			'unbranded update: nothing is tracked in this directory (no .unbranded.json).\n',
 		);

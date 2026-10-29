@@ -8,7 +8,13 @@ import { formatUnparseableSkip, planFileOp, renderPlanDiff } from '../fs/copy';
 import { loadCatalog, unitsDirsFor } from '../manifest/catalog';
 import { UNITS } from '../manifest/index';
 import { applyVscodeSettings } from '../manifest/vscode-settings';
-import { hashBuffer, readStateFile, STATE_FILENAME, unsupportedStateMessage } from '../state/state';
+import {
+	hashBuffer,
+	malformedStateMessage,
+	readStateFile,
+	STATE_FILENAME,
+	unsupportedStateMessage,
+} from '../state/state';
 import { PKG_ROOT } from '../util/paths';
 
 // Unlike the `--dry-run --diff` preview, which reports what a *fresh* init would
@@ -138,6 +144,10 @@ export function runDiff(opts: RunDiffOpts = {}): number {
 	// fails on empty input instead of parsing a confident, wrong report.
 	if (read.kind === 'unsupported') {
 		process.stderr.write(`unbranded diff: ${unsupportedStateMessage(read.schema)}\n`);
+		return 1;
+	}
+	if (read.kind === 'malformed') {
+		process.stderr.write(`unbranded diff: ${malformedStateMessage()}\n`);
 		return 1;
 	}
 	const state = read.kind === 'ok' ? read.state : undefined;
