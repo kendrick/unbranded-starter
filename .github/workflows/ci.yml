@@ -71,6 +71,22 @@ jobs:
       - name: Smoke-test built CLI
         run: node dist/cli.js --version
 
+      # Node below 20.12 has no util.styleText, so a static import that reaches it fails at link time and the version gate never runs (#226). The 22 and 24 legs can't catch that. These steps run on one leg, after every other step, because setup-node switches the Node for the rest of the job. Module linking fails the same way on every OS, so the Linux leg covers it.
+      - name: Node-version gate on Node 18
+        if: matrix.os == 'ubuntu-latest' && matrix.node == 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 18
+      - name: Node-version gate output on Node 18
+        if: matrix.os == 'ubuntu-latest' && matrix.node == 22
+        run: |
+          code=0
+          stdout="$(node dist/cli.js --version 2>"$RUNNER_TEMP/stderr")" || code=$?
+          expected="unbranded requires Node 22 or newer, but you're running $(node -p 'process.version')."
+          test -z "$stdout"
+          test "$code" -eq 1
+          printf '%s\n' "$expected" | cmp - "$RUNNER_TEMP/stderr"
+
   e2e-main:
     name: e2e main (node ${{ matrix.node }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}

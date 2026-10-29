@@ -5,6 +5,7 @@ README.md
 dist/cli.js
 dist/index.d.ts
 dist/index.js
+dist/main.js
 docs/agent-cookbook.md
 docs/authoring-units.md
 docs/switching-to-oxc.md
