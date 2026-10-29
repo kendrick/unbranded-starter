@@ -3,7 +3,6 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { confirm, isCancel, log } from '@clack/prompts';
 import { cancelAndExit } from '../util/cancel';
-import { spawnOptions } from './spawn';
 
 export type GitPlan = 'init' | 'init-commit' | 'none';
 
@@ -53,17 +52,29 @@ export async function maybeInitGit(opts: MaybeInitGitOpts): Promise<void> {
 	}
 
 	if (plan === 'init-commit') {
-		await runGit(opts.targetDir, ['add', '-A']);
-		await runGit(opts.targetDir, ['commit', '-m', 'chore: scaffold with unbranded']);
+		const committed =
+			(await runGit(opts.targetDir, ['add', '-A'])) &&
+			(await runGit(opts.targetDir, ['commit', '-m', 'chore: scaffold with unbranded']));
+		if (!committed) {
+			// A missing user.name or user.email is the usual cause. The repo and the
+			// files are already in place, so warn rather than fail the run.
+			log.warn(
+				'Skipped the initial commit (is a git identity set?). The scaffold is otherwise complete.',
+			);
+		}
 	}
 }
 
 // Resolves to whether git exited cleanly. The 'error' branch (ENOENT when git
 // isn't on PATH) resolves false rather than rejecting, so the caller's warn-and-
 // continue path handles both a missing binary and a non-zero exit the same way.
+// No `shell`: Node joins args unquoted when a shell is on, so on Windows
+// `commit -m "a b c"` reaches git as separate pathspecs. git.exe is a real
+// executable rather than a `.cmd` shim, so unlike package-manager spawns (see
+// spawn.ts) it needs no shell.
 async function runGit(cwd: string, args: string[]): Promise<boolean> {
 	return new Promise((resolve) => {
-		const child = spawn('git', args, spawnOptions(cwd));
+		const child = spawn('git', args, { cwd, stdio: 'inherit' });
 		child.on('exit', (code) => resolve(code === 0));
 		child.on('error', () => resolve(false));
 	});
@@ -71,12 +82,12 @@ async function runGit(cwd: string, args: string[]): Promise<boolean> {
 
 // The stdout-capturing sibling of runGit. runGit inherits stdio so it can only
 // hand back a boolean; reading `git status --porcelain` needs the output itself,
-// so this pipes stdout while keeping spawnOptions' win32 shell handling. Resolves
-// null on a non-zero exit or a missing binary — same warn-and-continue posture as
-// runGit's false, so a broken git can never mask itself as a clean tree.
+// so this pipes stdout. Resolves null on a non-zero exit or a missing binary,
+// the same warn-and-continue posture as runGit's false, so a broken git can
+// never mask itself as a clean tree.
 export async function gitCapture(cwd: string, args: string[]): Promise<string | null> {
 	return new Promise((resolve) => {
-		const child = spawn('git', args, { ...spawnOptions(cwd), stdio: 'pipe' });
+		const child = spawn('git', args, { cwd, stdio: 'pipe' });
 		let out = '';
 		child.stdout?.on('data', (chunk: Buffer) => {
 			out += chunk.toString();

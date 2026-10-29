@@ -69,6 +69,76 @@ describe('cli git init (new-project mode)', () => {
 		expect(result.stdout + result.stderr).not.toMatch(/Skipped husky-init/);
 	});
 
+	it('git: "init-commit" makes one commit with the whole message', () => {
+		writeJson(join(tmp, 'recipe.json'), {
+			units: ['core-editorconfig'],
+			pm: null,
+			onConflict: 'overwrite',
+			postInstall: 'none',
+			projectName: 'fresh',
+			git: 'init-commit',
+		});
+
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+			env: {
+				...process.env,
+				GIT_AUTHOR_NAME: 'Test',
+				GIT_AUTHOR_EMAIL: 'test@example.com',
+				GIT_COMMITTER_NAME: 'Test',
+				GIT_COMMITTER_EMAIL: 'test@example.com',
+			},
+		});
+
+		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
+		const subjects = execFileSync('git', ['log', '--format=%s'], {
+			cwd: join(tmp, 'fresh'),
+			encoding: 'utf-8',
+		}).trim();
+		expect(subjects).toBe('chore: scaffold with unbranded');
+	});
+
+	it('warns about the initial commit and exits 0 when no git identity is set', () => {
+		writeJson(join(tmp, 'recipe.json'), {
+			units: ['core-editorconfig'],
+			pm: null,
+			onConflict: 'overwrite',
+			postInstall: 'none',
+			projectName: 'noid',
+			git: 'init-commit',
+		});
+
+		// useConfigOnly stops git deriving a name/email from the passwd entry, Windows
+		// account or hostname, which would let the commit succeed on some runners.
+		// Env keys are case-insensitive on Windows, so strip identity vars by their
+		// uppercased name rather than an exact key.
+		const nullConfig = process.platform === 'win32' ? 'NUL' : '/dev/null';
+		const identityVars = /^(GIT_(AUTHOR|COMMITTER)_(NAME|EMAIL)|EMAIL)$/;
+		const env = Object.fromEntries(
+			Object.entries(process.env).filter(([k]) => !identityVars.test(k.toUpperCase())),
+		);
+		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+			env: {
+				...env,
+				HOME: tmp,
+				USERPROFILE: tmp,
+				XDG_CONFIG_HOME: tmp,
+				GIT_CONFIG_NOSYSTEM: '1',
+				GIT_CONFIG_GLOBAL: nullConfig,
+				GIT_CONFIG_COUNT: '1',
+				GIT_CONFIG_KEY_0: 'user.useConfigOnly',
+				GIT_CONFIG_VALUE_0: 'true',
+			},
+		});
+
+		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
+		expect(result.stdout + result.stderr).toMatch(/initial commit/i);
+		expect(existsSync(join(tmp, 'noid', '.git'))).toBe(true);
+	});
+
 	it('warns and continues when the git binary is missing', () => {
 		mkdirSync(join(tmp, 'empty-bin'));
 		writeJson(join(tmp, 'recipe.json'), {

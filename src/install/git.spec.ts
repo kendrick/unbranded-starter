@@ -2,8 +2,16 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { gitCapture, isDirty, isDirtyGitTree } from './git';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { gitCapture, isDirty, isDirtyGitTree, maybeInitGit } from './git';
+
+const spawnSpy = vi.hoisted(() => vi.fn<typeof import('node:child_process').spawn>());
+vi.mock('node:child_process', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('node:child_process')>();
+	spawnSpy.mockImplementation(actual.spawn);
+	return { ...actual, spawn: spawnSpy };
+});
 
 describe('isDirty (porcelain predicate)', () => {
 	it('treats empty and whitespace-only output as clean', () => {
@@ -75,5 +83,34 @@ describe('gitCapture / isDirtyGitTree (real git)', () => {
 		initRepo(dir);
 		writeFileSync(join(dir, 'stray.txt'), 'stray\n');
 		expect(await isDirtyGitTree(dir)).toBe(true);
+	});
+});
+
+describe('git spawns never use a shell', () => {
+	let dir: string;
+	const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+
+	beforeEach(() => {
+		dir = mkdtempSync(join(tmpdir(), 'unbranded-gitshell-'));
+		spawnSpy.mockClear();
+		Object.defineProperty(process, 'platform', { value: 'win32' });
+	});
+
+	afterEach(() => {
+		Object.defineProperty(process, 'platform', realPlatform);
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	it('gitCapture leaves shell unset on win32', async () => {
+		await gitCapture(dir, ['--version']);
+		expect(spawnSpy).toHaveBeenCalledTimes(1);
+		expect(spawnSpy.mock.calls[0]![0]).toBe('git');
+		expect(spawnSpy.mock.calls[0]![2]?.shell).toBeFalsy();
+	});
+
+	it('runGit (via maybeInitGit) leaves shell unset on win32', async () => {
+		await maybeInitGit({ targetDir: dir, plan: 'init' });
+		expect(spawnSpy).toHaveBeenCalledTimes(1);
+		expect(spawnSpy.mock.calls[0]![2]?.shell).toBeFalsy();
 	});
 });
