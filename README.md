@@ -196,16 +196,16 @@ unbranded validate <path>        check unit definitions against the published sc
 
 The flags you'll reach for most, with `unbranded --help` for the full set:
 
-| Flag                          | Does                                                          |
-| ----------------------------- | ------------------------------------------------------------- |
-| `--config, -c <file>`         | run a JSON recipe non-interactively                           |
-| `--units <a,b,c>`             | pick units inline, no recipe file                             |
-| `--units-dir <dir>`           | load custom unit definitions from a directory                 |
-| `--pm <npm\|pnpm\|yarn\|bun>` | set the package manager and skip detection                    |
-| `--yes`                       | apply without the confirm prompt (needs `--units`/`--config`) |
-| `--dry-run`                   | resolve and report, write nothing                             |
-| `--latest`                    | take newest versions, not pins; held pins keep their major    |
-| `--target <dir>`              | scaffold against `<dir>` instead of the current directory     |
+| Flag                                | Does                                                                                      |
+| ----------------------------------- | ----------------------------------------------------------------------------------------- |
+| `--config, -c <file>`               | run a JSON recipe non-interactively                                                       |
+| `--units <a,b,c>`                   | pick units inline, no recipe file                                                         |
+| `--units-dir <dir>`                 | load custom unit definitions from a directory                                             |
+| `--pm <npm\|pnpm\|yarn\|bun\|null>` | set the package manager and skip detection; `null` writes the files and skips the install |
+| `--yes`                             | apply without the confirm prompt (needs `--units`/`--config`)                             |
+| `--dry-run`                         | resolve and report, write nothing                                                         |
+| `--latest`                          | take newest versions, not pins; held pins keep their major                                |
+| `--target <dir>`                    | scaffold against `<dir>` instead of the current directory                                 |
 
 `--help` covers the rest, including `--force`, `--json`, `--fix`, `--cascade`, `--strategy`, and `--registry`.
 
@@ -269,9 +269,10 @@ pnpm test:e2e     # builds first, then the end-to-end suite
 pnpm test:all     # both suites
 pnpm typecheck
 pnpm lint         # CI parity: CI=true pnpm lint
+pnpm lint:tracked # what the pre-push hook runs: git-tracked files only
 ```
 
-CI runs all of these on Node 22 and 24, across Ubuntu and Windows. [AGENTS.md](AGENTS.md) has the repo layout and the full non-interactive contract; [docs/authoring-units.md](docs/authoring-units.md) covers authoring your own units.
+CI runs all of these except `lint:tracked` on Node 22 and 24, across Ubuntu and Windows. [AGENTS.md](AGENTS.md) has the repo layout and the full non-interactive contract; [docs/authoring-units.md](docs/authoring-units.md) covers authoring your own units.
 
 The repo also doubles as a template if you'd rather hand-pick files than run the CLI. Run `pnpm dlx degit kendrick/unbranded-starter new-project`, then take what you want from the root configs and the `opt-in/` directories.
 
