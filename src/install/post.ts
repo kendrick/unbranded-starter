@@ -12,7 +12,8 @@ export interface PostInstallOpts {
 	pm: Pm;
 	units: AnyUnit[];
 	// Non-interactive answer for every prompt. 'all' runs every hook whose
-	// precondition passes; 'none' skips them. Config-mode wires this in.
+	// precondition passes; 'none' skips them. Config mode and a bare
+	// --post-install wire this in.
 	auto?: 'all' | 'none';
 }
 
