@@ -180,7 +180,7 @@ function main() {
 	// Every unit branch starts from the same base, not from the previous bump
 	// branch, so the PRs stay independent and merge in any order.
 	const base = dryRun ? '' : sh('git', ['rev-parse', 'HEAD']).trim();
-	let missedAny = false;
+	let failed = false;
 
 	for (const [unit, bumps] of groups) {
 		const lines = bumps.map((b) => `${b.name} ${b.from} → ${b.to}`);
@@ -205,7 +205,7 @@ function main() {
 				process.stderr.write(
 					`bump/${unit}: no pin literal found for ${[...missed].join(', ')} — manifest moved since outdated ran?\n`,
 				);
-				missedAny = true;
+				failed = true;
 			}
 			continue;
 		}
@@ -227,7 +227,7 @@ function main() {
 			process.stderr.write(
 				`bump/${unit}: no pin literal found for ${[...missed].join(', ')} — manifest moved since outdated ran?\n`,
 			);
-			missedAny = true;
+			failed = true;
 			sh('git', ['checkout', base]);
 			continue;
 		}
@@ -235,7 +235,7 @@ function main() {
 
 		// package.json is an opportunistic extra target, not a manifest source:
 		// its misses are expected (turbo, husky, @playwright/test carry no
-		// devDependencies counterpart) and don't join missedAny above.
+		// devDependencies counterpart) and do not set `failed` above.
 		const pkgResult = rewritePackageJson(readFileSync('package.json', 'utf-8'), bumps);
 		if (pkgResult.applied.length > 0) {
 			writeFileSync('package.json', pkgResult.source);
@@ -274,13 +274,13 @@ function main() {
 				process.stderr.write(
 					`${branch}: gh pr create failed: ${String(err.stderr ?? err.message).trim()}\n`,
 				);
-				missedAny = true;
+				failed = true;
 			}
 		}
 		sh('git', ['checkout', base]);
 	}
 
-	if (missedAny) process.exit(1);
+	if (failed) process.exit(1);
 }
 
 // Import-safe: vitest pulls the pure functions without running the git glue.

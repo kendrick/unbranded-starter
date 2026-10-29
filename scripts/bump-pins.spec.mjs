@@ -291,8 +291,8 @@ describe('skipLoopUnits', () => {
 	});
 });
 
-// main() runs against a scratch repo with a local bare origin and a fake gh
-// ahead of the real one on PATH, so nothing reaches GitHub (#218).
+// The fake gh sits ahead of the real one on PATH and origin is a local bare
+// repo, so nothing here can reach GitHub.
 describe('bump-pins main()', () => {
 	const SCRIPT = resolve(import.meta.dirname, 'bump-pins.mjs');
 	const scratch = [];
@@ -322,7 +322,6 @@ describe('bump-pins main()', () => {
 		put('work/src/manifest/oxlint-config.ts', '// none\n');
 		put('work/package.json', '{"name":"x","devDependencies":{}}\n');
 		put('outdated.json', JSON.stringify({ packages: report }));
-		// `pr list` feeds skipLoopUnits; only `pr create` gets the scenario's behavior.
 		put('bin/gh', `#!/bin/sh\n[ "$2" = list ] && { echo '[]'; exit 0; }\n${gh}`);
 		chmodSync(join(root, 'bin/gh'), 0o755);
 		git('init', '-q', '-b', 'main');
