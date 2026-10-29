@@ -196,16 +196,16 @@ unbranded validate <path>        check unit definitions against the published sc
 
 The flags you'll reach for most, with `unbranded --help` for the full set:
 
-| Flag                                | Does                                                                                      |
-| ----------------------------------- | ----------------------------------------------------------------------------------------- |
-| `--config, -c <file>`               | run a JSON recipe non-interactively                                                       |
-| `--units <a,b,c>`                   | pick units inline, no recipe file                                                         |
-| `--units-dir <dir>`                 | load custom unit definitions from a directory                                             |
-| `--pm <npm\|pnpm\|yarn\|bun\|null>` | set the package manager and skip detection; `null` writes the files and skips the install |
-| `--yes`                             | apply without the confirm prompt (needs `--units`/`--config`)                             |
-| `--dry-run`                         | resolve and report, write nothing                                                         |
-| `--latest`                          | take newest versions, not pins; held pins keep their major                                |
-| `--target <dir>`                    | scaffold against `<dir>` instead of the current directory                                 |
+| Flag                                | Does                                                                                             |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `--config, -c <file>`               | run a JSON recipe non-interactively                                                              |
+| `--units <a,b,c>`                   | pick units inline, no recipe file                                                                |
+| `--units-dir <dir>`                 | load custom unit definitions from a directory                                                    |
+| `--pm <npm\|pnpm\|yarn\|bun\|null>` | set the package manager and skip detection; `null` writes the files and skips the install        |
+| `--yes`                             | apply without the confirm prompt (needs `--units`/`--config`)                                    |
+| `--dry-run`                         | resolve and report, write nothing                                                                |
+| `--latest`                          | take newest versions, not pins; held pins keep their major                                       |
+| `--target <dir>`                    | act on `<dir>` instead of the current directory (scaffold, `diff`, `doctor`, `remove`, `update`) |
 
 `--help` covers the rest, including `--force`, `--json`, `--fix`, `--cascade`, `--strategy`, and `--registry`.
 
