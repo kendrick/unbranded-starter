@@ -9,8 +9,8 @@
 //   node scripts/bump-pins.mjs /tmp/outdated.json [--dry-run]
 //
 // The pure pieces (planBumps, groupByUnit, rewritePins, rewritePackageJson)
-// are unit-tested; main() is thin git/gh glue that --dry-run bypasses
-// entirely.
+// are unit-tested directly; main() is covered by running the script against a
+// scratch repo with a fake gh. --dry-run bypasses the git/gh glue entirely.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -180,7 +180,7 @@ function main() {
 	// Every unit branch starts from the same base, not from the previous bump
 	// branch, so the PRs stay independent and merge in any order.
 	const base = dryRun ? '' : sh('git', ['rev-parse', 'HEAD']).trim();
-	let missedAny = false;
+	let failed = false;
 
 	for (const [unit, bumps] of groups) {
 		const lines = bumps.map((b) => `${b.name} ${b.from} → ${b.to}`);
@@ -205,7 +205,7 @@ function main() {
 				process.stderr.write(
 					`bump/${unit}: no pin literal found for ${[...missed].join(', ')} — manifest moved since outdated ran?\n`,
 				);
-				missedAny = true;
+				failed = true;
 			}
 			continue;
 		}
@@ -213,24 +213,29 @@ function main() {
 		const branch = `bump/${unit}`;
 		sh('git', ['checkout', '-B', branch, base]);
 
+		// Rewrite in memory and write only once nothing is missed: `git checkout`
+		// carries uncommitted edits, so a refused unit's partial bump on disk would
+		// ride into the next unit's `commit -am` (#218).
 		const missed = new Set(bumps.map((b) => b.name));
+		const rewrites = [];
 		for (const path of MANIFEST_FILES) {
 			const result = rewritePins(readFileSync(path, 'utf-8'), bumps);
-			writeFileSync(path, result.source);
+			rewrites.push([path, result.source]);
 			for (const name of result.applied) missed.delete(name);
 		}
 		if (missed.size > 0) {
 			process.stderr.write(
 				`bump/${unit}: no pin literal found for ${[...missed].join(', ')} — manifest moved since outdated ran?\n`,
 			);
-			missedAny = true;
+			failed = true;
 			sh('git', ['checkout', base]);
 			continue;
 		}
+		for (const [path, source] of rewrites) writeFileSync(path, source);
 
 		// package.json is an opportunistic extra target, not a manifest source:
 		// its misses are expected (turbo, husky, @playwright/test carry no
-		// devDependencies counterpart) and don't join missedAny above.
+		// devDependencies counterpart) and do not set `failed` above.
 		const pkgResult = rewritePackageJson(readFileSync('package.json', 'utf-8'), bumps);
 		if (pkgResult.applied.length > 0) {
 			writeFileSync('package.json', pkgResult.source);
@@ -260,14 +265,22 @@ function main() {
 			process.stdout.write(
 				`Opened PR for ${branch} (${bumps.length} pin${bumps.length === 1 ? '' : 's'}).\n`,
 			);
-		} catch {
-			// Branch force-pushed into an existing PR: the PR is already refreshed.
-			process.stdout.write(`PR for ${branch} already open; branch refreshed.\n`);
+		} catch (err) {
+			// Only gh's own "already exists" means the force-push refreshed an open PR;
+			// a bad token or an outage must fail the job, not read as success (#218).
+			if (/already exists/.test(String(err.stderr))) {
+				process.stdout.write(`PR for ${branch} already open; branch refreshed.\n`);
+			} else {
+				process.stderr.write(
+					`${branch}: gh pr create failed: ${String(err.stderr ?? err.message).trim()}\n`,
+				);
+				failed = true;
+			}
 		}
 		sh('git', ['checkout', base]);
 	}
 
-	if (missedAny) process.exit(1);
+	if (failed) process.exit(1);
 }
 
 // Import-safe: vitest pulls the pure functions without running the git glue.

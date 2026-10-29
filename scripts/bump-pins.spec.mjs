@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
 	groupByUnit,
 	MANIFEST_FILES,
@@ -285,4 +289,102 @@ describe('skipLoopUnits', () => {
 		const groups = new Map([['core-eslint', []]]);
 		expect([...skipLoopUnits(groups, []).kept.keys()]).toEqual(['core-eslint']);
 	});
+});
+
+// The fake gh is a sh script and PATH joins on ':', and bump-pins.mjs runs only on the pin-bumps workflow's ubuntu runner. A local bare origin and the fake gh keep it off GitHub.
+describe.skipIf(process.platform === 'win32')('bump-pins main()', () => {
+	const SCRIPT = resolve(import.meta.dirname, 'bump-pins.mjs');
+	const scratch = [];
+	afterEach(() => {
+		for (const dir of scratch.splice(0)) rmSync(dir, { recursive: true, force: true });
+	});
+
+	function fixture({ manifest, report, gh }) {
+		const root = mkdtempSync(join(tmpdir(), 'bump-pins-'));
+		scratch.push(root);
+		const env = {
+			...process.env,
+			GIT_AUTHOR_NAME: 'a',
+			GIT_AUTHOR_EMAIL: 'a@b',
+			GIT_COMMITTER_NAME: 'a',
+			GIT_COMMITTER_EMAIL: 'a@b',
+			PATH: `${join(root, 'bin')}:${process.env.PATH}`,
+		};
+		const git = (...args) =>
+			execFileSync('git', args, { cwd: join(root, 'work'), env, encoding: 'utf-8' });
+		execFileSync('git', ['init', '-q', '--bare', join(root, 'origin.git')]);
+		mkdirSync(join(root, 'work/src/manifest'), { recursive: true });
+		mkdirSync(join(root, 'bin'));
+		const put = (rel, text) => writeFileSync(join(root, rel), text);
+		put('work/src/manifest/index.ts', manifest);
+		put('work/src/manifest/eslint-config.ts', '// none\n');
+		put('work/src/manifest/oxlint-config.ts', '// none\n');
+		put('work/package.json', '{"name":"x","devDependencies":{}}\n');
+		put('outdated.json', JSON.stringify({ packages: report }));
+		put('bin/gh', `#!/bin/sh\n[ "$2" = list ] && { echo '[]'; exit 0; }\n${gh}`);
+		chmodSync(join(root, 'bin/gh'), 0o755);
+		git('init', '-q', '-b', 'main');
+		git('add', '-A');
+		git('commit', '-qm', 'init');
+		git('remote', 'add', 'origin', '../origin.git');
+		const base = git('rev-parse', 'HEAD').trim();
+		const run = () =>
+			spawnSync('node', [SCRIPT, join(root, 'outdated.json')], {
+				cwd: join(root, 'work'),
+				env,
+				encoding: 'utf-8',
+			});
+		return { git, base, run };
+	}
+
+	const pkg = (name, pin, unit) => ({
+		name,
+		pin,
+		latest: pin.replace(/\d+$/, (n) => String(Number(n) + 1)),
+		behind: 'patch',
+		units: [unit],
+	});
+
+	it('keeps a refused unit’s partial bump out of the next unit’s PR and the working tree', () => {
+		const f = fixture({
+			manifest: "export const X = {\n\tfoo: '1.0.0',\n\tbaz: '3.0.0',\n};\n",
+			report: [
+				pkg('foo', '1.0.0', 'unit-a'),
+				pkg('bar', '2.0.0', 'unit-a'),
+				pkg('baz', '3.0.0', 'unit-b'),
+			],
+			gh: 'exit 0\n',
+		});
+		const result = f.run();
+		expect(result.status).toBe(1);
+		expect(result.stderr).toContain('no pin literal found for bar');
+		const changed = f.git('show', 'bump/unit-b', '--', 'src/manifest/index.ts');
+		const edits = changed.split('\n').filter((l) => /^[+-]\t/.test(l));
+		expect(edits).toEqual(["-\tbaz: '3.0.0',", "+\tbaz: '3.0.1',"]);
+		expect(f.git('status', '--porcelain')).toBe('');
+		expect(f.git('rev-parse', 'bump/unit-a').trim()).toBe(f.base);
+	}, 60_000);
+
+	it('fails on a gh error that is not "already exists"', () => {
+		const f = fixture({
+			manifest: "export const X = {\n\tbaz: '3.0.0',\n};\n",
+			report: [pkg('baz', '3.0.0', 'unit-b')],
+			gh: 'echo "HTTP 401: Bad credentials (https://api.github.com/graphql)" >&2\nexit 1\n',
+		});
+		const result = f.run();
+		expect(result.status).not.toBe(0);
+		expect(result.stderr).toContain('HTTP 401: Bad credentials');
+		expect(result.stdout).not.toContain('already open');
+	}, 60_000);
+
+	it('still treats gh’s "already exists" as a refreshed PR', () => {
+		const f = fixture({
+			manifest: "export const X = {\n\tbaz: '3.0.0',\n};\n",
+			report: [pkg('baz', '3.0.0', 'unit-b')],
+			gh: `echo 'a pull request for branch "bump/unit-b" into branch "main" already exists:' >&2\nexit 1\n`,
+		});
+		const result = f.run();
+		expect(result.status).toBe(0);
+		expect(result.stdout).toContain('PR for bump/unit-b already open; branch refreshed.');
+	}, 60_000);
 });
