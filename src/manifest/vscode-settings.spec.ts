@@ -1,17 +1,16 @@
 import type { AnyUnit } from './types';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PKG_ROOT } from '../util/paths';
 import { UNITS } from './index';
 import { applyVscodeSettings, buildVscodeSettings, VSCODE_SETTINGS_DEST } from './vscode-settings';
 
-// What a scaffold writes for each lint selection, pinned byte for byte so a
-// change to the base file or the splice shows up here.
-const LEGACY =
+// core-eslint projects keep the file #184 shipped; this pins it from drifting.
+const ESLINT =
 	'{\n\t"editor.formatOnSave": true,\n\t"editor.codeActionsOnSave": {\n\t\t"source.fixAll.eslint": "explicit",\n\t\t"source.fixAll.stylelint": "explicit"\n\t},\n\t"editor.defaultFormatter": "dbaeumer.vscode-eslint",\n\t"editor.insertSpaces": false,\n\t"eslint.useFlatConfig": true,\n\t"stylelint.validate": ["css", "postcss", "scss"],\n\t"[css]": {\n\t\t"editor.defaultFormatter": "stylelint.vscode-stylelint"\n\t},\n\t"typescript.tsdk": "node_modules/typescript/lib",\n\t"typescript.enablePromptUseWorkspaceTsdk": true,\n\t"search.exclude": {\n\t\t"**/node_modules": true,\n\t\t"**/dist": true\n\t}\n}\n';
 
-const OXLINT =
-	'{\n\t"editor.formatOnSave": true,\n\t"editor.codeActionsOnSave": {\n\t\t"source.fixAll.oxc": "explicit",\n\t\t"source.fixAll.stylelint": "explicit"\n\t},\n\t"editor.defaultFormatter": "oxc.oxc-vscode",\n\t"editor.insertSpaces": false,\n\t"stylelint.validate": ["css", "postcss", "scss"],\n\t"[css]": {\n\t\t"editor.defaultFormatter": "stylelint.vscode-stylelint"\n\t},\n\t"typescript.tsdk": "node_modules/typescript/lib",\n\t"typescript.enablePromptUseWorkspaceTsdk": true,\n\t"search.exclude": {\n\t\t"**/node_modules": true,\n\t\t"**/dist": true\n\t}\n}\n';
-const NO_LINT =
-	'{\n\t"editor.formatOnSave": true,\n\t"editor.codeActionsOnSave": {\n\t\t"source.fixAll.stylelint": "explicit"\n\t},\n\t"editor.insertSpaces": false,\n\t"stylelint.validate": ["css", "postcss", "scss"],\n\t"[css]": {\n\t\t"editor.defaultFormatter": "stylelint.vscode-stylelint"\n\t},\n\t"typescript.tsdk": "node_modules/typescript/lib",\n\t"typescript.enablePromptUseWorkspaceTsdk": true,\n\t"search.exclude": {\n\t\t"**/node_modules": true,\n\t\t"**/dist": true\n\t}\n}\n';
+const readBase = (): string => readFileSync(join(PKG_ROOT, 'opt-in/vscode/settings.json'), 'utf8');
 
 describe('buildVscodeSettings (#184)', () => {
 	it('names the oxc extension and no eslint for core-oxlint', () => {
@@ -32,7 +31,7 @@ describe('buildVscodeSettings (#184)', () => {
 
 	it("keeps today's file byte for byte for core-eslint", () => {
 		const { content, retire } = buildVscodeSettings(new Set(['core-eslint', 'opt-vscode']));
-		expect(content).toBe(LEGACY);
+		expect(content).toBe(ESLINT);
 		expect(retire).toEqual([
 			{ path: ['editor.defaultFormatter'], value: 'oxc.oxc-vscode' },
 			{ path: ['editor.codeActionsOnSave', 'source.fixAll.oxc'], value: 'explicit' },
@@ -50,9 +49,24 @@ describe('buildVscodeSettings (#184)', () => {
 		expect(retire).toEqual([]);
 	});
 
-	it('keeps the core-oxlint and no-lint files byte for byte (#236)', () => {
-		expect(buildVscodeSettings(new Set(['core-oxlint', 'opt-vscode'])).content).toBe(OXLINT);
-		expect(buildVscodeSettings(new Set(['opt-vscode'])).content).toBe(NO_LINT);
+	it('writes the base file byte for byte with no lint unit (#236)', () => {
+		expect(buildVscodeSettings(new Set(['opt-vscode'])).content).toBe(readBase());
+	});
+
+	it('adds only the oxc formatter to the base, right after codeActionsOnSave (#236)', () => {
+		const { content } = buildVscodeSettings(new Set(['core-oxlint', 'opt-vscode']));
+		const out = JSON.parse(content) as Record<string, Record<string, unknown>>;
+		const base = JSON.parse(readBase()) as Record<string, Record<string, unknown>>;
+		const baseKeys = Object.keys(base);
+		const at = baseKeys.indexOf('editor.codeActionsOnSave') + 1;
+		expect(Object.keys(out)).toEqual([
+			...baseKeys.slice(0, at),
+			'editor.defaultFormatter',
+			...baseKeys.slice(at),
+		]);
+		delete out['editor.defaultFormatter'];
+		delete out['editor.codeActionsOnSave']?.['source.fixAll.oxc'];
+		expect(out).toEqual(base);
 	});
 });
 

@@ -24,6 +24,21 @@ const BASE_SETTINGS_SRC = 'opt-in/vscode/settings.json';
 
 const FIX_ON_SAVE = 'editor.codeActionsOnSave';
 const FORMATTER = 'editor.defaultFormatter';
+const INSERT_SPACES = 'editor.insertSpaces';
+
+// buildVscodeSettings runs on every picker render, which the repo keeps free of
+// disk reads past the first. Callers get a fresh copy so none can mutate the cache.
+let baseCache: string | undefined;
+function readBase(): Record<string, unknown> {
+	baseCache ??= readFileSync(join(PKG_ROOT, BASE_SETTINGS_SRC), 'utf8');
+	const base = JSON.parse(baseCache) as Record<string, unknown>;
+	// The lint keys splice in after these two; without them they'd silently drop.
+	for (const anchor of [FIX_ON_SAVE, INSERT_SPACES]) {
+		if (!(anchor in base))
+			throw new Error(`${BASE_SETTINGS_SRC} lost "${anchor}", which lint keys anchor to`);
+	}
+	return base;
+}
 
 export interface VscodeSettings {
 	content: string;
@@ -34,15 +49,10 @@ export function buildVscodeSettings(selected: ReadonlySet<string>): VscodeSettin
 	const oxlint = selected.has('core-oxlint');
 	const eslint = !oxlint && selected.has('core-eslint');
 
-	// A scaffold writes this text verbatim and the spec pins it byte for byte, so
-	// each lint key keeps a fixed slot among the base keys rather than going at
-	// the end.
-	const base = JSON.parse(readFileSync(join(PKG_ROOT, BASE_SETTINGS_SRC), 'utf8')) as Record<
-		string,
-		unknown
-	>;
+	// A scaffold writes this text verbatim, so each lint key keeps a fixed slot
+	// among the base keys rather than going at the end.
 	const settings: Record<string, unknown> = {};
-	for (const [key, value] of Object.entries(base)) {
+	for (const [key, value] of Object.entries(readBase())) {
 		if (key === FIX_ON_SAVE) {
 			const fixOnSave: Record<string, unknown> = {};
 			if (oxlint) fixOnSave[OXC_FIX] = 'explicit';
@@ -52,7 +62,7 @@ export function buildVscodeSettings(selected: ReadonlySet<string>): VscodeSettin
 			else if (eslint) settings[FORMATTER] = ESLINT_FORMATTER;
 		} else {
 			settings[key] = value;
-			if (key === 'editor.insertSpaces' && eslint) settings['eslint.useFlatConfig'] = true;
+			if (key === INSERT_SPACES && eslint) settings['eslint.useFlatConfig'] = true;
 		}
 	}
 
@@ -70,11 +80,11 @@ export function buildVscodeSettings(selected: ReadonlySet<string>): VscodeSettin
 		);
 	}
 
-	// A fresh scaffold copies this text verbatim, so the short array stays on one
-	// line, as the formatter leaves it in the base file.
+	// A fresh scaffold copies this text verbatim, so every string array goes on
+	// one line, the way the formatter leaves the base file's one array.
 	const content = `${JSON.stringify(settings, null, '\t')}\n`.replace(
-		/\[\s+"css",\s+"postcss",\s+"scss"\s+\]/,
-		'["css", "postcss", "scss"]',
+		/\[\s*((?:"(?:[^"\\]|\\.)*"\s*,?\s*)+)\]/g,
+		(_, body: string) => `[${(body.match(/"(?:[^"\\]|\\.)*"/g) ?? []).join(', ')}]`,
 	);
 	return { content, retire };
 }
