@@ -236,4 +236,30 @@ describe('unbranded --units-dir', () => {
 		expect(result.stdout).toContain('.editorconfig');
 		expect(result.status).toBe(0);
 	});
+
+	it('lets a local unit require a built-in the project already tracks', () => {
+		const first = run(['--units', 'core-typescript', '--pm', 'null', '--yes', '--force'], tmp);
+		expect(first.status, first.stderr).toBe(0);
+		unit(
+			join(tmp, 'my-units'),
+			'foo',
+			{
+				schema: 1,
+				id: 'foo',
+				category: 'foundation',
+				label: 'Foo',
+				description: 'Needs TS.',
+				requires: ['core-typescript'],
+				files: [{ src: 'FOO.txt', dest: 'FOO.txt' }],
+			},
+			{ 'FOO.txt': 'hi\n' },
+		);
+		const result = run(
+			['--units-dir', './my-units', '--units', 'my-units/foo', '--pm', 'null', '--yes', '--force'],
+			tmp,
+		);
+		expect(result.status, `stdout: ${result.stdout}\nstderr: ${result.stderr}`).toBe(0);
+		expect(readFileSync(join(tmp, 'FOO.txt'), 'utf-8')).toBe('hi\n');
+		expect(readState(tmp).units.filter((u) => u.id === 'core-typescript')).toHaveLength(1);
+	});
 });

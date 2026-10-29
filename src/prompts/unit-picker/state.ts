@@ -4,6 +4,7 @@ import { applyLintStaged } from '../../manifest/lint-staged';
 import { applyVscodeSettings } from '../../manifest/vscode-settings';
 import { applyUnitOptions } from '../../manifest/options';
 import { allowedValues, constrain } from '../../manifest/option-lines';
+import { IMPLIES_ONE_OF } from '../../manifest';
 import { resolveSelection } from '../../manifest/resolve';
 import { buildUnitPickerOptions } from './options';
 
@@ -83,7 +84,7 @@ export function createPickerState(
 	// the same way a manual toggle would.
 	const known = new Set(units.map((u) => u.id));
 	const selected = new Set(initialSelected.filter((id) => known.has(id)));
-	const preview = previewAuto(selected, units);
+	const preview = previewAuto(selected, units, tracked);
 	return {
 		units,
 		options,
@@ -134,11 +135,14 @@ function applyFilter(state: PickerState, filter: string): PickerState {
 // The resolver is the single source of truth for "what does picking X drag in?".
 // A non-ok selection (conflict/missing) has no clean auto set to preview; the real
 // resolution in init.ts surfaces that error, so the preview just shows nothing.
+// Tracked units go in as `present`, as runInit passes them, or the footer promises
+// units the install skips.
 function previewAuto(
 	selected: Set<string>,
 	units: AnyUnit[],
+	tracked: Set<string>,
 ): Pick<PickerState, 'auto' | 'requiredBy'> {
-	const result = resolveSelection([...selected], units);
+	const result = resolveSelection([...selected], units, IMPLIES_ONE_OF, [...tracked]);
 	if (result.kind === 'ok') return { auto: new Set(result.auto), requiredBy: result.requiredBy };
 	return { auto: new Set<string>(), requiredBy: {} };
 }
@@ -193,7 +197,7 @@ export function reducePicker(state: PickerState, event: PickerEvent): PickerStat
 			const selected = new Set(state.selected);
 			if (selected.has(opt.value)) selected.delete(opt.value);
 			else selected.add(opt.value);
-			const preview = previewAuto(selected, state.units);
+			const preview = previewAuto(selected, state.units, state.tracked);
 			return {
 				...state,
 				selected,
