@@ -1,4 +1,3 @@
-import type { SpawnOptions } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -66,19 +65,16 @@ export async function maybeInitGit(opts: MaybeInitGitOpts): Promise<void> {
 	}
 }
 
-// Node joins args unquoted when a shell is on, so on Windows `commit -m "a b c"`
-// reaches git as separate pathspecs. git.exe is a real executable rather than a
-// `.cmd` shim, so unlike package-manager spawns (see spawn.ts) it needs no shell.
-function gitSpawnOptions(cwd: string, stdio: 'inherit' | 'pipe'): SpawnOptions {
-	return { cwd, stdio };
-}
-
 // Resolves to whether git exited cleanly. The 'error' branch (ENOENT when git
 // isn't on PATH) resolves false rather than rejecting, so the caller's warn-and-
 // continue path handles both a missing binary and a non-zero exit the same way.
+// No `shell`: Node joins args unquoted when a shell is on, so on Windows
+// `commit -m "a b c"` reaches git as separate pathspecs. git.exe is a real
+// executable rather than a `.cmd` shim, so unlike package-manager spawns (see
+// spawn.ts) it needs no shell.
 async function runGit(cwd: string, args: string[]): Promise<boolean> {
 	return new Promise((resolve) => {
-		const child = spawn('git', args, gitSpawnOptions(cwd, 'inherit'));
+		const child = spawn('git', args, { cwd, stdio: 'inherit' });
 		child.on('exit', (code) => resolve(code === 0));
 		child.on('error', () => resolve(false));
 	});
@@ -91,7 +87,7 @@ async function runGit(cwd: string, args: string[]): Promise<boolean> {
 // never mask itself as a clean tree.
 export async function gitCapture(cwd: string, args: string[]): Promise<string | null> {
 	return new Promise((resolve) => {
-		const child = spawn('git', args, gitSpawnOptions(cwd, 'pipe'));
+		const child = spawn('git', args, { cwd, stdio: 'pipe' });
 		let out = '';
 		child.stdout?.on('data', (chunk: Buffer) => {
 			out += chunk.toString();

@@ -109,22 +109,29 @@ describe('cli git init (new-project mode)', () => {
 			git: 'init-commit',
 		});
 
-		// Point HOME and the global/system config at nothing so no identity is found.
+		// useConfigOnly stops git deriving a name/email from the passwd entry, Windows
+		// account or hostname, which would let the commit succeed on some runners.
+		// Env keys are case-insensitive on Windows, so strip identity vars by their
+		// uppercased name rather than an exact key.
 		const nullConfig = process.platform === 'win32' ? 'NUL' : '/dev/null';
-		const env = { ...process.env, HOME: tmp, USERPROFILE: tmp, XDG_CONFIG_HOME: tmp };
-		for (const k of [
-			'GIT_AUTHOR_NAME',
-			'GIT_AUTHOR_EMAIL',
-			'GIT_COMMITTER_NAME',
-			'GIT_COMMITTER_EMAIL',
-			'EMAIL',
-		]) {
-			delete env[k];
-		}
+		const identityVars = /^(GIT_(AUTHOR|COMMITTER)_(NAME|EMAIL)|EMAIL)$/;
+		const env = Object.fromEntries(
+			Object.entries(process.env).filter(([k]) => !identityVars.test(k.toUpperCase())),
+		);
 		const result = spawnSync('node', [CLI, '--config', 'recipe.json'], {
 			cwd: tmp,
 			encoding: 'utf-8',
-			env: { ...env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: nullConfig },
+			env: {
+				...env,
+				HOME: tmp,
+				USERPROFILE: tmp,
+				XDG_CONFIG_HOME: tmp,
+				GIT_CONFIG_NOSYSTEM: '1',
+				GIT_CONFIG_GLOBAL: nullConfig,
+				GIT_CONFIG_COUNT: '1',
+				GIT_CONFIG_KEY_0: 'user.useConfigOnly',
+				GIT_CONFIG_VALUE_0: 'true',
+			},
 		});
 
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
