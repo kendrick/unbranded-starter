@@ -40,13 +40,13 @@ No command below needs a TTY. Anything interactive has a flag that answers it. W
 | `doctor --json`    | `schemas/doctor.schema.json`   | 2              |
 | `outdated --json`  | `schemas/outdated.schema.json` | 2              |
 | `--dry-run --json` | `schemas/plan.schema.json`     | 1              |
-| `.unbranded.json`  | `schemas/state.schema.json`    | 2              |
+| `.unbranded.json`  | `schemas/state.schema.json`    | 4              |
 | `validate --json`  | `schemas/validate.schema.json` | 1              |
 | unit definition    | `schemas/unit.schema.json`     | 1              |
 
 ### The State File And Its Sidecar
 
-A scaffolded repo carries `.unbranded.json` at its root: installed units, one content hash per tracked file, and (schema 2) which unit wrote each file, how it was produced, and the run's resolved options. Beside it, `.unbranded/baseline/` holds byte-exact copies of the copy-mode files as written—the merge base `update` uses. Both belong in version control. `diff`, `doctor`, `update`, and `remove` all read the state file; only the CLI should write it.
+A scaffolded repo carries `.unbranded.json` at its root: installed units, one content hash per tracked file, which unit wrote each file, how it was produced, and the run's resolved options. Beside it, `.unbranded/baseline/` holds a byte-exact copy of each copy-mode file as written, named with a `.base` suffix so oxfmt and oxlint skip it. Those copies are the merge base `update` uses. Both belong in version control. `diff`, `doctor`, `update`, and `remove` all read the state file; only the CLI should write it.
 
 ### The Loop
 
@@ -71,7 +71,7 @@ For agents working on this repo:
 - E2E tests: `pnpm test:e2e` (builds first)
 - Everything: `pnpm test:all`
 - Typecheck: `pnpm typecheck`
-- Lint: `pnpm lint` (CI parity: `CI=true pnpm lint`)
+- Lint: `pnpm lint` (CI parity: `CI=true pnpm lint`). The pre-push hook runs `pnpm lint:tracked`, which lints only git-tracked files, so a local `pnpm lint` can fail on an untracked file the hook never checked.
 
 <!-- working-memory:start -->
 
