@@ -230,6 +230,22 @@ describe('runInit exclusions against tracked units (#157)', () => {
 		expect(vi.mocked(writeAndInstall)).not.toHaveBeenCalled();
 	});
 
+	it('refuses an unparseable state file before writing anything', async () => {
+		trackedProject('core-eslint');
+		const conflicted = `<<<<<<< HEAD\n${readFileSync(join(tmp, STATE_FILENAME), 'utf-8')}=======\n>>>>>>> theirs\n`;
+		writeFileSync(join(tmp, STATE_FILENAME), conflicted);
+		const { messages } = trapExit();
+
+		await expect(
+			runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', yes: true, pm: 'pnpm' } }),
+		).rejects.toThrow('exit 1');
+
+		expect(messages.join('\n')).toContain(STATE_FILENAME);
+		expect(readFileSync(join(tmp, STATE_FILENAME), 'utf-8')).toBe(conflicted);
+		expect(existsSync(join(tmp, '.editorconfig'))).toBe(false);
+		expect(vi.mocked(writeAndInstall)).not.toHaveBeenCalled();
+	});
+
 	it('refuses a newer-schema state file on the --dry-run --json path, on stderr', async () => {
 		trackedProject('core-eslint');
 		writeFileSync(join(tmp, STATE_FILENAME), JSON.stringify({ schema: 99, units: [], files: {} }));

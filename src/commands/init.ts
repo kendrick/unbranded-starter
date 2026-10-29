@@ -43,7 +43,12 @@ import {
 import { applyUnitOptions } from '../manifest/options';
 import { exclusionAgainstTracked, resolveSelection } from '../manifest/resolve';
 import { unitPicker } from '../prompts/unit-picker/prompt';
-import { readStateFile, unsupportedStateMessage, writeStateFile } from '../state/state';
+import {
+	malformedStateMessage,
+	readStateFile,
+	unsupportedStateMessage,
+	writeStateFile,
+} from '../state/state';
 import { cancelAndExit, CancelledError } from '../util/cancel';
 import { EXIT_ERROR } from '../util/exit-codes';
 import { declaredSpecs, readPackageJson } from '../util/package-json';
@@ -164,8 +169,9 @@ function openCatalog(opts: { configPath?: string; preset?: string; unitsDir?: st
 }
 
 // Refusing here, ahead of the first write, matters because writeStateFile throws on
-// a newer-schema envelope only after files are written and the install has run,
-// which strands a half-applied scaffold.
+// a newer-schema or malformed envelope only after files are written and the install
+// has run, which strands a half-applied scaffold. Refusing early also leaves a malformed
+// file and its baselines untouched.
 function readTracked(
 	dir: string,
 ):
@@ -173,6 +179,7 @@ function readTracked(
 	| { unsupported: string } {
 	const read = readStateFile(dir);
 	if (read.kind === 'unsupported') return { unsupported: unsupportedStateMessage(read.schema) };
+	if (read.kind === 'malformed') return { unsupported: malformedStateMessage() };
 	if (read.kind !== 'ok') return { ids: [], options: {} };
 	return { ids: read.state.units.map((u) => u.id), options: read.state.options ?? {} };
 }

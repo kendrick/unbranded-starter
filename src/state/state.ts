@@ -333,14 +333,15 @@ export function refreshTrackedFiles(opts: {
 export type StateRead =
 	| { kind: 'ok'; state: StateFile }
 	| { kind: 'none' }
+	| { kind: 'malformed' }
 	| { kind: 'unsupported'; schema: number };
 
-// Three outcomes rather than two, because "written by a newer unbranded" and "not
-// tracked here" must not collapse into the same answer. They used to: an unreadable
-// file returned undefined, and `diff` reads undefined as an untracked project and
-// exits 0 clean. A CI gate would then report no drift on a repo it can't actually
-// read. `none` still covers both "no file" and "malformed JSON" — degrading a
-// corrupt file to the friendly path beats throwing a stack trace at a CI job.
+// `unsupported` stays apart from `none` because `diff` reads absent state as an
+// untracked project and exits 0 clean, so a CI gate would report no drift on a repo
+// it can't read. `malformed` (bad JSON, or JSON that isn't an object) stays apart
+// because every writer merges onto the prior state: reading a merge-conflicted file
+// as absent wrote a fresh envelope over it and pruned every baseline (#220).
+// Read-only callers, `diff` included, still degrade `malformed` to `none` for now.
 export function readStateFile(dir: string): StateRead {
 	const path = join(dir, STATE_FILENAME);
 	if (!existsSync(path)) return { kind: 'none' };
@@ -349,14 +350,19 @@ export function readStateFile(dir: string): StateRead {
 	try {
 		raw = JSON.parse(readFileSync(path, 'utf-8'));
 	} catch {
-		return { kind: 'none' };
+		return { kind: 'malformed' };
 	}
+	if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return { kind: 'malformed' };
 
 	const doc = raw as Partial<StateFile> & { units?: unknown };
 	const schema = typeof doc.schema === 'number' ? doc.schema : 1;
 	if (schema > STATE_SCHEMA) return { kind: 'unsupported', schema };
 
 	return { kind: 'ok', state: { ...doc, units: normalizeUnits(doc.units) } as StateFile };
+}
+
+export function malformedStateMessage(): string {
+	return `${STATE_FILENAME} exists but doesn't parse (a merge conflict is the likely cause). Fix or delete it, then re-run.`;
 }
 
 export function unsupportedStateMessage(schema: number): string {
@@ -409,6 +415,7 @@ function normalizeSource(raw: unknown): UnitSource {
 function priorStateForWrite(targetDir: string): StateFile | undefined {
 	const read = readStateFile(targetDir);
 	if (read.kind === 'unsupported') throw new Error(unsupportedStateMessage(read.schema));
+	if (read.kind === 'malformed') throw new Error(malformedStateMessage());
 	return read.kind === 'ok' ? read.state : undefined;
 }
 
