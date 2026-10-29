@@ -325,7 +325,7 @@ export async function main(): Promise<void> {
 		);
 	}
 
-	runInit(
+	return runInit(
 		omitUnset({
 			configPath: values.config,
 			preset: values.preset,

@@ -9,5 +9,5 @@ if (versionError) {
 	process.exit(EXIT_ERROR);
 }
 
-const { main } = await import('./main.js');
+const { main } = await import('./main');
 await main();
