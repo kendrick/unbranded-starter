@@ -370,11 +370,14 @@ describe('runUpdate on a commented .vscode/settings.json (#216)', () => {
 
 describe('runUpdate on an .unbranded.json that does not parse (#231)', () => {
 	let tmp: string;
+	const BASELINE = '.unbranded/baseline/eslint.config.mjs.base';
 	const conflicted = '<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>> theirs\n';
 
 	beforeEach(() => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-update-malformed-'));
 		writeFileSync(join(tmp, '.unbranded.json'), conflicted);
+		mkdirSync(join(tmp, '.unbranded', 'baseline'), { recursive: true });
+		writeFileSync(join(tmp, BASELINE), 'base\n');
 	});
 
 	afterEach(() => {
@@ -387,5 +390,6 @@ describe('runUpdate on an .unbranded.json that does not parse (#231)', () => {
 		expect(await runUpdate({ cwd: tmp, yes: true, strategy: 'theirs' })).toBe(1);
 		expect(String(err.mock.calls[0]?.[0])).toContain('.unbranded.json');
 		expect(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')).toBe(conflicted);
+		expect(existsSync(join(tmp, BASELINE))).toBe(true);
 	});
 });

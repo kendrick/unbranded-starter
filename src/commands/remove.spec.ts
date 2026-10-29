@@ -1,6 +1,6 @@
 import type { Unit, UnitId } from '../manifest/types';
 import type { StateFile } from '../state/state';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -394,11 +394,14 @@ describe('runRemove', () => {
 
 describe('runRemove on an .unbranded.json that does not parse (#231)', () => {
 	let tmp: string;
+	const BASELINE = '.unbranded/baseline/eslint.config.mjs.base';
 	const conflicted = '<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>> theirs\n';
 
 	beforeEach(() => {
 		tmp = mkdtempSync(join(tmpdir(), 'unbranded-remove-malformed-'));
 		writeFileSync(join(tmp, '.unbranded.json'), conflicted);
+		mkdirSync(join(tmp, '.unbranded', 'baseline'), { recursive: true });
+		writeFileSync(join(tmp, BASELINE), 'base\n');
 	});
 
 	afterEach(() => {
@@ -413,5 +416,6 @@ describe('runRemove on an .unbranded.json that does not parse (#231)', () => {
 		expect(msg).toContain("doesn't parse");
 		expect(msg).not.toContain('no .unbranded.json found');
 		expect(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')).toBe(conflicted);
+		expect(existsSync(join(tmp, BASELINE))).toBe(true);
 	});
 });
