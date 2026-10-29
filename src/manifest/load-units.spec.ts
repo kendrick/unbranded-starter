@@ -164,6 +164,10 @@ describe('loadUnitsDir', () => {
 		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
 		expect(loaded.units).toEqual([]);
 		expect(loaded.skipped.map((s) => s.id).sort()).toEqual(['a', 'b', 'c', 'd']);
+		for (const id of ['a', 'b', 'c']) {
+			const entry = loaded.skipped.find((s) => s.id === id);
+			expect(entry?.issues[0]?.path).toBe('(relations)');
+		}
 	});
 
 	it('skips a unit that declares the same option key twice, naming the key', () => {
@@ -174,7 +178,7 @@ describe('loadUnitsDir', () => {
 		expect(loaded.skipped).toHaveLength(1);
 		const issue = loaded.skipped[0]?.issues[0];
 		expect(issue?.path).toBe('options');
-		expect(issue?.got).toContain('flavor');
+		expect(issue?.got).toBe('key "flavor" declared twice in this unit');
 	});
 
 	it('still loads a unit whose options use different keys', () => {

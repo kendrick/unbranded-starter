@@ -133,26 +133,31 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 	// comment) — enforced here since it's a cross-unit property no single
 	// definition's own validation can see. Skip the whole unit rather than the
 	// one option: a partially-loaded unit whose colliding option silently
-	// vanished would be a worse surprise than the unit not loading at all.
+	// vanished would be a worse surprise than the unit not loading at all. The
+	// same holds inside one unit: a recipe's flat `options` map can't tell two
+	// options sharing a key apart, and claimedOptionKeys sees only earlier units.
 	const claimedOptionKeys = new Set<string>();
 	const survivors: Validated[] = [];
 	for (const v of validated) {
 		const keys = (v.unit.options ?? []).map((o) => o.key);
-		// claimedOptionKeys holds only earlier units' keys, so the indexOf test
-		// catches a key repeated inside this one unit.
-		const collision = keys.find(
-			(k, i) => BUILTIN_OPTION_KEYS.has(k) || claimedOptionKeys.has(k) || keys.indexOf(k) !== i,
-		);
-		if (collision !== undefined) {
+		const repeated = keys.find((k, i) => keys.indexOf(k) !== i);
+		const collision = keys.find((k) => BUILTIN_OPTION_KEYS.has(k) || claimedOptionKeys.has(k));
+		if (collision !== undefined || repeated !== undefined) {
 			skipped.push({
 				path: v.file,
 				id: v.unit.id,
 				issues: [
-					{
-						path: 'options',
-						expected: 'option keys not claimed by a built-in or a sibling unit',
-						got: `key "${collision}" already claimed`,
-					},
+					collision !== undefined
+						? {
+								path: 'options',
+								expected: 'option keys not claimed by a built-in or a sibling unit',
+								got: `key "${collision}" already claimed`,
+							}
+						: {
+								path: 'options',
+								expected: 'each option key declared once within a unit',
+								got: `key "${repeated}" declared twice in this unit`,
+							},
 				],
 			});
 			continue;
