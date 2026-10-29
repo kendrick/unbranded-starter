@@ -368,6 +368,19 @@ describe('copyFileOp mode: append-if-missing', () => {
 		expect(readFileSync(join(targetDir, '.gitignore'), 'utf-8')).toBe('node_modules\r\ndist\r\n');
 	});
 
+	it('joins with CRLF when a CRLF file lacks a trailing newline', async () => {
+		writeFileSync(join(pkgRoot, '.gitignore'), 'node_modules\ndist\ncoverage\n');
+		writeFileSync(join(targetDir, '.gitignore'), 'node_modules\r\ndist');
+		const result = await copyFileOp(
+			{ src: '.gitignore', dest: '.gitignore', mode: 'append-if-missing' },
+			{ pkgRoot, targetDir },
+		);
+		expect(result.action).toBe('appended');
+		expect(readFileSync(join(targetDir, '.gitignore'), 'utf-8')).toBe(
+			'node_modules\r\ndist\r\ncoverage\r\n',
+		);
+	});
+
 	it('leaves an LF file alone when the template lines carry CRLF', async () => {
 		writeFileSync(join(pkgRoot, '.gitignore'), 'node_modules\r\n');
 		writeFileSync(join(targetDir, '.gitignore'), 'node_modules\n');

@@ -463,7 +463,8 @@ interface AppendResult {
 // is preserved so the file stays POSIX-clean. Lines compare without a trailing
 // `\r` because a Windows checkout with core.autocrlf writes CRLF, and a CRLF
 // line never equals the same line in an LF template, or the reverse. Appended
-// lines take the existing file's ending so the file doesn't end up mixed.
+// lines take the existing file's ending so the file doesn't end up mixed, and
+// one `\r\n` anywhere makes the whole file count as CRLF.
 function appendMissingLines(existing: Buffer, incoming: Buffer): AppendResult {
 	const existingText = existing.toString('utf-8');
 	const stripCr = (line: string) => (line.endsWith('\r') ? line.slice(0, -1) : line);
