@@ -1,5 +1,25 @@
 # Changelog
 
+## [3.0.1](https://github.com/kendrick/unbranded-starter/compare/v3.0.0...v3.0.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* **bump-pins:** keep a refused unit's bump out of the next PR, and fail on real gh errors ([#218](https://github.com/kendrick/unbranded-starter/issues/218)) ([#256](https://github.com/kendrick/unbranded-starter/issues/256)) ([767091b](https://github.com/kendrick/unbranded-starter/commit/767091bdfa08988ce5fc2f6e0b18a0d08613ab65))
+* **cli:** pass --target to diff, doctor, remove and update ([#223](https://github.com/kendrick/unbranded-starter/issues/223)) ([#261](https://github.com/kendrick/unbranded-starter/issues/261)) ([19cdd71](https://github.com/kendrick/unbranded-starter/commit/19cdd718686caeaf8d35f28ccde303c512dc77f0))
+* **cli:** run the Node-version gate before any import needs styleText ([#226](https://github.com/kendrick/unbranded-starter/issues/226)) ([#258](https://github.com/kendrick/unbranded-starter/issues/258)) ([d77f705](https://github.com/kendrick/unbranded-starter/commit/d77f7055b3dc33a610e51222196558df16ba3665))
+* **cli:** set exitCode instead of exiting so piped output drains ([#230](https://github.com/kendrick/unbranded-starter/issues/230)) ([#263](https://github.com/kendrick/unbranded-starter/issues/263)) ([a785fcf](https://github.com/kendrick/unbranded-starter/commit/a785fcf152d0deff86b61a1707c831ac78a01bba))
+* **copy:** stop append-if-missing re-appending lines in a CRLF file ([#225](https://github.com/kendrick/unbranded-starter/issues/225)) ([#251](https://github.com/kendrick/unbranded-starter/issues/251)) ([dd8a5dd](https://github.com/kendrick/unbranded-starter/commit/dd8a5ddaa05ae503f43dd9c2a418075c6cba238e))
+* **detect:** rank the project's packageManager above an ancestor lockfile ([#224](https://github.com/kendrick/unbranded-starter/issues/224)) ([#250](https://github.com/kendrick/unbranded-starter/issues/250)) ([4aee763](https://github.com/kendrick/unbranded-starter/commit/4aee763c15fd23a2d9121bdfee416e6ddf9cf50a))
+* **diff:** judge merge-json and append-if-missing files by update's rule ([#227](https://github.com/kendrick/unbranded-starter/issues/227)) ([#262](https://github.com/kendrick/unbranded-starter/issues/262)) ([cb45788](https://github.com/kendrick/unbranded-starter/commit/cb457887758e8a72ff082f9a75bb8df2bb9af845))
+* **git:** make the initial commit on Windows, and warn when it fails ([#221](https://github.com/kendrick/unbranded-starter/issues/221)) ([#257](https://github.com/kendrick/unbranded-starter/issues/257)) ([e37dab0](https://github.com/kendrick/unbranded-starter/commit/e37dab07b0f1f04edbcf1f035b64129579478d1d))
+* **init:** let --post-install answer the post-install prompts without a recipe ([#105](https://github.com/kendrick/unbranded-starter/issues/105)) ([#247](https://github.com/kendrick/unbranded-starter/issues/247)) ([4e6abce](https://github.com/kendrick/unbranded-starter/commit/4e6abce852e17d2fa5f9ccf90f6029f20fe8ccb7))
+* **load-units:** drop a unit whose relations reach a dropped sibling at any depth ([#229](https://github.com/kendrick/unbranded-starter/issues/229)) ([#252](https://github.com/kendrick/unbranded-starter/issues/252)) ([541388b](https://github.com/kendrick/unbranded-starter/commit/541388bf029ac430aba17a87a01db034126c50ac))
+* **opt-husky:** run lint-staged without pnpm in the pre-commit hook ([#222](https://github.com/kendrick/unbranded-starter/issues/222)) ([#255](https://github.com/kendrick/unbranded-starter/issues/255)) ([0daf885](https://github.com/kendrick/unbranded-starter/commit/0daf885c78930a8369028cb75522e53b31e56f4a))
+* **resolve:** let tracked units satisfy requires and the picker preview ([#228](https://github.com/kendrick/unbranded-starter/issues/228)) ([#260](https://github.com/kendrick/unbranded-starter/issues/260)) ([28130cd](https://github.com/kendrick/unbranded-starter/commit/28130cd8d854a4967ba5dc942765ba8f740a8fdc))
+* **state:** refuse an .unbranded.json that doesn't parse in diff, update, remove and doctor ([#231](https://github.com/kendrick/unbranded-starter/issues/231)) ([#259](https://github.com/kendrick/unbranded-starter/issues/259)) ([e6b2306](https://github.com/kendrick/unbranded-starter/commit/e6b23068baed2e8df71e759fad32aa32c64424cc))
+* **state:** refuse to write over an .unbranded.json that doesn't parse ([#220](https://github.com/kendrick/unbranded-starter/issues/220)) ([#253](https://github.com/kendrick/unbranded-starter/issues/253)) ([f0c7a78](https://github.com/kendrick/unbranded-starter/commit/f0c7a78ea8bdcee8714e5eba460077bf94f7da73))
+
 ## [3.0.0](https://github.com/kendrick/unbranded-starter/compare/v2.0.5...v3.0.0) (2026-10-27)
 
 
