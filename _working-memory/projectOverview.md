@@ -20,7 +20,8 @@
 
 ```
 src/
-  cli.ts            — arg parsing (node:util parseArgs): --config/-c, --help, --version, --no-color/--color; applyColorPolicy() at startup; top-level error catch
+  cli.ts            — the Node-version gate: static imports kept clear of util.styleText, then a dynamic import of main.ts
+  main.ts           — arg parsing (node:util parseArgs): --config/-c, --help, --version, --no-color/--color; applyColorPolicy() at startup; --target resolved once and passed to every subcommand; top-level error catch
   commands/         — init.ts (runInit(): detect → select → resolve → plan → copy → install → post-install; returns { ok }); the day-2 verbs list/diff/doctor (--fix)/remove/update, each a pure planner + prompting shell
   config/load.ts    — --config recipe loader + validate() (JSON only in v1)
   detect/pm.ts      — package-manager detection (lockfile → packageManager field → user-agent → prompt)

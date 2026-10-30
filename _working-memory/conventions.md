@@ -28,6 +28,7 @@
 
 ## Error Handling
 
-- Throw `Error` with an actionable message. `src/cli.ts` has a top-level catch that renders it via `clack log.error` and exits 1 — no raw stack traces reach users.
+- Throw `Error` with an actionable message. `src/main.ts` has a top-level catch that renders it via `clack log.error` and sets exit code 1 — no raw stack traces reach users.
+- In `src/main.ts`, set `process.exitCode` and return; never call `process.exit` after anything reaches stdout. A piped stdout writes asynchronously, and exiting early cuts the reader off at 64 KiB (#230). Without `process.exit`, an open handle keeps the process alive, so abandoned async work has to be cancelled (`fetchVersions` aborts its pool on the first failure).
 - Fail loudly on ambiguity that would confuse later: `detectPm` throws for a malformed `package.json` and for `workspace-leaf`; `validate()` throws for bad recipes.
 - User aborts route through `cancelAndExit()` (`src/util/cancel.ts`): it prints the cancel banner and exits 130 (the SIGINT convention, 128 + 2), never an error. Every `isCancel()` branch ends there, but prompts that run after `runInit` has started writing (`promptConflict`, `promptDepConflict`) throw `CancelledError` instead, so `runInit` can roll the journal back before it calls `cancelAndExit()`; an exit from inside them would strand the written files (#217). Answering No at the Apply prompt exits 0, since that's a choice rather than an abort.
