@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildVscodeSettings } from '../manifest/vscode-settings';
 import { buildStateFile, builtinUnits, hashBuffer } from '../state/state';
 import { PKG_ROOT } from '../util/paths';
 import { classify, computeDiff, runDiff } from './diff';
@@ -29,6 +30,13 @@ describe('classify', () => {
 
 	it('never flags template-updated when the template hash is unknown', () => {
 		expect(classify({ recorded: 'h', onDisk: 'h' })).toBe('unchanged');
+	});
+
+	it('lets an explicit templateUpdated verdict win over the hash comparison', () => {
+		expect(
+			classify({ recorded: 'h', onDisk: 'h', template: 'newer', templateUpdated: false }),
+		).toBe('unchanged');
+		expect(classify({ recorded: 'h', onDisk: 'edited', templateUpdated: true })).toBe('both');
 	});
 });
 
@@ -117,6 +125,80 @@ describe('computeDiff', () => {
 		// planFileOp compares on-disk against the current template, which is the
 		// patch `unbranded diff --diff` renders for a drifted file.
 		expect(entry?.plan?.diff).toBeDefined();
+	});
+});
+
+describe('computeDiff on a merge-json file merged into an existing one (#227)', () => {
+	let tmp: string;
+	const SETTINGS = '.vscode/settings.json';
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-diff-merge-'));
+		mkdirSync(join(tmp, '.vscode'));
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	// Writes `settings` as the on-disk file and records its own hash, as a scaffold
+	// that merged into an existing file does: the record is the merge result, not
+	// the template's bytes.
+	function statusOf(
+		settings: Record<string, unknown>,
+		units: string[],
+		recordedSettings: Record<string, unknown> = settings,
+	): string | undefined {
+		writeFileSync(join(tmp, SETTINGS), `${JSON.stringify(settings, null, '\t')}\n`);
+		const recorded = Buffer.from(`${JSON.stringify(recordedSettings, null, '\t')}\n`);
+		const state = buildStateFile({
+			version: '1.0.0',
+			units: builtinUnits(units),
+			files: { [SETTINGS]: hashBuffer(recorded) },
+		});
+		return computeDiff({ state, targetDir: tmp }).files.find((f) => f.path === SETTINGS)?.status;
+	}
+
+	const generated = (...ids: string[]): Record<string, unknown> =>
+		JSON.parse(buildVscodeSettings(new Set(ids)).content) as Record<string, unknown>;
+
+	it('reads unchanged when the template adds nothing the file lacks', () => {
+		expect(statusOf({ 'editor.tabSize': 4, ...generated() }, ['opt-vscode'])).toBe('unchanged');
+	});
+
+	it('reads template-updated when the template sets a key the file lacks', () => {
+		const { 'editor.formatOnSave': _, ...rest } = generated();
+		expect(statusOf({ 'editor.tabSize': 4, ...rest }, ['opt-vscode'])).toBe('template-updated');
+	});
+
+	it('reads user-modified when the user added a key the template does not set', () => {
+		const merged = { 'editor.tabSize': 4, ...generated() };
+		expect(statusOf({ ...merged, 'my.key': 1 }, ['opt-vscode'], merged)).toBe('user-modified');
+	});
+
+	it('reads template-updated for a same-key conflict on an untouched file', () => {
+		expect(statusOf({ ...generated(), 'editor.formatOnSave': false }, ['opt-vscode'])).toBe(
+			'template-updated',
+		);
+	});
+
+	it('reads both when the user also edited a file whose template conflicts', () => {
+		const recorded = generated();
+		expect(statusOf({ ...recorded, 'editor.formatOnSave': false }, ['opt-vscode'], recorded)).toBe(
+			'both',
+		);
+	});
+
+	it('reads template-updated after a lint-unit switch merges into the existing file', () => {
+		// Scaffolded under ESLint, then core-oxlint joined the set: the generated op
+		// now retires the ESLint keys and adds Oxc's, which is a merge into this file.
+		expect(statusOf(generated('core-eslint'), ['opt-vscode', 'core-oxlint'])).toBe(
+			'template-updated',
+		);
+	});
+
+	it('reads unchanged under the lint unit the file was generated for', () => {
+		expect(statusOf(generated('core-oxlint'), ['opt-vscode', 'core-oxlint'])).toBe('unchanged');
 	});
 });
 

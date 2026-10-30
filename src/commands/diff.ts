@@ -1,6 +1,6 @@
 import type { FilePlan } from '../fs/copy';
 import type { Catalog } from '../manifest/catalog';
-import type { AnyUnit } from '../manifest/types';
+import type { AnyUnit, FileOp } from '../manifest/types';
 import type { StateFile } from '../state/state';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
@@ -30,13 +30,17 @@ export const DIFF_SCHEMA = 1;
 // Pure core: three hashes in, a verdict out. `onDisk` undefined means the file
 // was deleted — still a user edit. `template` undefined means no shipped template
 // backs this record anymore, so the template axis can't be judged.
+// `templateUpdated`, when set, overrides the hash comparison on that axis.
 export function classify(hashes: {
 	recorded: string;
 	onDisk?: string;
 	template?: string;
+	templateUpdated?: boolean;
 }): DiffCategory {
 	const userModified = hashes.onDisk !== hashes.recorded;
-	const templateUpdated = hashes.template !== undefined && hashes.template !== hashes.recorded;
+	const templateUpdated =
+		hashes.templateUpdated ??
+		(hashes.template !== undefined && hashes.template !== hashes.recorded);
 	if (userModified && templateUpdated) return 'both';
 	if (userModified) return 'user-modified';
 	if (templateUpdated) return 'template-updated';
@@ -74,6 +78,7 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 	const byId = new Map<string, AnyUnit>(units.map((u) => [u.id, u]));
 
 	const planByRel = new Map<string, FilePlan>();
+	const opModeByRel = new Map<string, FileOp['mode']>();
 	const installedIds = new Set(opts.state.units.map((u) => u.id));
 	for (const { id } of opts.state.units) {
 		const catalogUnit = byId.get(id);
@@ -82,12 +87,9 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 		// as "the template axis can't be judged" rather than as drift.
 		if (!catalogUnit) continue;
 		// Replay the generator init used. The raw catalog op has no lint keys, so
-		// planning it reports template-updated on a clean scaffold, and the generated
-		// op is `content`, which carries no src file and so no template hash, the
-		// same user-axis-only path as lint-staged.config.mjs. Hashing the generated
-		// bytes instead misreads a settings file merged into an existing one, such as
-		// after a lint-unit switch, as template-updated that `update` can't clear
-		// (#227).
+		// planning it would report template-updated on a clean scaffold. The generated
+		// op carries inline `content` and no src file, and that's fine, since a
+		// merge-mode file takes its template axis from planFileOp's outcome below.
 		const unit = applyVscodeSettings(catalogUnit, installedIds);
 		const pkgRoot = opts.catalog?.templateRoots.get(id) ?? fallbackRoot;
 		for (const op of unit.files) {
@@ -97,6 +99,7 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 				...(opts.projectName !== undefined ? { projectName: opts.projectName } : {}),
 			});
 			planByRel.set(toPosix(plan.rel), plan);
+			opModeByRel.set(toPosix(plan.rel), op.mode);
 		}
 	}
 
@@ -105,13 +108,26 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 		const plan = planByRel.get(rel);
 		const destPath = plan?.dest ?? join(opts.targetDir, ...rel.split(posix.sep));
 		const onDisk = existsSync(destPath) ? hashBuffer(readFileSync(destPath)) : undefined;
-		const template = plan && existsSync(plan.src) ? hashBuffer(readFileSync(plan.src)) : undefined;
+		const mode = opts.state.modes?.[rel] ?? opModeByRel.get(rel);
+		const merged = mode === 'merge-json' || mode === 'append-if-missing';
+		// A merged file's recorded hash is the merge result, which matches the
+		// template's bytes only when no file existed before the scaffold. So judge
+		// it by update's rule instead, where a plan with nothing to change is
+		// current. A deleted or unparseable file leaves the axis unjudged, and the
+		// user axis reports it.
+		const templateUpdated =
+			merged && plan && onDisk !== undefined && !plan.unparseable
+				? plan.outcome !== 'skip' && plan.diff !== undefined
+				: undefined;
+		const template =
+			!merged && plan && existsSync(plan.src) ? hashBuffer(readFileSync(plan.src)) : undefined;
 		files.push({
 			path: rel,
 			status: classify({
 				recorded,
 				...(onDisk !== undefined ? { onDisk } : {}),
 				...(template !== undefined ? { template } : {}),
+				...(templateUpdated !== undefined ? { templateUpdated } : {}),
 			}),
 			...(plan !== undefined ? { plan } : {}),
 		});
