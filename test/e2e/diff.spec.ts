@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -224,5 +224,196 @@ describe('unbranded diff — computed writes are tracked (F-00)', () => {
 		expect(result.status, `stderr: ${result.stderr}`).toBe(1);
 		expect(result.stdout).toMatch(/user-modified\s+\.nvmrc/);
 		expect(result.stdout).toContain('Drift detected.');
+	});
+});
+
+// #227: a merge-json or append-if-missing file merged into an existing one records
+// the merge result, so the raw template's hash never matches it. diff has to judge
+// those files by planFileOp's outcome, the rule update uses.
+describe('unbranded diff — merge modes into an existing file (#227)', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-diff-merge-'));
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	const run = (...args: string[]) =>
+		spawnSync('node', [CLI, ...args], { cwd: tmp, encoding: 'utf-8' });
+
+	function scaffoldCfg(): void {
+		writeJson(join(tmp, 'package.json'), { name: 't', version: '0.0.0' });
+		mkdirSync(join(tmp, 'my-units', 'cfg'), { recursive: true });
+		writeJson(join(tmp, 'my-units', 'cfg', 'unit.json'), {
+			schema: 1,
+			id: 'cfg',
+			category: 'foundation',
+			label: 'Cfg',
+			description: 'Merges and appends.',
+			files: [
+				{ src: 'cfg.json', dest: 'cfg.json', mode: 'merge-json' },
+				{ src: 'ignore.txt', dest: '.prettierignore', mode: 'append-if-missing' },
+				{ src: 'plain.txt', dest: 'plain.txt' },
+			],
+		});
+		writeFileSync(join(tmp, 'my-units', 'cfg', 'cfg.json'), '{"b": 2}\n');
+		writeFileSync(join(tmp, 'my-units', 'cfg', 'ignore.txt'), 'dist\n');
+		writeFileSync(join(tmp, 'my-units', 'cfg', 'plain.txt'), 'one\n');
+		writeFileSync(join(tmp, 'cfg.json'), '{"a": 1}\n');
+		writeFileSync(join(tmp, '.prettierignore'), 'coverage\n');
+		const applied = run(
+			'--units-dir',
+			'./my-units',
+			'--units',
+			'my-units/cfg',
+			'--pm',
+			'null',
+			'--yes',
+			'--force',
+		);
+		expect(applied.status, `scaffold stderr: ${applied.stderr}`).toBe(0);
+	}
+
+	// Maps each path both commands list to whether diff and update call it drifted.
+	function agreement(): { path: string; diffDrifted: boolean; updateDrifted: boolean }[] {
+		const diff = JSON.parse(run('diff', '--json').stdout) as {
+			files: { path: string; status: string }[];
+		};
+		// The dry-run plan is a clack table, one `label  path` row per file. Its labels
+		// map to update's statuses: `merge` is merged, `needs choice` is needs-choice,
+		// `update` is clean-update and `conflict` is conflict (the last two are how a
+		// copy file with a newer template reads). Anything but `up-to-date` is drift.
+		const update = new Map(
+			[
+				...run('update', '--dry-run').stdout.matchAll(
+					/^│\s+(up-to-date|update|merge|conflict|needs choice)\s+(\S+)/gm,
+				),
+			].map((m) => [m[2], m[1]]),
+		);
+		// An empty table would make every agreement check vacuous.
+		expect(update.size).toBeGreaterThan(0);
+		return diff.files.flatMap((f) => {
+			const u = update.get(f.path);
+			return u === undefined
+				? []
+				: [
+						{
+							path: f.path,
+							diffDrifted: f.status === 'template-updated' || f.status === 'both',
+							updateDrifted: u !== 'up-to-date',
+						},
+					];
+		});
+	}
+
+	it('reports no drift right after merging into existing files', () => {
+		scaffoldCfg();
+		const result = run('diff');
+		expect(result.status, `stdout: ${result.stdout}`).toBe(0);
+		expect(result.stdout).toContain('No drift.');
+		expect(agreement().filter((a) => a.diffDrifted || a.updateDrifted)).toEqual([]);
+	});
+
+	it('reports no drift for opt-vscode merged into an existing .vscode/settings.json', () => {
+		writeJson(join(tmp, 'package.json'), { name: 't', version: '0.0.0' });
+		mkdirSync(join(tmp, '.vscode'));
+		writeFileSync(join(tmp, '.vscode', 'settings.json'), '{"editor.tabSize": 4}\n');
+		const applied = run('--units', 'opt-vscode', '--pm', 'null', '--yes', '--force');
+		expect(applied.status, `scaffold stderr: ${applied.stderr}`).toBe(0);
+		const result = run('diff');
+		expect(result.status, `stdout: ${result.stdout}`).toBe(0);
+		expect(result.stdout).toContain('No drift.');
+	});
+
+	it('agrees with update on a copy file whose template moved', () => {
+		scaffoldCfg();
+		writeFileSync(join(tmp, 'my-units', 'cfg', 'plain.txt'), 'two\n');
+		const result = run('diff');
+		expect(result.status).toBe(1);
+		expect(result.stdout).toMatch(/template-updated\s+plain\.txt/);
+		const rows = agreement();
+		expect(rows.find((a) => a.path === 'plain.txt')).toEqual({
+			path: 'plain.txt',
+			diffDrifted: true,
+			updateDrifted: true,
+		});
+		expect(rows.filter((a) => a.diffDrifted !== a.updateDrifted)).toEqual([]);
+	});
+
+	it('follows a real lint-unit switch into an existing .vscode/settings.json', () => {
+		writeJson(join(tmp, 'package.json'), { name: 't', version: '0.0.0' });
+		mkdirSync(join(tmp, '.vscode'));
+		writeFileSync(join(tmp, '.vscode', 'settings.json'), '{"editor.tabSize": 4}\n');
+		const scaffold = (...args: string[]) => run(...args, '--pm', 'null', '--yes', '--force');
+		expect(scaffold('--units', 'core-eslint,opt-vscode').status).toBe(0);
+		expect(run('diff').stdout).toContain('No drift.');
+		expect(run('remove', 'core-eslint', '--yes', '--force').status).toBe(0);
+		expect(scaffold('--units', 'core-oxlint').status).toBe(0);
+
+		const drifted = run('diff');
+		expect(drifted.status).toBe(1);
+		expect(drifted.stdout).toMatch(/template-updated\s+\.vscode\/settings\.json/);
+		expect(agreement().find((a) => a.path === '.vscode/settings.json')).toEqual({
+			path: '.vscode/settings.json',
+			diffDrifted: true,
+			updateDrifted: true,
+		});
+
+		expect(run('update', '--yes').status).toBe(0);
+		const clean = run('diff');
+		expect(clean.status, `stdout: ${clean.stdout}`).toBe(0);
+		expect(clean.stdout).toContain('No drift.');
+	});
+
+	it('reports template-updated when the template adds a key, and agrees with update', () => {
+		scaffoldCfg();
+		writeFileSync(join(tmp, 'my-units', 'cfg', 'cfg.json'), '{"b": 2, "c": 3}\n');
+		const result = run('diff');
+		expect(result.status).toBe(1);
+		expect(result.stdout).toMatch(/template-updated\s+cfg\.json/);
+		expect(agreement().find((a) => a.path === 'cfg.json')).toEqual({
+			path: 'cfg.json',
+			diffDrifted: true,
+			updateDrifted: true,
+		});
+	});
+
+	it('reports user-modified when the user adds a key the template does not set', () => {
+		scaffoldCfg();
+		writeFileSync(join(tmp, 'cfg.json'), '{"a": 1, "b": 2, "mine": true}\n');
+		const result = run('diff');
+		expect(result.status).toBe(1);
+		expect(result.stdout).toMatch(/user-modified\s+cfg\.json/);
+		expect(agreement().find((a) => a.path === 'cfg.json')?.updateDrifted).toBe(false);
+	});
+
+	it('reports both for a conflict the user also edited, matching update needs-choice', () => {
+		scaffoldCfg();
+		writeFileSync(join(tmp, 'my-units', 'cfg', 'cfg.json'), '{"b": 3}\n');
+		writeFileSync(join(tmp, 'cfg.json'), '{"a": 1, "b": 2, "mine": true}\n');
+		const result = run('diff');
+		expect(result.status).toBe(1);
+		expect(result.stdout).toMatch(/user\+template\s+cfg\.json/);
+		expect(agreement().find((a) => a.path === 'cfg.json')).toEqual({
+			path: 'cfg.json',
+			diffDrifted: true,
+			updateDrifted: true,
+		});
+	});
+
+	it('reports template-updated when the template adds a line to an appended file', () => {
+		scaffoldCfg();
+		writeFileSync(join(tmp, 'my-units', 'cfg', 'ignore.txt'), 'dist\nbuild\n');
+		const result = run('diff');
+		expect(result.status).toBe(1);
+		expect(result.stdout).toMatch(/template-updated\s+\.prettierignore/);
+		expect(agreement().find((a) => a.path === '.prettierignore')).toEqual({
+			path: '.prettierignore',
+			diffDrifted: true,
+			updateDrifted: true,
+		});
 	});
 });
