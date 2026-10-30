@@ -40,7 +40,7 @@ Commands:
 Options:
   --config, -c <file>            Run non-interactively with a JSON recipe
   --preset <name>                Start from a shipped recipe (node-lib, next-app, cli); --units adds to it
-  --target <dir>                 Scaffold against <dir> instead of the current directory
+  --target <dir>                 Act on <dir> instead of the current directory (scaffold, diff, doctor, remove, update)
   --units <a,b,c>                Comma-separated unit ids (recipe field: units)
   --units-dir <dir>              Load your own unit definitions from <dir>; they're referenced as
                                  <dir-name>/<id> (recipe field: unitsDir). Works with \`diff\`,
@@ -156,6 +156,12 @@ export async function main(): Promise<void> {
 	// resolves against the recipe instead, and this beats it when both are given.
 	const unitsDir = values['units-dir'] ? resolve(values['units-dir']) : undefined;
 
+	// Each Run*Opts falls back to process.cwd() when cwd is unset, so a branch that
+	// omits cwd reads the wrong repo, and remove, update and doctor --fix write to it (#223).
+	// Resolved now, before any detection runs, so the dir is stable even though a
+	// relative --config path is still read from here.
+	const targetDir = values.target ? resolve(values.target) : undefined;
+
 	const command = positionals[0];
 
 	// `list` needs no target project and no TTY, so it runs and exits before any
@@ -182,11 +188,13 @@ export async function main(): Promise<void> {
 	// Read-only drift check against .unbranded.json. No target, no TTY; exit code
 	// carries the verdict (non-zero on drift) so CI can gate on it directly.
 	if (command === 'diff') {
-		process.exit(runDiff(omitUnset({ json: values.json, diff: values.diff, unitsDir })));
+		process.exit(
+			runDiff(omitUnset({ json: values.json, diff: values.diff, unitsDir, cwd: targetDir })),
+		);
 	}
 
-	// Read-only repo audit: guaranteed zero writes, cwd only. Default exit is 0 so a
-	// report never fails a job; --strict turns findings into a non-zero exit.
+	// Read-only repo audit: guaranteed zero writes. Default exit is 0 so a report
+	// never fails a job; --strict turns findings into a non-zero exit.
 	// --fix crosses into the apply pipeline (writes!), so it refuses --json rather
 	// than guess whether the caller wanted the audit report or the repair.
 	if (command === 'doctor') {
@@ -207,6 +215,7 @@ export async function main(): Promise<void> {
 						pm: values.pm,
 						onConflict: values['on-conflict'],
 						unitsDir,
+						cwd: targetDir,
 					}),
 				).catch((err: unknown) => {
 					log.error(err instanceof Error ? err.message : String(err));
@@ -214,7 +223,9 @@ export async function main(): Promise<void> {
 				}),
 			);
 		}
-		process.exit(runDoctor(omitUnset({ json: values.json, strict: values.strict })));
+		process.exit(
+			runDoctor(omitUnset({ json: values.json, strict: values.strict, cwd: targetDir })),
+		);
 	}
 
 	// Backing a unit out is an apply-shaped verb (it writes), so it reuses the same
@@ -236,6 +247,7 @@ export async function main(): Promise<void> {
 					force: values.force,
 					cascade: values.cascade,
 					unitsDir,
+					cwd: targetDir,
 				}),
 			).catch((err: unknown) => {
 				log.error(err instanceof Error ? err.message : String(err));
@@ -284,6 +296,7 @@ export async function main(): Promise<void> {
 					force: values.force,
 					strategy,
 					unitsDir,
+					cwd: targetDir,
 				}),
 			).catch((err: unknown) => {
 				log.error(err instanceof Error ? err.message : String(err));
@@ -309,7 +322,7 @@ export async function main(): Promise<void> {
 					preset: values.preset,
 					unitsDir,
 					latest: values.latest,
-					targetDir: values.target ? resolve(values.target) : undefined,
+					targetDir,
 					inline: omitUnset({
 						units: values.units,
 						pm: values.pm,
@@ -330,9 +343,7 @@ export async function main(): Promise<void> {
 			configPath: values.config,
 			preset: values.preset,
 			unitsDir,
-			// Resolve against the invocation cwd now, before any detection runs, so the
-			// dir is stable even though a relative --config path is still read from here.
-			targetDir: values.target ? resolve(values.target) : undefined,
+			targetDir,
 			latest: values.latest,
 			force: values.force,
 			dryRun: values['dry-run'],
