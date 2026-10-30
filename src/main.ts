@@ -92,7 +92,7 @@ Examples:
 `;
 
 // .oxlintrc.json allows top-level await only in cli.*, so the dispatch lives in a function that cli.ts awaits.
-// Every branch sets process.exitCode and returns rather than calling process.exit: on a pipe stdout writes are async, and exiting early cuts a reader off at 64 KiB (#230). Nothing here may exit before the event loop drains.
+// Never call process.exit here: on a pipe, stdout writes are async, and exiting early cuts a reader off at 64 KiB (#230). Set process.exitCode and return.
 export async function main(): Promise<void> {
 	const { values, positionals } = parseArgs({
 		options: {
@@ -227,7 +227,7 @@ export async function main(): Promise<void> {
 				}),
 			).catch((err: unknown) => {
 				log.error(err instanceof Error ? err.message : String(err));
-				return 1;
+				return EXIT_ERROR;
 			});
 			return;
 		}

@@ -1,11 +1,33 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	closeSync,
+	mkdirSync,
+	mkdtempSync,
+	openSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { PKG_ROOT } from '../../src/util/paths';
 
 const CLI = join(PKG_ROOT, 'dist/cli.js');
+
+// A shell-free `> file` redirect, so the same invocation can be compared with its piped run on every OS.
+function runRedirected(args: string[], cwd: string, outPath: string): number | null {
+	const fd = openSync(outPath, 'w');
+	try {
+		return spawnSync('node', [CLI, ...args], {
+			cwd,
+			stdio: ['ignore', fd, 'pipe'],
+			timeout: 60_000,
+		}).status;
+	} finally {
+		closeSync(fd);
+	}
+}
 
 interface Catalog {
 	schema: number;
@@ -87,8 +109,7 @@ describe('unbranded list', () => {
 		expect(again.stdout).toBe(result.stdout);
 	});
 
-	// #230: a pipe reader got only the first 64 KiB because the process exited with
-	// the rest of stdout still queued. Needs a pack big enough to cross one pipe buffer.
+	// A pipe reader must get every byte a file redirect gets. Output past one pipe buffer (64 KiB) is where exiting before stdout drains shows up.
 	it('delivers --json output past 64 KiB through a pipe, same bytes as a file redirect', () => {
 		for (let i = 1; i <= 1000; i++) {
 			const dir = join(tmp, 'pack', `u${i}`);
@@ -106,28 +127,21 @@ describe('unbranded list', () => {
 			);
 		}
 
-		const piped = spawnSync('node', [CLI, 'list', '--json', '--units-dir', 'pack'], {
+		const args = ['list', '--json', '--units-dir', 'pack'];
+		const piped = spawnSync('node', [CLI, ...args], {
 			cwd: tmp,
 			encoding: 'utf-8',
 			maxBuffer: 16 * 1024 * 1024,
 			timeout: 60_000,
 		});
-		const redirected = join(tmp, 'list.json');
-		const viaFile = spawnSync(
-			'sh',
-			['-c', `node "${CLI}" list --json --units-dir pack > list.json`],
-			{
-				cwd: tmp,
-				encoding: 'utf-8',
-				timeout: 60_000,
-			},
-		);
+		const redirectedPath = join(tmp, 'list.json');
+		const redirectedStatus = runRedirected(args, tmp, redirectedPath);
 
 		expect(piped.status, `stderr: ${piped.stderr}`).toBe(0);
-		expect(viaFile.status, `stderr: ${viaFile.stderr}`).toBe(0);
-		const onDisk = readFileSync(redirected, 'utf-8');
+		expect(redirectedStatus).toBe(0);
+		const onDisk = readFileSync(redirectedPath, 'utf-8');
 		expect(onDisk.length).toBeGreaterThan(64 * 1024);
-		expect(piped.stdout.length).toBe(onDisk.length);
+		expect(piped.stdout).toBe(onDisk);
 		const parsed = JSON.parse(piped.stdout) as Catalog;
 		expect(parsed.units.filter((u) => /^pack\/u\d+$/.test(u.id))).toHaveLength(1000);
 	});
