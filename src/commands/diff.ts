@@ -30,7 +30,9 @@ export const DIFF_SCHEMA = 1;
 // Pure core: three hashes in, a verdict out. `onDisk` undefined means the file
 // was deleted — still a user edit. `template` undefined means no shipped template
 // backs this record anymore, so the template axis can't be judged.
-// `templateUpdated`, when set, overrides the hash comparison on that axis.
+// A merged file records the merge result, which matches the template's bytes only
+// when no file existed before the scaffold, so its caller passes update's verdict
+// as `templateUpdated` instead of a hash.
 export function classify(hashes: {
 	recorded: string;
 	onDisk?: string;
@@ -88,8 +90,8 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 		if (!catalogUnit) continue;
 		// Replay the generator init used. The raw catalog op has no lint keys, so
 		// planning it would report template-updated on a clean scaffold. The generated
-		// op carries inline `content` and no src file, and that's fine, since a
-		// merge-mode file takes its template axis from planFileOp's outcome below.
+		// op carries inline `content` and no src file to hash, so its template axis
+		// has to come from planFileOp's outcome below.
 		const unit = applyVscodeSettings(catalogUnit, installedIds);
 		const pkgRoot = opts.catalog?.templateRoots.get(id) ?? fallbackRoot;
 		for (const op of unit.files) {

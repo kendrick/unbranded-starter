@@ -256,10 +256,12 @@ describe('unbranded diff — merge modes into an existing file (#227)', () => {
 			files: [
 				{ src: 'cfg.json', dest: 'cfg.json', mode: 'merge-json' },
 				{ src: 'ignore.txt', dest: '.prettierignore', mode: 'append-if-missing' },
+				{ src: 'plain.txt', dest: 'plain.txt' },
 			],
 		});
 		writeFileSync(join(tmp, 'my-units', 'cfg', 'cfg.json'), '{"b": 2}\n');
 		writeFileSync(join(tmp, 'my-units', 'cfg', 'ignore.txt'), 'dist\n');
+		writeFileSync(join(tmp, 'my-units', 'cfg', 'plain.txt'), 'one\n');
 		writeFileSync(join(tmp, 'cfg.json'), '{"a": 1}\n');
 		writeFileSync(join(tmp, '.prettierignore'), 'coverage\n');
 		const applied = run(
@@ -280,12 +282,14 @@ describe('unbranded diff — merge modes into an existing file (#227)', () => {
 		const diff = JSON.parse(run('diff', '--json').stdout) as {
 			files: { path: string; status: string }[];
 		};
-		// The dry-run plan is a clack table, one `label  path` row per file; `merge`
-		// and `needs choice` are its labels for merged and needs-choice.
+		// The dry-run plan is a clack table, one `label  path` row per file. Its labels
+		// map to update's statuses: `merge` is merged, `needs choice` is needs-choice,
+		// `update` is clean-update and `conflict` is conflict (the last two are how a
+		// copy file with a newer template reads). Anything but `up-to-date` is drift.
 		const update = new Map(
 			[
 				...run('update', '--dry-run').stdout.matchAll(
-					/^│\s+(up-to-date|merge|needs choice)\s+(\S+)/gm,
+					/^│\s+(up-to-date|update|merge|conflict|needs choice)\s+(\S+)/gm,
 				),
 			].map((m) => [m[2], m[1]]),
 		);
@@ -299,7 +303,7 @@ describe('unbranded diff — merge modes into an existing file (#227)', () => {
 						{
 							path: f.path,
 							diffDrifted: f.status === 'template-updated' || f.status === 'both',
-							updateDrifted: u === 'merge' || u === 'needs choice',
+							updateDrifted: u !== 'up-to-date',
 						},
 					];
 		});
@@ -322,6 +326,46 @@ describe('unbranded diff — merge modes into an existing file (#227)', () => {
 		const result = run('diff');
 		expect(result.status, `stdout: ${result.stdout}`).toBe(0);
 		expect(result.stdout).toContain('No drift.');
+	});
+
+	it('agrees with update on a copy file whose template moved', () => {
+		scaffoldCfg();
+		writeFileSync(join(tmp, 'my-units', 'cfg', 'plain.txt'), 'two\n');
+		const result = run('diff');
+		expect(result.status).toBe(1);
+		expect(result.stdout).toMatch(/template-updated\s+plain\.txt/);
+		const rows = agreement();
+		expect(rows.find((a) => a.path === 'plain.txt')).toEqual({
+			path: 'plain.txt',
+			diffDrifted: true,
+			updateDrifted: true,
+		});
+		expect(rows.filter((a) => a.diffDrifted !== a.updateDrifted)).toEqual([]);
+	});
+
+	it('follows a real lint-unit switch into an existing .vscode/settings.json', () => {
+		writeJson(join(tmp, 'package.json'), { name: 't', version: '0.0.0' });
+		mkdirSync(join(tmp, '.vscode'));
+		writeFileSync(join(tmp, '.vscode', 'settings.json'), '{"editor.tabSize": 4}\n');
+		const scaffold = (...args: string[]) => run(...args, '--pm', 'null', '--yes', '--force');
+		expect(scaffold('--units', 'core-eslint,opt-vscode').status).toBe(0);
+		expect(run('diff').stdout).toContain('No drift.');
+		expect(run('remove', 'core-eslint', '--yes', '--force').status).toBe(0);
+		expect(scaffold('--units', 'core-oxlint').status).toBe(0);
+
+		const drifted = run('diff');
+		expect(drifted.status).toBe(1);
+		expect(drifted.stdout).toMatch(/template-updated\s+\.vscode\/settings\.json/);
+		expect(agreement().find((a) => a.path === '.vscode/settings.json')).toEqual({
+			path: '.vscode/settings.json',
+			diffDrifted: true,
+			updateDrifted: true,
+		});
+
+		expect(run('update', '--yes').status).toBe(0);
+		const clean = run('diff');
+		expect(clean.status, `stdout: ${clean.stdout}`).toBe(0);
+		expect(clean.stdout).toContain('No drift.');
 	});
 
 	it('reports template-updated when the template adds a key, and agrees with update', () => {
