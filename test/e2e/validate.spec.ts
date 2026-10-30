@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -148,6 +148,32 @@ describe('unbranded validate', () => {
 		const empty = run(['validate', join(tmp, 'empty')], tmp);
 		expect(empty.status).toBe(1);
 		expect(empty.stderr).toContain('unit.json');
+	});
+
+	// #230: stdout past one pipe buffer (64 KiB) used to be cut off at process exit.
+	it('delivers --json output past 64 KiB through a pipe, same bytes as a file redirect', () => {
+		for (let i = 1; i <= 1000; i++) {
+			unit(`pack/u${i}`, { ...MINIMAL, id: `u${i}`, label: `Unit ${i}`, files: [] });
+		}
+
+		const piped = spawnSync('node', [CLI, 'validate', 'pack', '--json'], {
+			cwd: tmp,
+			encoding: 'utf-8',
+			maxBuffer: 16 * 1024 * 1024,
+			timeout: 60_000,
+		});
+		const viaFile = spawnSync('sh', ['-c', `node "${CLI}" validate pack --json > validate.json`], {
+			cwd: tmp,
+			encoding: 'utf-8',
+			timeout: 60_000,
+		});
+
+		expect(piped.status, `stderr: ${piped.stderr}`).toBe(0);
+		expect(viaFile.status, `stderr: ${viaFile.stderr}`).toBe(0);
+		const onDisk = readFileSync(join(tmp, 'validate.json'), 'utf-8');
+		expect(onDisk.length).toBeGreaterThan(64 * 1024);
+		expect(piped.stdout.length).toBe(onDisk.length);
+		expect(() => JSON.parse(piped.stdout)).not.toThrow();
 	});
 
 	it('requires a path argument', () => {
