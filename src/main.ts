@@ -92,6 +92,7 @@ Examples:
 `;
 
 // .oxlintrc.json allows top-level await only in cli.*, so the dispatch lives in a function that cli.ts awaits.
+// Never call process.exit here: on a pipe, stdout writes are async, and exiting early cuts a reader off at 64 KiB (#230). Set process.exitCode and return.
 export async function main(): Promise<void> {
 	const { values, positionals } = parseArgs({
 		options: {
@@ -132,14 +133,16 @@ export async function main(): Promise<void> {
 
 	if (values.help) {
 		process.stdout.write(HELP);
-		process.exit(EXIT_OK);
+		process.exitCode = EXIT_OK;
+		return;
 	}
 
 	// A preset IS a config; two sources of truth for the same run would need a
 	// precedence story nobody could remember. Pick one.
 	if (values.preset !== undefined && values.config !== undefined) {
 		process.stderr.write('--preset and --config are both full recipes; pass one or the other.\n');
-		process.exit(EXIT_ERROR);
+		process.exitCode = EXIT_ERROR;
+		return;
 	}
 
 	if (values.version) {
@@ -149,7 +152,8 @@ export async function main(): Promise<void> {
 			version: string;
 		};
 		process.stdout.write(`${pkg.version}\n`);
-		process.exit(EXIT_OK);
+		process.exitCode = EXIT_OK;
+		return;
 	}
 
 	// Resolved against the invocation cwd, like --target. A recipe's own unitsDir
@@ -168,7 +172,8 @@ export async function main(): Promise<void> {
 	// of the init flow's detection kicks in.
 	if (command === 'list') {
 		runList(omitUnset({ json: values.json, unitsDir }));
-		process.exit(EXIT_OK);
+		process.exitCode = EXIT_OK;
+		return;
 	}
 
 	// Authoring-side check: reads unit definitions off disk and never touches a
@@ -180,17 +185,20 @@ export async function main(): Promise<void> {
 			process.stderr.write(
 				'Usage: unbranded validate <path>. Pass a unit definition file, a unit directory, or a directory of units.\n',
 			);
-			process.exit(EXIT_ERROR);
+			process.exitCode = EXIT_ERROR;
+			return;
 		}
-		process.exit(runValidate(target, omitUnset({ json: values.json })));
+		process.exitCode = runValidate(target, omitUnset({ json: values.json }));
+		return;
 	}
 
 	// Read-only drift check against .unbranded.json. No target, no TTY; exit code
 	// carries the verdict (non-zero on drift) so CI can gate on it directly.
 	if (command === 'diff') {
-		process.exit(
-			runDiff(omitUnset({ json: values.json, diff: values.diff, unitsDir, cwd: targetDir })),
+		process.exitCode = runDiff(
+			omitUnset({ json: values.json, diff: values.diff, unitsDir, cwd: targetDir }),
 		);
+		return;
 	}
 
 	// Read-only repo audit: guaranteed zero writes. Default exit is 0 so a report
@@ -203,29 +211,30 @@ export async function main(): Promise<void> {
 				process.stderr.write(
 					'doctor --fix has no --json output. Run the audit with `doctor --json`, or drop --json to apply fixes.\n',
 				);
-				process.exit(EXIT_ERROR);
+				process.exitCode = EXIT_ERROR;
+				return;
 			}
-			process.exit(
-				await runDoctorFix(
-					omitUnset({
-						yes: values.yes,
-						dryRun: values['dry-run'],
-						diff: values.diff,
-						force: values.force,
-						pm: values.pm,
-						onConflict: values['on-conflict'],
-						unitsDir,
-						cwd: targetDir,
-					}),
-				).catch((err: unknown) => {
-					log.error(err instanceof Error ? err.message : String(err));
-					return 1;
+			process.exitCode = await runDoctorFix(
+				omitUnset({
+					yes: values.yes,
+					dryRun: values['dry-run'],
+					diff: values.diff,
+					force: values.force,
+					pm: values.pm,
+					onConflict: values['on-conflict'],
+					unitsDir,
+					cwd: targetDir,
 				}),
-			);
+			).catch((err: unknown) => {
+				log.error(err instanceof Error ? err.message : String(err));
+				return EXIT_ERROR;
+			});
+			return;
 		}
-		process.exit(
-			runDoctor(omitUnset({ json: values.json, strict: values.strict, cwd: targetDir })),
+		process.exitCode = runDoctor(
+			omitUnset({ json: values.json, strict: values.strict, cwd: targetDir }),
 		);
+		return;
 	}
 
 	// Backing a unit out is an apply-shaped verb (it writes), so it reuses the same
@@ -236,42 +245,41 @@ export async function main(): Promise<void> {
 			process.stderr.write(
 				'Usage: unbranded remove <unit-id>. Run `unbranded list` for the ids.\n',
 			);
-			process.exit(EXIT_ERROR);
+			process.exitCode = EXIT_ERROR;
+			return;
 		}
-		process.exit(
-			await runRemove(
-				unitId,
-				omitUnset({
-					yes: values.yes,
-					dryRun: values['dry-run'],
-					force: values.force,
-					cascade: values.cascade,
-					unitsDir,
-					cwd: targetDir,
-				}),
-			).catch((err: unknown) => {
-				log.error(err instanceof Error ? err.message : String(err));
-				return EXIT_ERROR;
+		process.exitCode = await runRemove(
+			unitId,
+			omitUnset({
+				yes: values.yes,
+				dryRun: values['dry-run'],
+				force: values.force,
+				cascade: values.cascade,
+				unitsDir,
+				cwd: targetDir,
 			}),
-		);
+		).catch((err: unknown) => {
+			log.error(err instanceof Error ? err.message : String(err));
+			return EXIT_ERROR;
+		});
+		return;
 	}
 
 	// Read-only freshness report: manifest pins vs the registry's latest. Like
 	// doctor, the default exit is 0 so a report never fails a job; --strict is the
 	// opt-in gate, and it trips on majors only.
 	if (command === 'outdated') {
-		process.exit(
-			await runOutdated(
-				omitUnset({
-					json: values.json,
-					strict: values.strict,
-					registry: values.registry,
-				}),
-			).catch((err: unknown) => {
-				log.error(err instanceof Error ? err.message : String(err));
-				return EXIT_ERROR;
+		process.exitCode = await runOutdated(
+			omitUnset({
+				json: values.json,
+				strict: values.strict,
+				registry: values.registry,
 			}),
-		);
+		).catch((err: unknown) => {
+			log.error(err instanceof Error ? err.message : String(err));
+			return EXIT_ERROR;
+		});
+		return;
 	}
 
 	// Template refresh over the recorded baselines. Validating --strategy here keeps
@@ -285,57 +293,57 @@ export async function main(): Promise<void> {
 			strategy !== 'markers'
 		) {
 			process.stderr.write(`--strategy must be ours, theirs, or markers (got "${strategy}").\n`);
-			process.exit(EXIT_ERROR);
+			process.exitCode = EXIT_ERROR;
+			return;
 		}
-		process.exit(
-			await runUpdate(
-				omitUnset({
-					yes: values.yes,
-					dryRun: values['dry-run'],
-					diff: values.diff,
-					force: values.force,
-					strategy,
-					unitsDir,
-					cwd: targetDir,
-				}),
-			).catch((err: unknown) => {
-				log.error(err instanceof Error ? err.message : String(err));
-				return EXIT_ERROR;
+		process.exitCode = await runUpdate(
+			omitUnset({
+				yes: values.yes,
+				dryRun: values['dry-run'],
+				diff: values.diff,
+				force: values.force,
+				strategy,
+				unitsDir,
+				cwd: targetDir,
 			}),
-		);
+		).catch((err: unknown) => {
+			log.error(err instanceof Error ? err.message : String(err));
+			return EXIT_ERROR;
+		});
+		return;
 	}
 
 	// A stray positional is almost always a typo (`unbranded lst`). Failing loudly
 	// beats silently dropping it and running the interactive flow the user didn't ask for.
 	if (command !== undefined) {
 		process.stderr.write(`Unknown command: ${command}. Run \`unbranded --help\` for usage.\n`);
-		process.exit(EXIT_ERROR);
+		process.exitCode = EXIT_ERROR;
+		return;
 	}
 
 	// The machine half of --dry-run: pure JSON on stdout, no clack chrome. Routed
 	// ahead of runInit because that flow starts narrating from its first line.
 	if (values['dry-run'] && values.json) {
-		process.exit(
-			await runPlanJson(
-				omitUnset({
-					configPath: values.config,
-					preset: values.preset,
-					unitsDir,
-					latest: values.latest,
-					targetDir,
-					inline: omitUnset({
-						units: values.units,
-						pm: values.pm,
-						onConflict: values['on-conflict'],
-						postInstall: values['post-install'],
-						yes: values.yes,
-					}),
+		process.exitCode = await runPlanJson(
+			omitUnset({
+				configPath: values.config,
+				preset: values.preset,
+				unitsDir,
+				latest: values.latest,
+				targetDir,
+				inline: omitUnset({
+					units: values.units,
+					pm: values.pm,
+					onConflict: values['on-conflict'],
+					postInstall: values['post-install'],
+					yes: values.yes,
 				}),
-			).catch((err: unknown) => {
-				process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
-				return EXIT_ERROR;
 			}),
-		);
+		).catch((err: unknown) => {
+			process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+			return EXIT_ERROR;
+		});
+		return;
 	}
 
 	return runInit(
@@ -369,6 +377,6 @@ export async function main(): Promise<void> {
 			// instead of a raw stack trace. detectPm throws for workspace-leaf and
 			// malformed package.json; config validation throws for bad recipes.
 			log.error(err instanceof Error ? err.message : String(err));
-			process.exit(EXIT_ERROR);
+			process.exitCode = EXIT_ERROR;
 		});
 }

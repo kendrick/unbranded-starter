@@ -93,6 +93,26 @@ describe('fetchVersions', () => {
 		expect(peak).toBeLessThanOrEqual(3);
 	});
 
+	it('cancels outstanding lookups and stops dequeuing once one fails', async () => {
+		const signals: AbortSignal[] = [];
+		const fetchImpl = vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+			if (String(input).endsWith('/pkg-0')) return new Response('nope', { status: 404 });
+			const signal = init?.signal as AbortSignal;
+			signals.push(signal);
+			return new Promise<Response>((_resolve, reject) => {
+				signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+			});
+		}) as unknown as typeof fetch;
+
+		const names = Array.from({ length: 12 }, (_, i) => `pkg-${i}`);
+		await expect(fetchVersions(names, { fetchImpl, concurrency: 3 })).rejects.toThrow(
+			/answered 404 for pkg-0\./,
+		);
+		expect(vi.mocked(fetchImpl).mock.calls.length).toBeLessThanOrEqual(3);
+		expect(signals.length).toBeGreaterThan(0);
+		expect(signals.every((signal) => signal.aborted)).toBe(true);
+	});
+
 	it('turns a non-OK response into an error naming the package and registry', async () => {
 		await expect(fetchVersions(['ghost-package'], { fetchImpl: fakeRegistry({}) })).rejects.toThrow(
 			/ghost-package.*registry\.npmjs\.org|registry\.npmjs\.org.*ghost-package/,
