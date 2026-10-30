@@ -14,6 +14,14 @@ Each entry follows this shape:
 **Alternatives considered:** What was rejected, and why.
 ```
 
+## 2026-10-29: Wave B: read-only state refusal, `--target` on every subcommand, `diff` follows `update`, and no `process.exit` in `main()`
+
+**Source:** issues #223, #227, #228, #230, #231; PRs #259–#263
+
+**Context:** Five P2 bugs, each a place where two parts of the CLI disagreed about the same input. `diff` read a merge-conflicted `.unbranded.json` as untracked and exited 0; subcommands ignored `--target`; `diff` and `update` judged merged files by different rules; the picker and `resolveSelection` ignored tracked units for `requires`; piped output was cut at 64 KiB by `process.exit`.
+**Decision:** `diff`, `update` and `remove` refuse a `malformed` state file with exit 1 and nothing on stdout, and `doctor` warns and drops its accept-list (#231). Every subcommand that reads a project honors `--target`, `doctor` included, since it only reads (#223). For `merge-json` and `append-if-missing` files, `diff` takes the template axis from `planFileOp`'s outcome, which also covers the generated `.vscode/settings.json` (#227). A tracked unit satisfies `requires` as well as a slot, in the resolver and in the picker preview (#228). `main()` sets `process.exitCode` and returns everywhere; review then caught `fetchVersions` leaving its pool running after a failure, so the first failure now aborts the rest (#230).
+**Alternatives considered:** Having `doctor` refuse `--target`—rejected, a read-only command gains nothing from refusing. Hashing generated settings bytes as the template—tried in #234 and reverted, it disagreed with `update` after a lint-unit switch. Making `remove` delete a drifted file under `--target` to match #223's literal criterion—rejected, it would change the keep-modified rule.
+
 ## 2026-08-31: Dependency version collisions obey `--on-conflict` (issue #113)
 
 **Source:** issue #113
