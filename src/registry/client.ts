@@ -21,7 +21,7 @@ export interface PackageVersions {
 // Batched lookup of the `latest` dist-tag plus every published version per
 // package. Rejects on the FIRST failure with one clear error (offline
 // degrades to a message, not a hang or a half-report); the rest of the pool
-// is abandoned.
+// is cancelled.
 export async function fetchVersions(
 	names: string[],
 	opts: FetchVersionsOpts = {},
@@ -36,9 +36,21 @@ export async function fetchVersions(
 
 	// A worker-pool cap rather than one request per package all at once: forty
 	// parallel hits on a corporate mirror is a good way to get rate-limited.
+	// Abort on the first failure: with no process.exit to kill them, abandoned
+	// workers would keep draining the queue and hold the CLI open (#230).
+	const controller = new AbortController();
 	const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
-		for (let name = queue.shift(); name !== undefined; name = queue.shift())
-			found.set(name, await versionsOf(name, registry, fetchImpl, timeoutMs));
+		try {
+			for (
+				let name = queue.shift();
+				name !== undefined && !controller.signal.aborted;
+				name = queue.shift()
+			)
+				found.set(name, await versionsOf(name, registry, fetchImpl, timeoutMs, controller.signal));
+		} catch (err) {
+			controller.abort();
+			throw err;
+		}
 	});
 	await Promise.all(workers);
 
@@ -50,6 +62,7 @@ async function versionsOf(
 	registry: string,
 	fetchImpl: typeof fetch,
 	timeoutMs: number,
+	cancel: AbortSignal,
 ): Promise<PackageVersions> {
 	// Scoped names keep the @ but encode the slash — the registry route wants
 	// one path segment per package. replaceAll, not replace: a valid npm name
@@ -65,7 +78,7 @@ async function versionsOf(
 			// megabytes, and the abbreviated one still carries the dist-tags and the
 			// `versions` keys a held line is graded against.
 			headers: { accept: 'application/vnd.npm.install-v1+json' },
-			signal: AbortSignal.timeout(timeoutMs),
+			signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), cancel]),
 		});
 	} catch (err) {
 		throw new Error(
