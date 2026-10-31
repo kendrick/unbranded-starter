@@ -249,6 +249,7 @@ export async function runPlanJson(opts: {
 	}
 
 	const target = await detectTarget({
+		nonInteractive: true,
 		...(config.projectName !== undefined ? { projectName: config.projectName } : {}),
 		...(opts.targetDir !== undefined ? { cwd: opts.targetDir } : {}),
 	});
@@ -432,6 +433,7 @@ export async function runInit(opts: RunInitOpts = {}): Promise<RunInitResult> {
 	for (const notice of catalogNotices(catalog)) log.warn(notice);
 
 	const target = await detectTarget({
+		nonInteractive,
 		...(config?.projectName !== undefined ? { projectName: config.projectName } : {}),
 		...(opts.targetDir !== undefined ? { cwd: opts.targetDir } : {}),
 	});
