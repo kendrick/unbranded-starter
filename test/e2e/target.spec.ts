@@ -146,4 +146,42 @@ describe('cli --target on subcommands', () => {
 		expect(git(a, 'status', '--short').stdout).toBe('');
 		expect(existsSync(join(b, '.gitattributes'))).toBe(true);
 	});
+
+	describe('with a --target that is not a directory', () => {
+		const refused = [
+			'diff',
+			'diff --json',
+			'update --yes',
+			'remove core-editorconfig --yes',
+			'doctor --json',
+			'doctor --fix --yes --pm null',
+		];
+
+		it.each(refused)('%s refuses a missing path', (line) => {
+			const result = cli(a, ...line.split(' '), '--target', '../missing');
+
+			expect(result.status, `stderr: ${result.stderr}`).toBe(1);
+			expect(result.stdout).toBe('');
+			expect(result.stderr).toContain('--target');
+			expect(result.stderr).toContain(join(base, 'missing'));
+			expect(existsSync(join(base, 'missing'))).toBe(false);
+		});
+
+		it('diff refuses a regular file', () => {
+			const result = cli(a, 'diff', '--target', 'package.json');
+
+			expect(result.status, `stderr: ${result.stderr}`).toBe(1);
+			expect(result.stdout).toBe('');
+			expect(result.stderr).toContain('--target');
+			expect(result.stderr).toContain(join(a, 'package.json'));
+		});
+
+		it('diff still nudges on an existing empty directory', () => {
+			mkdirSync(join(base, 'empty'));
+			const result = cli(a, 'diff', '--target', '../empty');
+
+			expect(result.status, `stderr: ${result.stderr}`).toBe(0);
+			expect(result.stdout + result.stderr).toContain('No .unbranded.json here');
+		});
+	});
 });
