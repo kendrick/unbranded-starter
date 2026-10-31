@@ -944,8 +944,8 @@ describe('runInit in a directory with no package.json (#203)', () => {
 		vi.mocked(note).mockClear();
 	});
 
-	// Before #203 the project-name prompt stopped every fresh-directory run, so no
-	// caller reached formatPlan's freshProject branch.
+	// formatPlan's freshProject branch only fires for a fresh target; this is the
+	// caller-level path that gets there (recipe-named, so no prompt is involved).
 	it('reaches the freshProject branch of formatPlan through a recipe projectName', async () => {
 		writeFileSync(
 			join(tmp, 'recipe.json'),

@@ -6,7 +6,7 @@ Two kinds of agent land here. If you're **using** the unbranded CLI—scaffoldin
 
 Everything below is a versioned promise as of 1.0. Each JSON surface carries an integer `schema` field; key off that, never off field sniffing. A breaking change to a surface bumps its `schema` integer, and the package major moves with it. This package ships one JSON Schema per surface under `schemas/`—validate against the copy in your installed version.
 
-No command below needs a TTY. Anything interactive has a flag that answers it. Without `--pm`, a run that finds no lockfile, no `packageManager` field, and no `npm_config_user_agent` exits 1 and names `--pm`; `--pm null` writes the files and skips the install. With no `package.json` in the target, a non-interactive run whose recipe sets no `projectName` exits 1 and names `projectName`.
+No command below needs a TTY. Anything interactive has a flag or recipe field that answers it. Without `--pm`, a run that finds no lockfile, no `packageManager` field, and no `npm_config_user_agent` exits 1 and names `--pm`; `--pm null` writes the files and skips the install. With no `package.json` in the target, a non-interactive run whose recipe sets no `projectName` exits 1 and names `projectName`.
 
 ### Commands
 

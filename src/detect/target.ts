@@ -77,7 +77,7 @@ export interface DetectTargetOpts {
 }
 
 export function noProjectNameMessage(dir: string): string {
-	return `No package.json in ${dir}, so this is a new project, and a non-interactive run can't ask for its name. Set "projectName" in a recipe and pass it with --config ("." scaffolds into this directory), or run without --yes and --units to be prompted.`;
+	return `No package.json in ${dir}, so this is a new project, and a non-interactive run can't ask for its name. Set "projectName" in a recipe and pass it with --config ("." scaffolds into this directory), or run with no --config, --preset, --units or --yes to be prompted.`;
 }
 
 export async function detectTarget(opts: DetectTargetOpts = {}): Promise<TargetContext> {
@@ -88,11 +88,11 @@ export async function detectTarget(opts: DetectTargetOpts = {}): Promise<TargetC
 	}
 
 	// No package.json — a fresh project. Honor the supplied name (config mode)
-	// or ask for one. `interactive` also gates the confirm below: a recipe's
+	// or ask for one. `needsName` also gates the confirm below: a recipe's
 	// projectName is consent already given, so config mode never re-prompts.
 	const { projectName } = opts;
-	const interactive = projectName === undefined;
-	if (interactive && opts.nonInteractive) {
+	const needsName = projectName === undefined;
+	if (needsName && opts.nonInteractive) {
 		throw new Error(noProjectNameMessage(inspection.parent));
 	}
 
@@ -133,7 +133,7 @@ export async function detectTarget(opts: DetectTargetOpts = {}): Promise<TargetC
 		if (classifyExistingDir(readdirSync(newDir)) === 'unsafe') {
 			throw new Error(`Directory already exists and isn't empty: ${newDir}`);
 		}
-		if (interactive) {
+		if (needsName) {
 			const proceed = await confirm({
 				message: `${newDir} already exists. Scaffold into it?`,
 				initialValue: true,
