@@ -227,7 +227,7 @@ unbranded --config recipe.json
 }
 ```
 
-`units`, `pm` (or `null` to skip install), `onConflict` (which settles file and dependency version collisions alike), and `postInstall` are required; `projectName` only in new-project mode, and an unknown unit id fails validation immediately. Config mode skips the Apply confirmation, and inline flags like `--units`/`--pm` override the matching recipe field when both are set.
+`units`, `pm` (or `null` to skip install), `onConflict` (which settles file and dependency version collisions alike), and `postInstall` are required; `projectName` only in new-project mode (a non-interactive run there without it exits 1), and an unknown unit id fails validation immediately. Config mode skips the Apply confirmation, and inline flags like `--units`/`--pm` override the matching recipe field when both are set.
 
 Don't want to hand-write the JSON? Finish an interactive run and it offers to save your choices as `recipe.json`, so you explore once and replay everywhere. The full recipe schema and the exit-code contract (`0` success, `1` any error or `--strict` gate, `130` for Ctrl-C at a prompt) are documented in [AGENTS.md](AGENTS.md).
 

@@ -70,6 +70,14 @@ export interface DetectTargetOpts {
 	// install keys off the returned `dir`, so steering detection here is enough —
 	// no process.chdir is needed for augment or in-place runs.
 	cwd?: string;
+	// A recipe, preset, `--units`, or `--yes` run must never prompt: with no
+	// package.json and no projectName, the name prompt would hang CI on a closed
+	// stdin or exit 13. Refuse instead, the way detectPm does for the pm picker.
+	nonInteractive?: boolean;
+}
+
+export function noProjectNameMessage(dir: string): string {
+	return `No package.json in ${dir}, so this is a new project, and a non-interactive run can't ask for its name. Set "projectName" in a recipe and pass it with --config ("." scaffolds into this directory), or run without --yes and --units to be prompted.`;
 }
 
 export async function detectTarget(opts: DetectTargetOpts = {}): Promise<TargetContext> {
@@ -84,6 +92,9 @@ export async function detectTarget(opts: DetectTargetOpts = {}): Promise<TargetC
 	// projectName is consent already given, so config mode never re-prompts.
 	const { projectName } = opts;
 	const interactive = projectName === undefined;
+	if (interactive && opts.nonInteractive) {
+		throw new Error(noProjectNameMessage(inspection.parent));
+	}
 
 	let name: string;
 	if (projectName !== undefined) {

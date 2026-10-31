@@ -4,7 +4,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { confirm, isCancel, text } from '@clack/prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { classifyExistingDir, detectTarget, inspectTarget, validateProjectName } from './target';
+import {
+	classifyExistingDir,
+	detectTarget,
+	inspectTarget,
+	noProjectNameMessage,
+	validateProjectName,
+} from './target';
 
 // The async shell (detectTarget) prompts through clack. Mock the module so we
 // can drive the text and confirm answers directly; the pure halves below run
@@ -161,5 +167,18 @@ describe('detectTarget (new-project shell)', () => {
 		} finally {
 			rmSync(other, { recursive: true, force: true });
 		}
+	});
+
+	it('refuses a non-interactive run with no projectName before prompting or creating anything', async () => {
+		await expect(detectTarget({ nonInteractive: true, cwd })).rejects.toThrow(
+			noProjectNameMessage(cwd),
+		);
+		expect(text).not.toHaveBeenCalled();
+		expect(readdirSync(tmp)).toEqual([]);
+	});
+
+	it('still scaffolds a non-interactive run that supplies a projectName', async () => {
+		const result = await detectTarget({ nonInteractive: true, projectName: '.', cwd });
+		expect(result).toEqual({ dir: cwd, mode: 'new' });
 	});
 });

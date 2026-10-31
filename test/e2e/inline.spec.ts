@@ -195,3 +195,60 @@ describe('no package-manager signal', () => {
 		expect(() => JSON.parse(result.stdout)).not.toThrow();
 	});
 });
+
+describe('no package.json and no project name (#203)', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-noname-'));
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	// Closed stdin turns a stray prompt into exit 13, so a pass proves the run
+	// refused instead of reaching clack. Status 1 rules out both 13 and 0.
+	function run(args: string[]) {
+		return spawnSync('node', [CLI, ...args], { cwd: tmp, encoding: 'utf-8', input: '' });
+	}
+
+	it('refuses --yes without writing anything', () => {
+		const result = run(['--units', 'core-tailwind', '--pm', 'null', '--yes']);
+
+		expect(result.status, `stdout: ${result.stdout}\nstderr: ${result.stderr}`).toBe(1);
+		expect(result.stdout + result.stderr).toMatch(/projectName/);
+		expect(readdirSync(tmp)).toEqual([]);
+	});
+
+	it('fails --dry-run --json with the message on stderr and nothing on stdout', () => {
+		const result = run(['--dry-run', '--json', '--units', 'core-tailwind', '--pm', 'null']);
+
+		expect(result.status, `stdout: ${result.stdout}\nstderr: ${result.stderr}`).toBe(1);
+		expect(result.stdout).toBe('');
+		expect(result.stderr).toMatch(/projectName/);
+		expect(readdirSync(tmp)).toEqual([]);
+	});
+
+	it('refuses doctor --fix --yes in an empty --target', () => {
+		const result = run(['doctor', '--fix', '--yes', '--pm', 'null', '--target', tmp]);
+
+		expect(result.status, `stdout: ${result.stdout}\nstderr: ${result.stderr}`).toBe(1);
+		expect(result.stdout + result.stderr).toMatch(/projectName/);
+		expect(readdirSync(tmp)).toEqual([]);
+	});
+
+	it('still scaffolds when a recipe supplies projectName', () => {
+		writeJson(join(tmp, 'recipe.json'), {
+			units: ['core-tailwind'],
+			pm: null,
+			onConflict: 'overwrite',
+			postInstall: 'none',
+			projectName: '.',
+		});
+		const result = run(['--config', join(tmp, 'recipe.json')]);
+
+		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
+		expect(existsSync(join(tmp, '.unbranded.json'))).toBe(true);
+	});
+});
