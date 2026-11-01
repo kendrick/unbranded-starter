@@ -2,7 +2,7 @@ import type { Unit, UnitId } from '../manifest/types';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { log } from '@clack/prompts';
+import { log, note } from '@clack/prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeAndInstall } from '../install/run';
 import { unitPicker } from '../prompts/unit-picker/prompt';
@@ -21,7 +21,7 @@ vi.mock('../prompts/unit-picker/prompt', () => ({ unitPicker: vi.fn() }));
 // answer "Apply?" without a real TTY—everything else stays real.
 vi.mock('@clack/prompts', async (importOriginal) => {
 	const mod = await importOriginal<typeof import('@clack/prompts')>();
-	return { ...mod, select: vi.fn(async () => ''), confirm: vi.fn() };
+	return { ...mod, select: vi.fn(async () => ''), confirm: vi.fn(), note: vi.fn() };
 });
 
 // The install spawn is the other boundary (same seam run.spec mocks): stubbing it
@@ -929,5 +929,54 @@ describe('formatPlan', () => {
 	it('names the pm when one is set, fresh project or not', () => {
 		expect(formatPlan([eslint], [], {}, 'pnpm', false, true)).toContain('install via pnpm');
 		expect(formatPlan([eslint], [], {}, 'npm', false, false)).toContain('install via npm');
+	});
+});
+
+describe('runInit in a directory with no package.json (#203)', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-init-fresh-'));
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+		vi.mocked(note).mockClear();
+	});
+
+	// formatPlan's freshProject branch only fires for a fresh target; this is the
+	// caller-level path that gets there (recipe-named, so no prompt is involved).
+	it('reaches the freshProject branch of formatPlan through a recipe projectName', async () => {
+		writeFileSync(
+			join(tmp, 'recipe.json'),
+			JSON.stringify({
+				units: ['core-editorconfig'],
+				pm: null,
+				onConflict: 'overwrite',
+				postInstall: 'none',
+				projectName: '.',
+			}),
+		);
+
+		const result = await runInit({
+			targetDir: tmp,
+			dryRun: true,
+			configPath: join(tmp, 'recipe.json'),
+		});
+
+		expect(result).toEqual({ ok: true });
+		expect(
+			vi
+				.mocked(note)
+				.mock.calls.map((c) => c[0])
+				.join('\n'),
+		).toContain('no install (no package.json)');
+	});
+
+	it('refuses a nameless --units run without writing anything', async () => {
+		await expect(
+			runInit({ targetDir: tmp, inline: { units: 'core-editorconfig', pm: 'pnpm', yes: true } }),
+		).rejects.toThrow(/projectName/);
+		expect(existsSync(join(tmp, STATE_FILENAME))).toBe(false);
 	});
 });
