@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { log } from '@clack/prompts';
@@ -189,6 +189,19 @@ export async function main(): Promise<void> {
 			return;
 		}
 		process.exitCode = runValidate(target, omitUnset({ json: values.json }));
+		return;
+	}
+
+	// A --target that doesn't exist would read as an untracked project: diff exits 0
+	// and doctor reports every file missing, so a mistyped CI path passes (#264).
+	// Scaffold is exempt; a new path there means new-project mode.
+	if (
+		targetDir !== undefined &&
+		(command === 'diff' || command === 'doctor' || command === 'remove' || command === 'update') &&
+		statSync(targetDir, { throwIfNoEntry: false })?.isDirectory() !== true
+	) {
+		process.stderr.write(`unbranded: --target ${targetDir} doesn't exist or isn't a directory.\n`);
+		process.exitCode = EXIT_ERROR;
 		return;
 	}
 
