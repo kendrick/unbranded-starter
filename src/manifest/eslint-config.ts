@@ -12,7 +12,7 @@ export const ESLINT_FLAVORS: EslintFlavor[] = ['base', 'react', 'next'];
 // React-ecosystem package so `base` stays lean, per the AC.
 const BASE_DEPS: Record<string, string> = {
 	'@antfu/eslint-config': '10.0.0',
-	'eslint': '10.13.0',
+	'eslint': '10.14.0',
 	'eslint-plugin-format': '2.0.1',
 };
 
@@ -25,7 +25,7 @@ const REACT_DEPS: Record<string, string> = {
 };
 
 const NEXT_DEPS: Record<string, string> = {
-	'@next/eslint-plugin-next': '16.4.3',
+	'@next/eslint-plugin-next': '16.4.4',
 };
 
 // The exact devDependencies a flavor installs. Pinned like every other unit; the
