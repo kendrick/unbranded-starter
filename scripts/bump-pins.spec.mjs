@@ -1,10 +1,11 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
 	groupByUnit,
+	GROUPED_HEAD,
 	MANIFEST_FILES,
 	planBumps,
 	rewritePackageJson,
@@ -289,6 +290,32 @@ describe('skipLoopUnits', () => {
 		const groups = new Map([['core-eslint', []]]);
 		expect([...skipLoopUnits(groups, []).kept.keys()]).toEqual(['core-eslint']);
 	});
+
+	const twoUnits = () =>
+		new Map([
+			['core-eslint', [{ name: 'eslint', from: '10.11.0', to: '10.12.0', units: ['core-eslint'] }]],
+			['core-oxlint', [{ name: 'oxlint', from: '1.86.0', to: '1.89.0', units: ['core-oxlint'] }]],
+		]);
+
+	it('grouped: an open bump/core-eslint drops core-eslint only', () => {
+		const { kept, skipped } = skipLoopUnits(twoUnits(), ['bump/core-eslint'], { grouped: true });
+		expect(skipped).toEqual(['core-eslint']);
+		expect([...kept.keys()]).toEqual(['core-oxlint']);
+	});
+
+	it('grouped: open bump/weekly and pin-health/core-vitest drop neither unit', () => {
+		const { kept, skipped } = skipLoopUnits(twoUnits(), ['bump/weekly', 'pin-health/core-vitest'], {
+			grouped: true,
+		});
+		expect(skipped).toEqual([]);
+		expect([...kept.keys()]).toEqual(['core-eslint', 'core-oxlint']);
+	});
+
+	it('per-unit: an open bump/core-eslint keeps both, since that is the PR it refreshes', () => {
+		const { kept, skipped } = skipLoopUnits(twoUnits(), ['bump/core-eslint']);
+		expect(skipped).toEqual([]);
+		expect([...kept.keys()]).toEqual(['core-eslint', 'core-oxlint']);
+	});
 });
 
 // The fake gh is a sh script and PATH joins on ':', and bump-pins.mjs runs only on the pin-bumps workflow's ubuntu runner. A local bare origin and the fake gh keep it off GitHub.
@@ -299,11 +326,13 @@ describe.skipIf(process.platform === 'win32')('bump-pins main()', () => {
 		for (const dir of scratch.splice(0)) rmSync(dir, { recursive: true, force: true });
 	});
 
-	function fixture({ manifest, report, gh }) {
+	// The #218 cases below predate the grouped default and pin per-unit behavior, so `run` defaults to `--per-unit`. Every gh call is logged, one line each, before it's answered, and `merge` answers the auto-merge call so `gh` itself only answers `pr create`.
+	function fixture({ manifest, report, gh, merge = 'exit 0' }) {
 		const root = mkdtempSync(join(tmpdir(), 'bump-pins-'));
 		scratch.push(root);
 		const env = {
 			...process.env,
+			GH_LOG: join(root, 'gh.log'),
 			GIT_AUTHOR_NAME: 'a',
 			GIT_AUTHOR_EMAIL: 'a@b',
 			GIT_COMMITTER_NAME: 'a',
@@ -321,20 +350,24 @@ describe.skipIf(process.platform === 'win32')('bump-pins main()', () => {
 		put('work/src/manifest/oxlint-config.ts', '// none\n');
 		put('work/package.json', '{"name":"x","devDependencies":{}}\n');
 		put('outdated.json', JSON.stringify({ packages: report }));
-		put('bin/gh', `#!/bin/sh\n[ "$2" = list ] && { echo '[]'; exit 0; }\n${gh}`);
+		put(
+			'bin/gh',
+			`#!/bin/sh\n{ printf '%s' "$*" | tr '\\n' ' '; echo; } >> "$GH_LOG"\n[ "$2" = list ] && { echo '[]'; exit 0; }\n[ "$2" = merge ] && { ${merge}; }\n${gh}`,
+		);
 		chmodSync(join(root, 'bin/gh'), 0o755);
 		git('init', '-q', '-b', 'main');
 		git('add', '-A');
 		git('commit', '-qm', 'init');
 		git('remote', 'add', 'origin', '../origin.git');
 		const base = git('rev-parse', 'HEAD').trim();
-		const run = () =>
-			spawnSync('node', [SCRIPT, join(root, 'outdated.json')], {
+		const run = (args = ['--per-unit']) =>
+			spawnSync('node', [SCRIPT, join(root, 'outdated.json'), ...args], {
 				cwd: join(root, 'work'),
 				env,
 				encoding: 'utf-8',
 			});
-		return { git, base, run };
+		const ghLog = () => readFileSync(join(root, 'gh.log'), 'utf-8').trim().split('\n');
+		return { git, base, run, ghLog };
 	}
 
 	const pkg = (name, pin, unit) => ({
@@ -386,5 +419,104 @@ describe.skipIf(process.platform === 'win32')('bump-pins main()', () => {
 		const result = f.run();
 		expect(result.status).toBe(0);
 		expect(result.stdout).toContain('PR for bump/unit-b already open; branch refreshed.');
+	}, 60_000);
+
+	const indexEdits = (f, ref) =>
+		f
+			.git('show', ref, '--', 'src/manifest/index.ts')
+			.split('\n')
+			.filter((l) => /^[+-]\t/.test(l));
+
+	it('grouped: two units ride one bump/weekly branch, one commit, one PR, one auto-merge call', () => {
+		const f = fixture({
+			manifest: "export const X = {\n\tfoo: '1.0.0',\n\tbaz: '3.0.0',\n};\n",
+			report: [pkg('foo', '1.0.0', 'unit-a'), pkg('baz', '3.0.0', 'unit-b')],
+			gh: 'exit 0\n',
+		});
+		const result = f.run([]);
+		expect(result.status).toBe(0);
+		expect(f.git('rev-list', '--count', `${f.base}..${GROUPED_HEAD}`).trim()).toBe('1');
+		const remote = f.git('ls-remote', '--heads', '../origin.git');
+		expect(remote).toContain('refs/heads/bump/weekly');
+		expect(remote).not.toContain('bump/unit-');
+		expect(f.git('branch', '--list', 'bump/unit-*')).toBe('');
+		expect(indexEdits(f, GROUPED_HEAD)).toEqual([
+			"-\tfoo: '1.0.0',",
+			"-\tbaz: '3.0.0',",
+			"+\tfoo: '1.0.1',",
+			"+\tbaz: '3.0.1',",
+		]);
+		const calls = f.ghLog().filter((l) => !l.startsWith('pr list'));
+		expect(calls).toHaveLength(2);
+		expect(calls[0]).toMatch(/^pr create .*--head bump\/weekly /);
+		expect(calls[0]).toContain('### unit-a');
+		expect(calls[1]).toBe('pr merge bump/weekly --auto --squash');
+	}, 60_000);
+
+	it('grouped: a unit with a missed pin drops out, the rest still ship, and the job exits 1', () => {
+		const f = fixture({
+			manifest: "export const X = {\n\tfoo: '1.0.0',\n\tbaz: '3.0.0',\n};\n",
+			report: [
+				pkg('foo', '1.0.0', 'unit-a'),
+				pkg('bar', '2.0.0', 'unit-a'),
+				pkg('baz', '3.0.0', 'unit-b'),
+			],
+			gh: 'exit 0\n',
+		});
+		const result = f.run([]);
+		expect(result.status).toBe(1);
+		expect(result.stderr).toContain('bump/unit-a: no pin literal found for bar');
+		expect(indexEdits(f, GROUPED_HEAD)).toEqual(["-\tbaz: '3.0.0',", "+\tbaz: '3.0.1',"]);
+		expect(f.git('ls-remote', '--heads', '../origin.git')).toContain('refs/heads/bump/weekly');
+		expect(f.git('status', '--porcelain')).toBe('');
+	}, 60_000);
+
+	it('grouped: a failed auto-merge call fails the job after the PR was created', () => {
+		const f = fixture({
+			manifest: "export const X = {\n\tbaz: '3.0.0',\n};\n",
+			report: [pkg('baz', '3.0.0', 'unit-b')],
+			gh: 'exit 0\n',
+			merge: 'echo "auto-merge is not allowed for this repository" >&2; exit 1',
+		});
+		const result = f.run([]);
+		expect(result.status).toBe(1);
+		expect(result.stdout).toContain('Opened PR for bump/weekly (1 pin).');
+		expect(result.stderr).toContain(
+			'bump/weekly: enabling auto-merge failed: auto-merge is not allowed for this repository',
+		);
+		const calls = f.ghLog().filter((l) => !l.startsWith('pr list'));
+		expect(calls[0]).toMatch(/^pr create /);
+		expect(calls[1]).toBe('pr merge bump/weekly --auto --squash');
+	}, 60_000);
+
+	it('grouped: an already-open bump/weekly is refreshed and still gets auto-merge', () => {
+		const f = fixture({
+			manifest: "export const X = {\n\tbaz: '3.0.0',\n};\n",
+			report: [pkg('baz', '3.0.0', 'unit-b')],
+			gh: `echo 'a pull request for branch "bump/weekly" into branch "main" already exists:' >&2\nexit 1\n`,
+		});
+		const result = f.run([]);
+		expect(result.status).toBe(0);
+		expect(result.stdout).toContain('PR for bump/weekly already open; branch refreshed.');
+		expect(f.ghLog()).toContain('pr merge bump/weekly --auto --squash');
+	}, 60_000);
+
+	it('--per-unit: one branch per unit, each with its own auto-merge call', () => {
+		const f = fixture({
+			manifest: "export const X = {\n\tfoo: '1.0.0',\n\tbaz: '3.0.0',\n};\n",
+			report: [pkg('foo', '1.0.0', 'unit-a'), pkg('baz', '3.0.0', 'unit-b')],
+			gh: 'exit 0\n',
+		});
+		const result = f.run(['--per-unit']);
+		expect(result.status).toBe(0);
+		const remote = f.git('ls-remote', '--heads', '../origin.git');
+		expect(remote).toContain('refs/heads/bump/unit-a');
+		expect(remote).toContain('refs/heads/bump/unit-b');
+		expect(remote).not.toContain('bump/weekly');
+		const merges = f.ghLog().filter((l) => l.startsWith('pr merge'));
+		expect(merges).toEqual([
+			'pr merge bump/unit-a --auto --squash',
+			'pr merge bump/unit-b --auto --squash',
+		]);
 	}, 60_000);
 });

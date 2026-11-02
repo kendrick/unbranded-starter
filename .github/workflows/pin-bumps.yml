@@ -1,14 +1,21 @@
 name: Pin bumps
 
 # The maintainer half of the freshness policy (#35): grade the manifest pins
-# with `unbranded outdated --json`, then open one PR per unit whose pins moved.
-# Each PR rides the normal CI, so a bump that breaks a unit's e2e never lands
-# on its own.
+# with `unbranded outdated --json`, then open one `bump/weekly` PR with every
+# unit's bumps and squash auto-merge on, so a green week merges with nobody
+# touching it (#272). For a red week, dispatch with `grouped: false` to get one
+# `bump/<unit>` PR per unit instead, which pin-health can repair one at a time.
+# Every PR rides the normal CI, so a bump that breaks a unit's e2e never lands.
 on:
   schedule:
     # Mondays 06:00 UTC. Weekly is the cadence the README promises.
     - cron: '0 6 * * 1'
   workflow_dispatch:
+    inputs:
+      grouped:
+        description: One bump/weekly PR (true) or one PR per unit (false)
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -18,10 +25,11 @@ jobs:
   bump:
     runs-on: ubuntu-latest
     steps:
-      # PRs created with the default github.token do NOT trigger CI — and CI is
+      # PRs created with the default github.token do NOT trigger CI—and CI is
       # the whole merge gate here. Set a PIN_BUMP_TOKEN secret (a fine-grained
-      # PAT with contents+PRs write) to get gated PRs; without it the workflow
-      # still runs, but each bump PR needs a manual close/reopen to start CI.
+      # PAT with contents+PRs write) to get gated PRs. Without it the workflow
+      # still runs, but CI never starts, so auto-merge waits until a maintainer
+      # closes and reopens each bump PR.
       - uses: actions/checkout@v7
         with:
           token: ${{ secrets.PIN_BUMP_TOKEN || github.token }}
@@ -42,10 +50,13 @@ jobs:
       - name: Grade the manifest pins
         run: node dist/cli.js outdated --json > /tmp/outdated.json
 
-      - name: Open per-unit bump PRs
+      - name: Open bump PRs
         env:
           GH_TOKEN: ${{ secrets.PIN_BUMP_TOKEN || github.token }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          node scripts/bump-pins.mjs /tmp/outdated.json
+          # On schedule, inputs.grouped is null, and null == false is true in
+          # an Actions expression, so without the event_name check the
+          # scheduled run would go per-unit.
+          node scripts/bump-pins.mjs /tmp/outdated.json ${{ github.event_name == 'workflow_dispatch' && inputs.grouped == false && '--per-unit' || '' }}

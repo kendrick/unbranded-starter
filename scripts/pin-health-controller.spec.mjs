@@ -129,6 +129,17 @@ describe('rankCandidates', () => {
 		expect(candidates[0].unit).toBe('opt-monorepo');
 		expect(skipped).toHaveLength(3);
 	});
+
+	it('skips the grouped bump/weekly PR instead of reading it as a unit named weekly', () => {
+		const { candidates, skipped } = rankCandidates({
+			prs: [pr({ number: 300, headRefName: 'bump/weekly', body: '- vitest 5.0.4 → 5.0.5' })],
+			held: [],
+		});
+		expect(candidates).toEqual([]);
+		expect(skipped).toEqual([
+			'#300: grouped bump; re-run pin-bumps with grouped: false to repair per unit',
+		]);
+	});
 });
 
 describe('chooseTarget', () => {

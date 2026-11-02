@@ -9,6 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import process from 'node:process';
+import { GROUPED_HEAD } from './bump-pins.mjs';
 
 export const LOOP_LABEL = 'agent-pin-health';
 export const ESCALATION_MARKER = 'agent-pin-health:escalated';
@@ -71,6 +72,13 @@ export function rankCandidates({ prs, held }) {
 	const candidates = [];
 	for (const pr of prs) {
 		if (!pr.headRefName.startsWith(BUMP_PREFIX)) continue;
+		// The grouped PR carries every unit at once and would read as a unit named `weekly`. Repairing it means bisecting units, which this loop doesn't do (#272).
+		if (pr.headRefName === GROUPED_HEAD) {
+			skipped.push(
+				`#${pr.number}: grouped bump; re-run pin-bumps with grouped: false to repair per unit`,
+			);
+			continue;
+		}
 		const unit = pr.headRefName.slice(BUMP_PREFIX.length);
 		const bumps = parseBumpLines(pr.body);
 		if (loopHeads.has(`pin-health/${unit}`))
