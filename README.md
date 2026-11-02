@@ -43,7 +43,7 @@ But most of the repos you touch already exist, and the tooling questions never r
 - **It works on repos that already exist.** Point it at a live project and it augments in place, folding into your `package.json` and config files rather than clobbering them. A real conflict stops for an overwrite-or-skip prompt with a diff. A dependency you've already pinned to something else is a conflict too, and it prompts the same way with both specs on screen.
 - **It uses your package manager.** npm, pnpm, yarn, or bun, detected from your lockfile. No tool forces its own on you.
 - **À la carte, not a monolith.** Pick the units you want and a resolver pulls in whatever they depend on, showing you the full set before it writes anything. No eject, no all-or-nothing template.
-- **Reproducible by default.** Every version is pinned; `--latest` opts out per run, and any interactive run saves as a recipe to replay in CI or on the next project. Automation re-checks the pins weekly with `unbranded outdated` and opens per-unit bump PRs gated on that unit's tests, so reproducible never quietly goes stale.
+- **Reproducible by default.** Every version is pinned; `--latest` opts out per run, and any interactive run saves as a recipe to replay in CI or on the next project. Automation re-checks the pins weekly with `unbranded outdated` and opens one bump PR that merges itself when CI is green, with per-unit PRs on demand when a week goes red, so reproducible never quietly goes stale.
 - **It stays useful past day one.** Every run records what it wrote, so `unbranded diff` shows how far a project has drifted from its scaffold and `unbranded doctor` audits any repo and names the exact unit that closes each gap.
 
 The name is the point: no framework lock-in, no house brand.

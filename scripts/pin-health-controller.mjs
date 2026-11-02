@@ -13,6 +13,8 @@ import process from 'node:process';
 export const LOOP_LABEL = 'agent-pin-health';
 export const ESCALATION_MARKER = 'agent-pin-health:escalated';
 const BUMP_PREFIX = 'bump/';
+// bump-pins.mjs imports this head for the grouped PR, so the name the loop skips can't drift from the one it opens.
+export const GROUPED_HEAD = 'bump/weekly';
 // Each re-run waits out a CI run, so the number of candidates tried per run is capped to keep the job inside its timeout.
 const MAX_RERUNS = 3;
 const LOG_TAIL_LINES = 500;
@@ -71,6 +73,13 @@ export function rankCandidates({ prs, held }) {
 	const candidates = [];
 	for (const pr of prs) {
 		if (!pr.headRefName.startsWith(BUMP_PREFIX)) continue;
+		// The grouped PR carries every unit at once and would read as a unit named `weekly`. Repairing it means bisecting units, which this loop doesn't do (#272).
+		if (pr.headRefName === GROUPED_HEAD) {
+			skipped.push(
+				`#${pr.number}: grouped bump; re-run pin-bumps with grouped: false to repair per unit`,
+			);
+			continue;
+		}
 		const unit = pr.headRefName.slice(BUMP_PREFIX.length);
 		const bumps = parseBumpLines(pr.body);
 		if (loopHeads.has(`pin-health/${unit}`))
