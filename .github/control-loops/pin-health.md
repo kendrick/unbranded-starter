@@ -2,7 +2,7 @@
 
 Status: agreed in Phase B of the `design-control-loop` skill and approved by the maintainer. The loop is built. Where building it changed the plan, [Changes While Building](#changes-while-building) says what changed and why, and the scripts are the source of truth from here.
 
-`pin-bumps.yml` already keeps the manifest pins moving. Every Monday it grades them with `unbranded outdated --json` and opens one `bump/weekly` PR with every unit's bumps and auto-merge on. Dispatched with `grouped: false`, it opens one `bump/<unit>` PR per unit instead. It doesn't react when a bump PR goes red. This loop does, for the per-unit PRs only. It skips `bump/weekly`, so when the weekly PR goes red, re-run `pin-bumps.yml` with `grouped: false` and the loop picks up whichever per-unit PR fails. A second weekly job finds a red bump PR, has a coding agent either repair what broke or write down why the pin should be held, and opens one PR with the result.
+`pin-bumps.yml` already keeps the manifest pins moving. Every Monday it grades them with `unbranded outdated --json` and opens one `bump/weekly` PR with every unit's bumps and auto-merge on. Dispatched with `grouped: false`, it opens one `bump/<unit>` PR per unit instead. It doesn't react when a bump PR goes red. This loop does, for the per-unit PRs only. It skips `bump/weekly`, so when the weekly PR goes red, close it and re-run `pin-bumps.yml` with `grouped: false`, and the loop picks up whichever per-unit PR fails. Closing it first keeps each unit's bump in one open PR, since a per-unit run doesn't skip units already in `bump/weekly`. A second weekly job finds a red bump PR, has a coding agent either repair what broke or write down why the pin should be held, and opens one PR with the result.
 
 ## Set Point and Scope
 
@@ -34,7 +34,7 @@ The sensor has two inputs, and both exist today:
 
 `scripts/pin-health-controller.mjs` is deterministic, with a sibling `.spec.mjs` like `bump-pins.mjs`. Each run it does the following:
 
-1. List open PRs on `bump/*` heads whose latest CI run failed, skipping `bump/weekly`. To repair a red weekly PR, re-run `pin-bumps.yml` with `grouped: false`.
+1. List open PRs on `bump/*` heads whose latest CI run failed, skipping `bump/weekly`. To repair a red weekly PR, close it and re-run `pin-bumps.yml` with `grouped: false`.
 2. Drop any PR whose unit already has an open `agent-pin-health` PR.
 3. Drop any PR whose pin the memory file records as held.
 4. Re-run the failed jobs once and wait for them, so a flaky Windows install doesn't cost an agent run. A PR that goes green drops out.

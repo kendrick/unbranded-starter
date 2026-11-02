@@ -1,23 +1,15 @@
-// Maintainer-side half of the freshness policy (#35): consume `unbranded
-// outdated --json`, rewrite the pin literals in the manifest sources and this
-// repo's own package.json (the manifest pins what we ship, package.json pins
-// what we build with, and both have to move together), and open
-// one `bump/weekly` PR with every unit's bumps and squash auto-merge on, so a
-// green week lands untouched (#272). `--per-unit` falls back to one
-// `bump/<unit>` PR per unit, each gated by that unit's own e2e, for a red week
-// where pin-health repairs units one at a time. Runs from the weekly workflow
-// (.github/workflows/pin-bumps.yml) or by hand:
+// Maintainer-side half of the freshness policy (#35): consume `unbranded outdated --json`, rewrite the pin literals in the manifest sources and this repo's own package.json (the manifest pins what we ship, package.json pins what we build with, and both have to move together), and open one `bump/weekly` PR with every unit's bumps and squash auto-merge on, so a green week lands untouched (#272). `--per-unit` falls back to one `bump/<unit>` PR per unit, each gated by that unit's own e2e, for a red week where pin-health repairs units one at a time. Runs from the weekly workflow (.github/workflows/pin-bumps.yml) or by hand:
 //
 //   node dist/cli.js outdated --json > /tmp/outdated.json
 //   node scripts/bump-pins.mjs /tmp/outdated.json [--dry-run] [--per-unit]
 //
-// The pure pieces (planBumps, groupByUnit, rewritePins, rewritePackageJson)
-// are unit-tested directly; main() is covered by running the script against a
-// scratch repo with a fake gh. --dry-run bypasses the git/gh glue entirely.
+// The pure pieces (planBumps, groupByUnit, rewritePins, rewritePackageJson) are unit-tested directly; main() is covered by running the script against a scratch repo with a fake gh. --dry-run bypasses the git/gh glue entirely.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
+// The controller owns the constant: agent-pin-health.yml runs the controller from a copy of only the pin-health-* scripts, so the controller can't import this file.
+import { GROUPED_HEAD } from './pin-health-controller.mjs';
 
 // Every manifest file that carries version pins. None of them is in the unit
 // registry, so all three get the rewrite. eslint's pins live in the flavor
@@ -27,9 +19,6 @@ import process from 'node:process';
 // source and its misses aren't a build-breaking signal the way a missing
 // manifest pin is, so it stays out of this list and out of the missed-union
 // hard-fail below.
-// pin-health-controller.mjs imports this to skip the grouped PR, which it can't repair per unit.
-export const GROUPED_HEAD = 'bump/weekly';
-
 export const MANIFEST_FILES = [
 	'src/manifest/index.ts',
 	'src/manifest/eslint-config.ts',
@@ -164,7 +153,7 @@ const missedLine = (head, missed) =>
 	`${head}: no pin literal found for ${[...missed].join(', ')} — manifest moved since outdated ran?\n`;
 
 // Every unit's rewrite runs over the sources the previous unit left, so two units touching one file both land. A unit with a missed pin drops out whole and the rest still ship (#218). Returns whether anything failed.
-function bumpGrouped(groups, { dryRun, base, openPr }) {
+function bumpGrouped(groups, { dryRun, base, openAutoMergePr }) {
 	let failed = false;
 	let sources = new Map(MANIFEST_FILES.map((path) => [path, readFileSync(path, 'utf-8')]));
 	const hits = new Map(MANIFEST_FILES.map((path) => [path, []]));
@@ -221,7 +210,7 @@ function bumpGrouped(groups, { dryRun, base, openPr }) {
 		([unit, bumps]) => `### ${unit}\n\n${bumps.map((b) => `- ${line(b)}`).join('\n')}`,
 	);
 	const body = `Weekly pin refresh from \`unbranded outdated --json\`. Merge gate is CI; auto-merge is on.\n\n${sections.join('\n\n')}`;
-	if (!openPr(GROUPED_HEAD, title, body, all.length)) failed = true;
+	if (!openAutoMergePr(GROUPED_HEAD, title, body, all.length)) failed = true;
 	sh('git', ['checkout', base]);
 	return failed;
 }
@@ -266,7 +255,7 @@ function main() {
 	let failed = false;
 
 	// Shared by both modes. A refreshed PR may predate auto-merge, so it gets the call too, and a failed call fails the job, because a quiet success here repeats the #218 failure.
-	function openPr(branch, title, body, pins) {
+	function openAutoMergePr(branch, title, body, pins) {
 		try {
 			sh('gh', [
 				'pr',
@@ -304,8 +293,8 @@ function main() {
 		return true;
 	}
 
-	if (!perUnit) failed = bumpGrouped(groups, { dryRun, base, openPr });
-	else
+	if (!perUnit) failed = bumpGrouped(groups, { dryRun, base, openAutoMergePr });
+	else {
 		for (const [unit, bumps] of groups) {
 			const lines = bumps.map((b) => `${b.name} ${b.from} → ${b.to}`);
 
@@ -370,9 +359,10 @@ function main() {
 			sh('git', ['commit', '-am', `${title}\n\n${lines.join('\n')}`]);
 			sh('git', ['push', '-f', 'origin', branch]);
 			const body = `Weekly pin refresh for ${unit}, from \`unbranded outdated --json\`. Merge gate is this unit's own CI; auto-merge is on.\n\n${lines.map((l) => `- ${l}`).join('\n')}`;
-			if (!openPr(branch, title, body, bumps.length)) failed = true;
+			if (!openAutoMergePr(branch, title, body, bumps.length)) failed = true;
 			sh('git', ['checkout', base]);
 		}
+	}
 
 	if (failed) process.exit(1);
 }

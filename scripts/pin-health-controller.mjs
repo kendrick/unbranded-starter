@@ -9,11 +9,12 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import process from 'node:process';
-import { GROUPED_HEAD } from './bump-pins.mjs';
 
 export const LOOP_LABEL = 'agent-pin-health';
 export const ESCALATION_MARKER = 'agent-pin-health:escalated';
 const BUMP_PREFIX = 'bump/';
+// bump-pins.mjs imports this head for the grouped PR, so the name the loop skips can't drift from the one it opens.
+export const GROUPED_HEAD = 'bump/weekly';
 // Each re-run waits out a CI run, so the number of candidates tried per run is capped to keep the job inside its timeout.
 const MAX_RERUNS = 3;
 const LOG_TAIL_LINES = 500;

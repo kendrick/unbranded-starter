@@ -1,10 +1,6 @@
 version: 2
 
-# Actions only, deliberately. The npm ecosystem here is already covered by
-# pin-bumps.yml, which grades the unit pins with `unbranded outdated` and opens
-# one grouped `bump/weekly` PR, or one PR per unit when dispatched with
-# `grouped: false` so a bad bump fails that unit's e2e in isolation. Dependabot
-# on npm would race it and split the same bump across two PRs.
+# Actions only, deliberately. The npm ecosystem here is already covered by pin-bumps.yml, which grades the unit pins with `unbranded outdated` and opens one grouped `bump/weekly` PR, or one PR per unit when dispatched with `grouped: false` so a bad bump fails that unit's e2e in isolation. Dependabot on npm would race it and split the same bump across two PRs.
 updates:
   - package-ecosystem: github-actions
     directory: /

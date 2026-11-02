@@ -1,3 +1,8 @@
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
 	chooseTarget,
@@ -248,5 +253,28 @@ describe('chooseTarget', () => {
 		expect(reruns).toBe(2);
 		expect(target.target).toBe('none');
 		expect(target.skipped).toContain('#3: re-run cap reached this run');
+	});
+});
+
+// agent-pin-health.yml's "Copy the loop's tooling" step copies only scripts/pin-health-*.mjs and scripts/pin-health-*.sh before the target branch replaces the tree, then runs the controller from that copy. An import of any other script dies there with ERR_MODULE_NOT_FOUND (#272).
+describe('the controller in the agent workflow’s tooling copy', () => {
+	it('loads with nothing but the pin-health-* scripts beside it', () => {
+		const root = mkdtempSync(join(tmpdir(), 'pin-health-tooling-'));
+		try {
+			mkdirSync(join(root, 'scripts'));
+			for (const name of readdirSync(import.meta.dirname))
+				if (/^pin-health-.*\.(mjs|sh)$/.test(name))
+					copyFileSync(join(import.meta.dirname, name), join(root, 'scripts', name));
+			const url = pathToFileURL(join(root, 'scripts/pin-health-controller.mjs')).href;
+			const result = spawnSync(
+				'node',
+				['--input-type=module', '-e', `await import(${JSON.stringify(url)});`],
+				{ encoding: 'utf-8' },
+			);
+			expect(result.stderr).not.toContain('ERR_MODULE_NOT_FOUND');
+			expect(result.status).toBe(0);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 });

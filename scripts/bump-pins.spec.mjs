@@ -5,13 +5,13 @@ import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
 	groupByUnit,
-	GROUPED_HEAD,
 	MANIFEST_FILES,
 	planBumps,
 	rewritePackageJson,
 	rewritePins,
 	skipLoopUnits,
 } from './bump-pins.mjs';
+import { GROUPED_HEAD } from './pin-health-controller.mjs';
 
 describe('planBumps', () => {
 	it('keeps only pins the registry is ahead of, mapping pin→from and latest→to', () => {
@@ -487,6 +487,21 @@ describe.skipIf(process.platform === 'win32')('bump-pins main()', () => {
 		const calls = f.ghLog().filter((l) => !l.startsWith('pr list'));
 		expect(calls[0]).toMatch(/^pr create /);
 		expect(calls[1]).toBe('pr merge bump/weekly --auto --squash');
+	}, 60_000);
+
+	it('grouped: a gh pr create error that is not "already exists" fails the job and skips auto-merge', () => {
+		const f = fixture({
+			manifest: "export const X = {\n\tbaz: '3.0.0',\n};\n",
+			report: [pkg('baz', '3.0.0', 'unit-b')],
+			gh: 'echo "HTTP 401: Bad credentials (https://api.github.com/graphql)" >&2\nexit 1\n',
+		});
+		const result = f.run([]);
+		expect(result.status).not.toBe(0);
+		expect(result.stderr).toContain('bump/weekly: gh pr create failed: HTTP 401: Bad credentials');
+		expect(result.stdout).not.toContain('already open');
+		const calls = f.ghLog();
+		expect(calls.some((l) => l.startsWith('pr create '))).toBe(true);
+		expect(calls.filter((l) => l.startsWith('pr merge'))).toEqual([]);
 	}, 60_000);
 
 	it('grouped: an already-open bump/weekly is refreshed and still gets auto-merge', () => {
