@@ -10,8 +10,8 @@ export const OXLINT_FLAVORS: OxlintFlavor[] = ['base', 'react', 'next'];
 // the minimum version. Bump oxlint and oxlint-tsgolint together so tsgolint never
 // falls below it.
 export const OXC_DEV_DEPENDENCIES: Record<string, string> = {
-	'oxlint': '1.89.0',
-	'oxfmt': '0.74.0',
+	'oxlint': '1.90.0',
+	'oxfmt': '0.75.0',
 	'oxlint-tsgolint': '7.0.2005',
 };
 
