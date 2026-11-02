@@ -197,7 +197,7 @@ export const UNITS: Unit[] = [
 			{ src: 'templates/tsconfig.json', dest: 'tsconfig.json' },
 		],
 		devDependencies: {
-			'@types/node': '26.6.5',
+			'@types/node': '26.6.6',
 		},
 		options: [
 			{
