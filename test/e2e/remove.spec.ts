@@ -159,7 +159,9 @@ describe('unbranded remove', () => {
 		commitBase(tmp);
 		writeFileSync(join(tmp, 'untracked.txt'), 'dirty');
 
-		expectNonTtyRefusal(run(['remove', 'opt-shadcn'], tmp));
+		const result = run(['remove', 'opt-shadcn'], tmp);
+		expectNonTtyRefusal(result);
+		expect(result.stdout).toContain('components.json');
 		expect(existsSync(join(tmp, 'components.json'))).toBe(true);
 		expect(existsSync(join(tmp, 'src', 'lib', 'utils.ts'))).toBe(true);
 	});

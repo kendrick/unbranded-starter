@@ -234,16 +234,12 @@ export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promi
 	intro(opts.dryRun ? 'unbranded remove (dry run)' : 'unbranded remove');
 
 	// Same rationale as init's guard: on a clean tree `git checkout .` undoes
-	// every deletion below. No TTY and no --yes refuses rather than prompts, so CI can't hang.
+	// every deletion below. No TTY skips this prompt; the refusal below the plan stops the run, so CI can't hang.
 	if (!opts.force && !opts.dryRun && (await isDirtyGitTree(cwd))) {
 		log.warn(
 			'Uncommitted changes in the git working tree — a clean tree is your undo button (`git checkout .`) if this removal goes sideways.',
 		);
-		if (!opts.yes && !interactive) {
-			process.stderr.write(NO_TTY_REFUSAL);
-			return EXIT_ERROR;
-		}
-		if (!opts.yes) {
+		if (!opts.yes && interactive) {
 			const proceed = await confirm({
 				message: 'Remove from a dirty tree anyway?',
 				initialValue: false,
