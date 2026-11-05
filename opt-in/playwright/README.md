@@ -38,6 +38,24 @@ test('home page passes axe-core WCAG 2.2 AA', async ({ page }) => {
 });
 ```
 
+## Choosing the port
+
+The config reads `E2E_PORT` once and uses it for `baseURL`, the `webServer` port, and the `PORT` it hands the dev server. When `E2E_PORT` is unset or empty, the port is 3000. A value that isn't an integer from 1 to 65535 throws when the config loads. The config never reads `PORT` from your shell, so a stray `PORT` can't move the tests.
+
+To run two worktrees at once, give each its own port:
+
+```sh
+E2E_PORT=3101 pnpm exec playwright test
+```
+
+The dev server has to listen on that port. `next dev` reads `PORT` from the environment, so it follows `E2E_PORT` with no changes. Vite ignores `PORT` and needs a flag, so change `webServer.command` to pass it:
+
+```ts
+command: `pnpm dev --port ${port}`,
+```
+
+Locally, `reuseExistingServer` is on (it's off in CI). If something already answers on the port, Playwright skips starting a server and tests whatever is there, which can be another worktree's dev server running different code. Give each worktree its own `E2E_PORT`, or stop the other server first.
+
 ## CI integration
 
 Uncomment the Playwright steps in `.github/workflows/ci.yml`:
