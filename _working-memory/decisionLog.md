@@ -14,6 +14,22 @@ Each entry follows this shape:
 **Alternatives considered:** What was rejected, and why.
 ```
 
+## 2026-11-05: Wave C: `diff` shares `update`'s option resolver, honest dry-run pins, a non-TTY `remove`, a kept husky hook, and dropped local units that stay dropped
+
+**Source:** issues #148, #176, #183, #198, #212, #266; PRs #274–#279
+
+**Context:** Six user-facing bugs run as one parallel wave. `diff` judged option-choice files (`eslint.config.mjs`, `.oxlintrc.json`, `.oxfmtrc.json`, `tsconfig.base.json`) as `unchanged` because it never applied recorded options; `--dry-run --json` reported manifest pins a `skip` run wouldn't write; `remove` with no TTY hung on a prompt and exited 13; `opt-husky`'s `husky init` post-install overwrote the shipped pre-commit hook with `<pm> test`; a dropped local unit could swap a sibling's bare ref to the built-in or keep its option keys claimed; the Playwright recipe reused any server on port 3000 across worktrees.
+**Decision:** `planUpdate`'s option-selection block moved into `recordedSelections` in `src/manifest/option-lines.ts`, and `computeDiff` calls it and `applyUnitOptions` before planning; the template hash is taken from the bytes the op would write, via an exported `readSource`, so inline-content files get one (#198). The dry-run envelope runs `collectDepCollisions` against the target's `package.json` and, under `skip` without `--latest`, reports the existing spec (#176). `remove` reads `process.stdin.isTTY` once; with no TTY and no `--yes` it warns on a dirty tree, prints the plan, then exits 1 naming `--yes` and `--dry-run` (#183). `opt-husky`'s post-install runs plain `husky`, keeping the step id `husky-init` because the log line, the skip message and `git.spec.ts` name it (#212). `loadUnitsDir` recomputes option-key claims from the surviving candidates inside the relations fixed point, and `UnitRefContext.droppedLocalIds` stops a bare ref to a dropped local id from falling through to the built-in (#266). The Playwright recipe reads `E2E_PORT` once, rejects anything that isn't a plain decimal 1–65535, and passes it as `webServer.env.PORT` (#148).
+**Alternatives considered:** Copying `planUpdate`'s loop into `diff.ts`—rejected; two copies would drift, which is how #198 happened. Refusing in `remove` before the dirty-tree prompt, without printing the plan—the plan's first shape, replaced after red-team showed one post-plan refusal covers both paths. Renaming the `husky-init` id—rejected; it would change user-visible log text and break recipes' expectations for no gain. Making relation drops provisional like claim losses—rejected as turning the fixed point into a search; the remaining edge (a referrer of a provisional claim loser stays dropped) is a `shortcut:` comment in `load-units.ts`. Extracting #176's skip rule into a helper shared with `run.ts`—deferred; it was outside the plan's files.
+
+## 2026-11-01: Non-interactive runs refuse the project-name prompt, and subcommands refuse a missing `--target`
+
+**Source:** issues #203, #264; PRs #268, #267
+
+**Context:** `--yes` with no `package.json` prompted for a project name and exited 13 with no TTY (#203). A `--target` that doesn't exist read as an untracked project, so `diff` exited 0 on a typo and passed CI (#264).
+**Decision:** `detectTarget` takes `nonInteractive` and throws a message naming `projectName` before any prompt or write when a new-project run can't ask for one (#203). `diff`, `doctor`, `remove` and `update` exit 1 on a `--target` path that doesn't exist (#264).
+**Alternatives considered:** None recorded; this entry was written after the fact from the merged PRs.
+
 ## 2026-10-29: Wave B: read-only state refusal, `--target` on every subcommand, `diff` follows `update`, and no `process.exit` in `main()`
 
 **Source:** issues #223, #227, #228, #230, #231; PRs #259–#263

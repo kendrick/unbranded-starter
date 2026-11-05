@@ -41,3 +41,10 @@
 **What broke:** CI has no TTY for the prompt, so ESLint fails to load entirely.
 **Why we backed out:** The config opts into `react: true` / `nextjs: true`, which hard-require those peers at load time.
 **Don't suggest:** Removing the explicit peer deps from the `core-eslint` unit's `devDependencies` in `src/manifest/index.ts`. (commit fff58b4)
+
+## 2026-11-05 — Don't run `husky init` as opt-husky's post-install
+
+**Tried:** `opt-husky`'s post-install step running `husky init` to wire the hooks.
+**What broke:** husky 9's `init` always rewrites `.husky/pre-commit` to `<pm> test`, so every scaffolded project's commits ran the test suite and never ran lint-staged, with no error to say so.
+**Why we backed out:** Plain `husky` sets `core.hooksPath` and writes `.husky/_/` without touching `pre-commit`, and the unit's `packageJsonPatch` already sets `prepare`, the only other thing `init` adds.
+**Don't suggest:** Switching the post-install back to `husky init`, or telling users to run `husky init` after scaffolding. (#212, commit 6548f5d)
