@@ -31,6 +31,10 @@ export interface UnitRefContext {
 	builtinIds: ReadonlySet<string>;
 	namespace?: string;
 	localBareIds?: ReadonlySet<string>;
+	// Bare ids the directory declared but dropped. Without this, a sibling's ref
+	// to a dropped local `core-eslint` would quietly fall through to the
+	// built-in of the same name, a unit its author never named (#266).
+	droppedLocalIds?: ReadonlySet<string>;
 }
 
 // The boundary normalizer: every reference from a CLI flag, a recipe, a state
@@ -52,6 +56,7 @@ export function resolveUnitRef(raw: string, ctx: UnitRefContext): string | undef
 	// only inside this directory — `my-units/core-eslint` stays a distinct unit
 	// from `core-eslint` everywhere else.
 	if (ctx.namespace !== undefined && ctx.localBareIds?.has(raw)) return qualify(ctx.namespace, raw);
+	if (ctx.namespace !== undefined && ctx.droppedLocalIds?.has(raw)) return undefined;
 	if (ctx.builtinIds.has(raw)) return raw;
 	return undefined;
 }

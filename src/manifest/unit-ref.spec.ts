@@ -30,6 +30,16 @@ describe('resolveUnitRef', () => {
 		expect(resolveUnitRef('core-eslint', ctx)).toBe('my-units/core-eslint');
 	});
 
+	it('returns undefined for a bare ref in droppedLocalIds even when it is a built-in id', () => {
+		const ctx: UnitRefContext = {
+			builtinIds,
+			namespace: 'my-units',
+			localBareIds: new Set(['banner']),
+			droppedLocalIds: new Set(['core-eslint']),
+		};
+		expect(resolveUnitRef('core-eslint', ctx)).toBeUndefined();
+	});
+
 	it('returns undefined for a bare id that names nothing known', () => {
 		const ctx: UnitRefContext = {
 			builtinIds,
