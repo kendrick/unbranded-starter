@@ -22,6 +22,7 @@ import { detectPm } from '../detect/pm';
 import { detectTarget } from '../detect/target';
 import { copyFileOp, formatUnparseableSkip, planFileOp, renderPlanDiff } from '../fs/copy';
 import { createJournal, formatRollbackReport, rollbackJournal } from '../fs/journal';
+import { collectDepCollisions } from '../fs/merge-json';
 import { formatInstallFailure, formatKeepLine, resolveInstallFailure } from '../install/failure';
 import { isDirtyGitTree, maybeInitGit } from '../install/git';
 import { runPostInstalls } from '../install/post';
@@ -325,6 +326,20 @@ export async function runPlanJson(opts: {
 	// Same precedence as runInit (flag, then recipe).
 	const latest = opts.latest === true || config.versions === 'latest';
 	const written = specsToWrite(units, heldPins(selectedUnits, optionSelections), latest);
+	const dependencies = mergedPins(written, 'dependencies');
+	const devDependencies = mergedPins(written, 'devDependencies');
+
+	// The envelope reports what a real run writes: under skip, a colliding spec
+	// keeps the target's. --latest overwrites every collision, so it never skips.
+	// An unreadable package.json yields no collisions, same as a missing one.
+	if (config.onConflict === 'skip' && !latest) {
+		const read = readPackageJson(target.dir);
+		if (read.kind === 'ok') {
+			const sections = { dependencies, devDependencies };
+			for (const c of collectDepCollisions(read.pkg, written))
+				sections[c.section][c.name] = c.existing;
+		}
+	}
 
 	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
 	const plans = units.flatMap((unit) =>
@@ -347,8 +362,8 @@ export async function runPlanJson(opts: {
 				auto: [...resolution.auto].sort(),
 				// Merged pins, so a consumer can see which TypeScript line (#158) a run
 				// would write before anything is written.
-				dependencies: mergedPins(written, 'dependencies'),
-				devDependencies: mergedPins(written, 'devDependencies'),
+				dependencies,
+				devDependencies,
 				// rel is native; the envelope speaks posix like every other surface.
 				files: plans.map((p) => ({ path: p.rel.split(sep).join('/'), action: p.outcome })),
 			},
