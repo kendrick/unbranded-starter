@@ -4,9 +4,11 @@ import type { AnyUnit, FileOp } from '../manifest/types';
 import type { StateFile } from '../state/state';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
-import { formatUnparseableSkip, planFileOp, renderPlanDiff } from '../fs/copy';
+import { formatUnparseableSkip, planFileOp, readSource, renderPlanDiff } from '../fs/copy';
 import { loadCatalog, unitsDirsFor } from '../manifest/catalog';
 import { UNITS } from '../manifest/index';
+import { recordedSelections } from '../manifest/option-lines';
+import { applyUnitOptions } from '../manifest/options';
 import { applyVscodeSettings } from '../manifest/vscode-settings';
 import {
 	hashBuffer,
@@ -81,7 +83,10 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 
 	const planByRel = new Map<string, FilePlan>();
 	const opModeByRel = new Map<string, FileOp['mode']>();
+	const opByRel = new Map<string, FileOp>();
 	const installedIds = new Set(opts.state.units.map((u) => u.id));
+	// Same resolver update uses, so both commands replay the same option choices.
+	const selections = recordedSelections({ state: opts.state, units, targetDir: opts.targetDir });
 	for (const { id } of opts.state.units) {
 		const catalogUnit = byId.get(id);
 		// A unit whose definition we can't load leaves its files judged on the user
@@ -89,10 +94,10 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 		// as "the template axis can't be judged" rather than as drift.
 		if (!catalogUnit) continue;
 		// Replay the generator init used. The raw catalog op has no lint keys, so
-		// planning it would report template-updated on a clean scaffold. The generated
-		// op carries inline `content` and no src file to hash, so its template axis
-		// has to come from planFileOp's outcome below.
-		const unit = applyVscodeSettings(catalogUnit, installedIds);
+		// planning it would report template-updated on a clean scaffold. Generated and
+		// option-choice ops carry inline `content` with no src file, so the template
+		// hash comes from readSource's bytes below, not from plan.src on disk.
+		const unit = applyVscodeSettings(applyUnitOptions(catalogUnit, selections), installedIds);
 		const pkgRoot = opts.catalog?.templateRoots.get(id) ?? fallbackRoot;
 		for (const op of unit.files) {
 			const plan = planFileOp(op, {
@@ -102,6 +107,7 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 			});
 			planByRel.set(toPosix(plan.rel), plan);
 			opModeByRel.set(toPosix(plan.rel), op.mode);
+			opByRel.set(toPosix(plan.rel), op);
 		}
 	}
 
@@ -121,8 +127,13 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 			merged && plan && onDisk !== undefined && !plan.unparseable
 				? plan.outcome !== 'skip' && plan.diff !== undefined
 				: undefined;
+		// A src-backed template that vanished leaves the axis unjudged; inline
+		// content has no file to vanish.
+		const op = opByRel.get(rel);
 		const template =
-			!merged && plan && existsSync(plan.src) ? hashBuffer(readFileSync(plan.src)) : undefined;
+			!merged && plan && op && (op.content !== undefined || existsSync(plan.src))
+				? hashBuffer(readSource(op, plan.src))
+				: undefined;
 		files.push({
 			path: rel,
 			status: classify({

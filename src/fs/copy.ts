@@ -125,7 +125,7 @@ export async function copyFileOp(op: FileOp, opts: CopyOptions): Promise<CopyRes
 // Buffer of the source, whichever way the FileOp carries it: a computed `content`
 // string, or a `src` file read off disk. One reader so every mode (copy, merge,
 // append, dry-run) treats an inline config the same as a shipped template.
-function readSource(op: FileOp, srcPath: string): Buffer {
+export function readSource(op: FileOp, srcPath: string): Buffer {
 	return op.content !== undefined ? Buffer.from(op.content, 'utf-8') : readFileSync(srcPath);
 }
 
