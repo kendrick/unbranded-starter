@@ -14,11 +14,12 @@ Pre-commit hook that runs your lint unit's fixers (oxlint and oxfmt, or ESLint) 
    pnpm add -D husky lint-staged
    ```
 2. Copy `.husky/` to the repo root. `unbranded` generates `lint-staged.config.mjs` from the lint unit you picked; setting it up by hand, point each glob at your linter's `--fix` command.
-3. Initialize husky:
+3. Wire up husky:
    ```sh
-   pnpm exec husky init
+   pnpm exec husky
    chmod +x .husky/pre-commit
    ```
+   Run plain `husky`, not `husky init`: `init` overwrites `.husky/pre-commit` with `pnpm test`.
 4. Add to root `package.json`:
    ```json
    {
