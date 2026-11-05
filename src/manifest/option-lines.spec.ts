@@ -1,3 +1,4 @@
+import type { StateFile } from '../state/state';
 import type { AnyUnit, OptionCoupling, UnitOption } from './types';
 import { describe, expect, it } from 'vitest';
 import {
@@ -10,6 +11,7 @@ import {
 	legacyTsFlavor,
 	lineDefault,
 	majorOf,
+	recordedSelections,
 	resolveLine,
 	specsToWrite,
 } from './option-lines';
@@ -253,5 +255,14 @@ describe('legacyTsFlavor', () => {
 	it('is undefined when core-typescript is not tracked', () => {
 		expect(legacyTsFlavor(new Set(['core-eslint']))).toBeUndefined();
 		expect(legacyTsFlavor(new Set())).toBeUndefined();
+	});
+});
+
+describe('recordedSelections', () => {
+	it('replays a state that records no options as legacy dom', () => {
+		const state = { units: [{ id: 'core-typescript' }] } as unknown as StateFile;
+		expect(recordedSelections({ state, units: [], targetDir: '/nonexistent' })).toEqual({
+			tsFlavor: 'dom',
+		});
 	});
 });

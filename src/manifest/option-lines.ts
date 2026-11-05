@@ -1,4 +1,6 @@
+import type { StateFile } from '../state/state';
 import type { AnyUnit, OptionCoupling, UnitOption } from './types';
+import { declaredSpecs } from '../util/package-json';
 import { LINE_OPTIONS, OPTION_COUPLINGS } from './index';
 
 // One version or one-major range: ^6, ~6.0, 6.x, =6.0.3, v6.0.3, 6.0.3-rc.1.
@@ -109,6 +111,40 @@ export function resolveLine(
 // call it so the two can't drift on which installs count.
 export function legacyTsFlavor(tracked: ReadonlySet<string>): string | undefined {
 	return tracked.has('core-typescript') ? 'dom' : undefined;
+}
+
+// The selections update replays a tracked install with: recorded options, then the
+// legacy tsFlavor, then each line option resolved the way init defaults it. diff
+// calls this too so both commands classify option-choice files against one template.
+export function recordedSelections(opts: {
+	state: StateFile;
+	units: AnyUnit[];
+	targetDir: string;
+}): Record<string, string> {
+	const { state, targetDir } = opts;
+	const byId = new Map<string, AnyUnit>(opts.units.map((u) => [u.id, u]));
+	const installedIds = new Set(state.units.map((u) => u.id));
+	const declared = declaredSpecs(targetDir);
+	// Pre-#193 installs never recorded a line, and update doesn't write options, so
+	// infer it on every run the same way init defaults one. That's stable because
+	// the inferred pin is what update writes back.
+	const selections: Record<string, string> = { ...state.options };
+	// Update never writes options, so every tracked install with no recorded
+	// tsFlavor is a pre-#117 one.
+	const legacyFlavor = legacyTsFlavor(installedIds);
+	if (legacyFlavor) selections.tsFlavor ??= legacyFlavor;
+	for (const { id } of state.units) {
+		for (const option of byId.get(id)?.options ?? []) {
+			if (!LINE_OPTIONS.includes(option.key)) continue;
+			selections[option.key] = resolveLine(
+				option,
+				state.options?.[option.key],
+				declared,
+				installedIds,
+			);
+		}
+	}
+	return selections;
 }
 
 export interface CouplingViolation {

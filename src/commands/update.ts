@@ -11,10 +11,9 @@ import { mergePackageJson } from '../fs/merge-json';
 import { isDirtyGitTree } from '../install/git';
 import { detectIndent } from '../install/run';
 import { loadCatalog, unitsDirsFor } from '../manifest/catalog';
-import { LINE_OPTIONS } from '../manifest/index';
 import { applyLintStaged } from '../manifest/lint-staged';
 import { applyVscodeSettings } from '../manifest/vscode-settings';
-import { legacyTsFlavor, resolveLine } from '../manifest/option-lines';
+import { recordedSelections } from '../manifest/option-lines';
 import { applyUnitOptions } from '../manifest/options';
 import {
 	baselinePath,
@@ -29,7 +28,6 @@ import {
 } from '../state/state';
 import { cancelAndExit } from '../util/cancel';
 import { colorEnabled } from '../util/color';
-import { declaredSpecs } from '../util/package-json';
 import { PKG_ROOT } from '../util/paths';
 
 // Per-file verdicts. The first four are #34's contract; the rest are the honest
@@ -90,26 +88,7 @@ export function planUpdate(opts: {
 	const replay = new Map<string, { op: FileOp; content: string; root: string }>();
 	const resolved: AnyUnit[] = [];
 	const installedIds = new Set(state.units.map((u) => u.id));
-	const declared = declaredSpecs(targetDir);
-	// Pre-#193 installs never recorded a line, and update doesn't write options, so
-	// infer it on every run the same way init defaults one. That's stable because
-	// the inferred pin is what update writes back.
-	const selections: Record<string, string> = { ...state.options };
-	// Update never writes options, so every tracked install with no recorded
-	// tsFlavor is a pre-#117 one.
-	const legacyFlavor = legacyTsFlavor(installedIds);
-	if (legacyFlavor) selections.tsFlavor ??= legacyFlavor;
-	for (const { id } of state.units) {
-		for (const option of byId.get(id)?.options ?? []) {
-			if (!LINE_OPTIONS.includes(option.key)) continue;
-			selections[option.key] = resolveLine(
-				option,
-				state.options?.[option.key],
-				declared,
-				installedIds,
-			);
-		}
-	}
+	const selections = recordedSelections({ state, units: opts.units, targetDir });
 	for (const { id } of state.units) {
 		const catalogUnit = byId.get(id);
 		if (!catalogUnit) continue;
