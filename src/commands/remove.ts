@@ -19,6 +19,7 @@ import {
 	unsupportedStateMessage,
 } from '../state/state';
 import { cancelAndExit } from '../util/cancel';
+import { EXIT_ERROR } from '../util/exit-codes';
 
 export interface RemovalPlan {
 	// The target plus, under --cascade, everything that depends on it.
@@ -180,12 +181,17 @@ export interface RunRemoveOpts {
 	unitsDir?: string;
 }
 
+// A scripted caller would otherwise hang on a prompt, and Node exits 13 on the unsettled top-level await.
+const NO_TTY_REFUSAL =
+	"unbranded remove: stdin is not a TTY, so there's no one to confirm the removal. Re-run with --yes to remove (modified files are kept), or --dry-run to preview.\n";
+
 // The day-2 exit door: doctor tells you what's missing, remove backs a unit out.
 // Refuses to strand dependents, previews under --dry-run, hash-checks before
 // deleting, and never executes a remedy that isn't "delete a file we wrote" or
 // "drop a package.json entry we added".
 export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promise<number> {
 	const cwd = opts.cwd ?? process.cwd();
+	const interactive = Boolean(process.stdin.isTTY);
 	const read = readStateFile(cwd);
 	if (read.kind === 'unsupported') {
 		process.stderr.write(`unbranded remove: ${unsupportedStateMessage(read.schema)}\n`);
@@ -228,11 +234,15 @@ export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promi
 	intro(opts.dryRun ? 'unbranded remove (dry run)' : 'unbranded remove');
 
 	// Same rationale as init's guard: on a clean tree `git checkout .` undoes
-	// every deletion below. Non-interactive runs only warn, so CI can't hang.
+	// every deletion below. Without a TTY we refuse before the prompt; --yes only warns.
 	if (!opts.force && !opts.dryRun && (await isDirtyGitTree(cwd))) {
 		log.warn(
 			'Uncommitted changes in the git working tree — a clean tree is your undo button (`git checkout .`) if this removal goes sideways.',
 		);
+		if (!opts.yes && !interactive) {
+			process.stderr.write(NO_TTY_REFUSAL);
+			return EXIT_ERROR;
+		}
 		if (!opts.yes) {
 			const proceed = await confirm({
 				message: 'Remove from a dirty tree anyway?',
@@ -265,6 +275,10 @@ export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promi
 		return 0;
 	}
 
+	if (!opts.yes && !interactive) {
+		process.stderr.write(NO_TTY_REFUSAL);
+		return EXIT_ERROR;
+	}
 	if (!opts.yes) {
 		const proceed = await confirm({ message: 'Remove?', initialValue: true });
 		if (isCancel(proceed)) return cancelAndExit();
@@ -287,6 +301,7 @@ export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promi
 			keptModified.push(d.rel);
 			continue;
 		}
+		// Unreachable without a TTY: the Remove? refusal above returns first.
 		const del = await confirm({
 			message: `${d.rel} was modified since it was scaffolded. Delete it anyway?`,
 			initialValue: false,
