@@ -222,8 +222,8 @@ describe('cli --help documents the preview flags', () => {
 	});
 });
 
-// #176: the envelope reports the spec a real run writes. Under --on-conflict skip
-// a colliding spec keeps the target's; --latest overwrites every collision.
+// #176: init.ts carries a second copy of the skip policy in src/install/run.ts,
+// so each case checks the envelope against what a real run writes.
 describe('cli --dry-run --json dependency specs under --on-conflict skip (#176)', () => {
 	let tmp: string;
 
@@ -243,8 +243,9 @@ describe('cli --dry-run --json dependency specs under --on-conflict skip (#176)'
 		});
 	}
 
-	function run(dir: string, args: string[], dry: boolean) {
-		const flags = dry ? ['--dry-run', '--json', '--pm', 'pnpm'] : ['--yes', '--pm', 'null'];
+	function run(dir: string, args: string[], mode: 'dry' | 'real') {
+		const flags =
+			mode === 'dry' ? ['--dry-run', '--json', '--pm', 'pnpm'] : ['--yes', '--pm', 'null'];
 		return spawnSync('node', [CLI, '--units', 'core-vitest', ...flags, ...args], {
 			cwd: dir,
 			encoding: 'utf-8',
@@ -252,18 +253,18 @@ describe('cli --dry-run --json dependency specs under --on-conflict skip (#176)'
 	}
 
 	function envelopeVitest(dir: string, args: string[]): string | undefined {
-		const res = run(dir, args, true);
+		const res = run(dir, args, 'dry');
 		expect(res.status, `stderr: ${res.stderr}`).toBe(0);
 		return JSON.parse(res.stdout).devDependencies.vitest;
 	}
 
 	function writtenVitest(dir: string, args: string[]): string | undefined {
-		const res = run(dir, args, false);
+		const res = run(dir, args, 'real');
 		expect(res.status, `stderr: ${res.stderr}`).toBe(0);
 		return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf-8')).devDependencies?.vitest;
 	}
 
-	// What the manifest pins, as a real overwrite run writes it into a bare project.
+	// Read from a real run because weekly pin bumps (#272) would break a hard-coded pin.
 	function manifestPin(): string {
 		const dir = mkdtempSync(join(tmpdir(), 'unbranded-e2e-dryrun-pin-'));
 		try {

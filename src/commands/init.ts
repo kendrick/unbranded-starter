@@ -326,16 +326,18 @@ export async function runPlanJson(opts: {
 	// Same precedence as runInit (flag, then recipe).
 	const latest = opts.latest === true || config.versions === 'latest';
 	const written = specsToWrite(units, heldPins(selectedUnits, optionSelections), latest);
-	const dependencies = mergedPins(written, 'dependencies');
-	const devDependencies = mergedPins(written, 'devDependencies');
+	const sections = {
+		dependencies: mergedPins(written, 'dependencies'),
+		devDependencies: mergedPins(written, 'devDependencies'),
+	};
 
-	// The envelope reports what a real run writes: under skip, a colliding spec
-	// keeps the target's. --latest overwrites every collision, so it never skips.
-	// An unreadable package.json yields no collisions, same as a missing one.
+	// Mirrors writeAndInstall's collision policy (src/install/run.ts), or the
+	// envelope reports pins the run never writes. --latest overwrites every
+	// collision, so skip can't apply with it. A malformed package.json still
+	// reports manifest pins here, though a real run aborts on the parse error.
 	if (config.onConflict === 'skip' && !latest) {
 		const read = readPackageJson(target.dir);
 		if (read.kind === 'ok') {
-			const sections = { dependencies, devDependencies };
 			for (const c of collectDepCollisions(read.pkg, written))
 				sections[c.section][c.name] = c.existing;
 		}
@@ -362,8 +364,7 @@ export async function runPlanJson(opts: {
 				auto: [...resolution.auto].sort(),
 				// Merged pins, so a consumer can see which TypeScript line (#158) a run
 				// would write before anything is written.
-				dependencies,
-				devDependencies,
+				...sections,
 				// rel is native; the envelope speaks posix like every other surface.
 				files: plans.map((p) => ({ path: p.rel.split(sep).join('/'), action: p.outcome })),
 			},
