@@ -352,16 +352,20 @@ export const UNITS: Unit[] = [
 		},
 		postInstall: [
 			{
+				// The id still says `init` though the step runs plain `husky`.
+				// src/install/post.ts prints the id in its step log and skip
+				// warning, and test/e2e/git.spec.ts matches `Skipped husky-init`,
+				// so renaming it would change both.
 				id: 'husky-init',
-				command: ['husky', 'init'],
-				prompt: 'Run `husky init` to scaffold the .husky/ directory?',
+				command: ['husky'],
+				prompt: 'Run `husky` to wire the git hooks?',
 				default: true,
-				// husky init writes git hooks, which only work in a real repo.
+				// husky writes git hooks, which only work in a real repo.
 				requires: 'git',
 			},
 		],
-		// husky init wires core.hooksPath into .git/config, which file removal
-		// can't reach — without this pointer, commits keep trying to run a hook
+		// husky wires core.hooksPath into .git/config, which file removal
+		// can't reach. Without this note, commits keep trying to run a hook
 		// that's gone.
 		removeNotes:
 			"husky set core.hooksPath in this repo's git config; run `git config --unset core.hooksPath` to fully detach the hooks.",

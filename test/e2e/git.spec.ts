@@ -1,5 +1,13 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -44,7 +52,7 @@ describe('cli git init (new-project mode)', () => {
 	it('runs the husky post-install because git init created the repo first', () => {
 		// The load-bearing ordering test: husky's post-install gates on `.git`.
 		// A real npm install pulls husky in; only if git init ran before the
-		// post-install pass does `husky init` scaffold `.husky/_/`. The plain
+		// post-install pass does husky create `.husky/_/`. The plain
 		// `.husky/pre-commit` we copy in wouldn't prove that on its own.
 		writeJson(join(tmp, 'recipe.json'), {
 			units: ['opt-husky'],
@@ -63,8 +71,18 @@ describe('cli git init (new-project mode)', () => {
 		expect(result.status, `stderr: ${result.stderr}`).toBe(0);
 		const projectDir = join(tmp, 'hooked');
 		expect(existsSync(join(projectDir, '.git'))).toBe(true);
-		// husky init (post-install) writes this; our file copy never does.
+		// husky (post-install) writes this; our file copy never does.
 		expect(existsSync(join(projectDir, '.husky', '_', 'husky.sh'))).toBe(true);
+		expect(
+			execFileSync('git', ['config', 'core.hooksPath'], {
+				cwd: projectDir,
+				encoding: 'utf-8',
+			}).trim(),
+		).toBe('.husky/_');
+		// #212: `husky init` rewrote the shipped hook to `<pm> test`; plain `husky` must not.
+		expect(readFileSync(join(projectDir, '.husky', 'pre-commit'))).toEqual(
+			readFileSync(join(PKG_ROOT, 'opt-in', 'husky-precommit', '.husky', 'pre-commit')),
+		);
 		// And the gate reported it ran rather than skipping for a missing repo.
 		expect(result.stdout + result.stderr).not.toMatch(/Skipped husky-init/);
 	});

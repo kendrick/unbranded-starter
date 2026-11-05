@@ -84,7 +84,7 @@ export interface PostInstall {
 	default: boolean;
 
 	// Hard precondition the runtime checks before spawning. Today the only
-	// value is 'git' (husky init needs a repo); kept open as a string union
+	// value is 'git' (husky needs a repo); kept open as a string union
 	// so we can add others without churning every postInstall entry.
 	requires?: 'git';
 }
