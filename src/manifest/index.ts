@@ -352,7 +352,7 @@ export const UNITS: Unit[] = [
 		},
 		postInstall: [
 			{
-				// Id predates the move off `husky init`; kept because recipes, logs and e2e match on it.
+				// Id predates the move off `husky init`. It stays because `src/install/post.ts` prints it in the log line and the skip message, and `test/e2e/git.spec.ts` matches `Skipped husky-init`.
 				id: 'husky-init',
 				command: ['husky'],
 				prompt: 'Run `husky` to wire the git hooks?',
