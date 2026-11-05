@@ -352,7 +352,10 @@ export const UNITS: Unit[] = [
 		},
 		postInstall: [
 			{
-				// Id predates the move off `husky init`. It stays because `src/install/post.ts` prints it in the log line and the skip message, and `test/e2e/git.spec.ts` matches `Skipped husky-init`.
+				// The id still says `init` though the step runs plain `husky`.
+				// src/install/post.ts prints the id in its step log and skip
+				// warning, and test/e2e/git.spec.ts matches `Skipped husky-init`,
+				// so renaming it would change both.
 				id: 'husky-init',
 				command: ['husky'],
 				prompt: 'Run `husky` to wire the git hooks?',
@@ -362,7 +365,7 @@ export const UNITS: Unit[] = [
 			},
 		],
 		// husky wires core.hooksPath into .git/config, which file removal
-		// can't reach — without this pointer, commits keep trying to run a hook
+		// can't reach. Without this note, commits keep trying to run a hook
 		// that's gone.
 		removeNotes:
 			"husky set core.hooksPath in this repo's git config; run `git config --unset core.hooksPath` to fully detach the hooks.",
