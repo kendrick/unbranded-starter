@@ -1,7 +1,10 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { planFileOp, readSource } from '../fs/copy';
+import { UNITS } from '../manifest/index';
+import { applyUnitOptions } from '../manifest/options';
 import { buildVscodeSettings } from '../manifest/vscode-settings';
 import { buildStateFile, builtinUnits, hashBuffer } from '../state/state';
 import { PKG_ROOT } from '../util/paths';
@@ -274,5 +277,95 @@ describe('runDiff on an .unbranded.json that does not parse (#231)', () => {
 		expect(String(err.mock.calls[0]?.[0])).toContain('.unbranded.json');
 		expect(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')).toBe(conflicted);
 		expect(existsSync(join(tmp, BASELINE))).toBe(true);
+	});
+});
+
+// Derived from UNITS so a new option choice with files is covered without editing
+// this list. Option-choice files used to get no template hash, so diff called
+// them unchanged however far the template moved (#198).
+const optionChoiceCases = UNITS.flatMap((unit) =>
+	(unit.options ?? []).flatMap((option) =>
+		option.choices
+			.filter((choice) => choice.files?.length)
+			.map((choice) => ({
+				label: `${unit.id} ${option.key}=${choice.value}`,
+				unitId: unit.id,
+				key: option.key,
+				value: choice.value,
+			})),
+	),
+);
+
+// Writes every file the resolved unit ships with a trailing newline appended and
+// records the hash of those new bytes, so the user axis reads clean and only the
+// template axis can differ.
+function ageUnitFiles(tmp: string, unitId: string, selections: Record<string, string>) {
+	const unit = UNITS.find((u) => u.id === unitId);
+	if (!unit) throw new Error(`no unit ${unitId}`);
+	const files: Record<string, string> = {};
+	for (const op of applyUnitOptions(unit, selections).files) {
+		const plan = planFileOp(op, { pkgRoot: PKG_ROOT, targetDir: tmp });
+		const aged = Buffer.concat([readSource(op, plan.src), Buffer.from('\n')]);
+		mkdirSync(dirname(plan.dest), { recursive: true });
+		writeFileSync(plan.dest, aged);
+		files[plan.rel.split(sep).join('/')] = hashBuffer(aged);
+	}
+	return files;
+}
+
+describe('computeDiff on option-choice files (#198)', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-diff-options-'));
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	it('enumerates the known option-choice files, so an emptied table cannot pass vacuously', () => {
+		expect(optionChoiceCases.length).toBeGreaterThanOrEqual(3);
+		expect(new Set(optionChoiceCases.map((c) => c.unitId))).toEqual(
+			new Set(['core-eslint', 'core-oxlint', 'core-typescript']),
+		);
+	});
+
+	it.each(optionChoiceCases)(
+		'classifies $label files as template-updated when aged with the record',
+		({ unitId, key, value }) => {
+			const choiceUnit = UNITS.find((u) => u.id === unitId);
+			const choice = choiceUnit?.options
+				?.find((o) => o.key === key)
+				?.choices.find((c) => c.value === value);
+			const files = ageUnitFiles(tmp, unitId, { [key]: value });
+			const state = buildStateFile({
+				version: '1.0.0',
+				units: builtinUnits([unitId]),
+				files,
+				options: { [key]: value },
+			});
+
+			const report = computeDiff({ state, targetDir: tmp });
+			for (const op of choice?.files ?? []) {
+				const rel = (op.rename ? join(dirname(op.dest), op.rename) : op.dest).split(sep).join('/');
+				expect(report.files.find((f) => f.path === rel)?.status, rel).toBe('template-updated');
+			}
+		},
+	);
+
+	it('replays the legacy dom flavor for a pre-#117 core-typescript with no options recorded', () => {
+		const files = ageUnitFiles(tmp, 'core-typescript', { tsFlavor: 'dom' });
+		const state = buildStateFile({
+			version: '1.0.0',
+			units: builtinUnits(['core-typescript']),
+			files,
+		});
+		expect(state.options).toBeUndefined();
+
+		const report = computeDiff({ state, targetDir: tmp });
+		expect(report.files.find((f) => f.path === 'tsconfig.base.json')?.status).toBe(
+			'template-updated',
+		);
 	});
 });
