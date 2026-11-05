@@ -76,7 +76,17 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main' || process.platform === 'win32
 				join(tmp, 'package.json'),
 				JSON.stringify({ name: 'staged-commit', version: '0.0.0', private: true }, null, 2),
 			);
-			const scaffold = cli(['--units', 'core-oxlint,opt-husky', '--pm', 'pnpm', '--yes'], tmp);
+			const git = (...args: string[]) =>
+				spawnSync('git', ['-c', 'user.name=e2e', '-c', 'user.email=e2e@example.com', ...args], {
+					cwd: tmp,
+					encoding: 'utf-8',
+				});
+			// The repo must exist first so the husky post-install wires the hooks itself (#212).
+			expect(git('init', '-q').status).toBe(0);
+			const scaffold = cli(
+				['--units', 'core-oxlint,opt-husky', '--pm', 'pnpm', '--post-install', 'all', '--yes'],
+				tmp,
+			);
 			expect(scaffold.status, `${scaffold.stdout}${scaffold.stderr}`).toBe(0);
 			const config = readFileSync(join(tmp, 'lint-staged.config.mjs'), 'utf-8');
 			expect(config).toContain('oxlint');
@@ -84,17 +94,9 @@ describe.skipIf(process.env.UB_E2E_LEG === 'main' || process.platform === 'win32
 			const diff = cli(['diff', '--json'], tmp);
 			expect(diff.status, `${diff.stdout}${diff.stderr}`).toBe(0);
 
-			const git = (...args: string[]) =>
-				spawnSync('git', ['-c', 'user.name=e2e', '-c', 'user.email=e2e@example.com', ...args], {
-					cwd: tmp,
-					encoding: 'utf-8',
-				});
-			expect(git('init', '-q').status).toBe(0);
 			// lint-staged needs a HEAD to diff against, so the scaffold lands first, unhooked.
 			expect(git('add', '-A').status).toBe(0);
 			expect(git('commit', '-q', '--no-verify', '-m', 'scaffold').status).toBe(0);
-			const husky = spawnSync('pnpm', ['exec', 'husky'], { cwd: tmp, encoding: 'utf-8' });
-			expect(husky.status, `${husky.stdout}${husky.stderr}`).toBe(0);
 
 			mkdirSync(join(tmp, 'src'), { recursive: true });
 			writeFileSync(join(tmp, 'src', 'a.ts'), 'export const a = (x: number[]) => [...[...x]];\n');
