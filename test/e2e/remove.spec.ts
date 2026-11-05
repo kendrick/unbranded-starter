@@ -40,6 +40,35 @@ function run(args: string[], cwd: string): ReturnType<typeof spawnSync<string>> 
 	return spawnSync('node', [CLI, ...args], { cwd, encoding: 'utf-8' });
 }
 
+// Throwaway repo inside tmp, so the dirty-tree guard has a base commit to compare to.
+function commitBase(tmp: string): void {
+	for (const args of [
+		['init', '-q'],
+		['add', '-A'],
+		[
+			'-c',
+			'user.name=t',
+			'-c',
+			'user.email=t@t',
+			'-c',
+			'commit.gpgsign=false',
+			'commit',
+			'-qm',
+			'base',
+		],
+	]) {
+		const r = spawnSync('git', args, { cwd: tmp, encoding: 'utf-8' });
+		expect(r.status, `git ${args.join(' ')}: ${r.stderr}`).toBe(0);
+	}
+}
+
+function expectNonTtyRefusal(result: ReturnType<typeof run>): void {
+	expect(result.status, `stdout: ${result.stdout}\nstderr: ${result.stderr}`).toBe(1);
+	expect(result.stderr).toMatch(/--yes/);
+	expect(result.stderr).toMatch(/--dry-run/);
+	expect(result.stderr).not.toMatch(/unsettled top-level await/);
+}
+
 function pkg(tmp: string): {
 	dependencies?: Record<string, string>;
 	devDependencies?: Record<string, string>;
@@ -111,5 +140,29 @@ describe('unbranded remove', () => {
 		scaffold(tmp);
 		expect(run(['remove', 'core-vitest', '--yes'], tmp).status).toBe(1);
 		expect(run(['remove'], tmp).status).toBe(1);
+	});
+
+	// stdin is a pipe here (spawnSync default), so a prompt can never be answered.
+	it('refuses without --yes when stdin is not a TTY, and removes nothing', () => {
+		scaffold(tmp);
+		commitBase(tmp);
+
+		const result = run(['remove', 'opt-shadcn'], tmp);
+		expectNonTtyRefusal(result);
+		expect(result.stdout).toContain('components.json');
+		expect(existsSync(join(tmp, 'components.json'))).toBe(true);
+		expect(existsSync(join(tmp, 'src', 'lib', 'utils.ts'))).toBe(true);
+	});
+
+	it('refuses on a dirty tree without --yes or --force when stdin is not a TTY', () => {
+		scaffold(tmp);
+		commitBase(tmp);
+		writeFileSync(join(tmp, 'untracked.txt'), 'dirty');
+
+		const result = run(['remove', 'opt-shadcn'], tmp);
+		expectNonTtyRefusal(result);
+		expect(result.stdout).toContain('components.json');
+		expect(existsSync(join(tmp, 'components.json'))).toBe(true);
+		expect(existsSync(join(tmp, 'src', 'lib', 'utils.ts'))).toBe(true);
 	});
 });
