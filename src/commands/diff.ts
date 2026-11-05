@@ -82,7 +82,6 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 	const byId = new Map<string, AnyUnit>(units.map((u) => [u.id, u]));
 
 	const planByRel = new Map<string, FilePlan>();
-	const opModeByRel = new Map<string, FileOp['mode']>();
 	const opByRel = new Map<string, FileOp>();
 	const installedIds = new Set(opts.state.units.map((u) => u.id));
 	// Same resolver update uses, so both commands replay the same option choices.
@@ -106,7 +105,6 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 				...(opts.projectName !== undefined ? { projectName: opts.projectName } : {}),
 			});
 			planByRel.set(toPosix(plan.rel), plan);
-			opModeByRel.set(toPosix(plan.rel), op.mode);
 			opByRel.set(toPosix(plan.rel), op);
 		}
 	}
@@ -116,7 +114,7 @@ export function computeDiff(opts: ComputeDiffOpts): DiffReport {
 		const plan = planByRel.get(rel);
 		const destPath = plan?.dest ?? join(opts.targetDir, ...rel.split(posix.sep));
 		const onDisk = existsSync(destPath) ? hashBuffer(readFileSync(destPath)) : undefined;
-		const mode = opts.state.modes?.[rel] ?? opModeByRel.get(rel);
+		const mode = opts.state.modes?.[rel] ?? opByRel.get(rel)?.mode;
 		const merged = mode === 'merge-json' || mode === 'append-if-missing';
 		// A merged file's recorded hash is the merge result, which matches the
 		// template's bytes only when no file existed before the scaffold. So judge

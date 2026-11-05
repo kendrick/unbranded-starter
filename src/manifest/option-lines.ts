@@ -113,9 +113,7 @@ export function legacyTsFlavor(tracked: ReadonlySet<string>): string | undefined
 	return tracked.has('core-typescript') ? 'dom' : undefined;
 }
 
-// The selections update replays a tracked install with: recorded options, then the
-// legacy tsFlavor, then each line option resolved the way init defaults it. diff
-// calls this too so both commands classify option-choice files against one template.
+// update and diff both call this so they judge option-choice files against one template.
 export function recordedSelections(opts: {
 	state: StateFile;
 	units: AnyUnit[];
@@ -125,11 +123,11 @@ export function recordedSelections(opts: {
 	const byId = new Map<string, AnyUnit>(opts.units.map((u) => [u.id, u]));
 	const installedIds = new Set(state.units.map((u) => u.id));
 	const declared = declaredSpecs(targetDir);
-	// Pre-#193 installs never recorded a line, and update doesn't write options, so
-	// infer it on every run the same way init defaults one. That's stable because
-	// the inferred pin is what update writes back.
+	// Pre-#193 installs never recorded a line, and neither update nor diff writes
+	// options, so infer it on every run the same way init defaults one. That's stable
+	// because the inferred pin is what update writes back.
 	const selections: Record<string, string> = { ...state.options };
-	// Update never writes options, so every tracked install with no recorded
+	// Neither command writes options, so every tracked install with no recorded
 	// tsFlavor is a pre-#117 one.
 	const legacyFlavor = legacyTsFlavor(installedIds);
 	if (legacyFlavor) selections.tsFlavor ??= legacyFlavor;

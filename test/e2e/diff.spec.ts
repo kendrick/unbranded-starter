@@ -490,6 +490,6 @@ describe('unbranded diff — option-choice files (#198)', () => {
 		expect(result.stdout).toContain('---');
 		expect(result.stdout).toContain('+++');
 		expect(result.stdout).toContain('@@');
-		expect(result.stdout).toContain('.oxlintrc.json');
+		expect(result.stdout).toMatch(/^\+\+\+ .*\.oxlintrc\.json/m);
 	});
 });
