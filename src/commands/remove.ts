@@ -195,11 +195,11 @@ export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promi
 	const read = readStateFile(cwd);
 	if (read.kind === 'unsupported') {
 		process.stderr.write(`unbranded remove: ${unsupportedStateMessage(read.schema)}\n`);
-		return 1;
+		return EXIT_ERROR;
 	}
 	if (read.kind === 'malformed') {
 		process.stderr.write(`unbranded remove: ${malformedStateMessage()}\n`);
-		return 1;
+		return EXIT_ERROR;
 	}
 	const state = read.kind === 'ok' ? read.state : undefined;
 	const installedIds = state ? state.units.map((u) => u.id) : [];
@@ -209,7 +209,7 @@ export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promi
 				? `unbranded remove: ${unitId} is not tracked here. Installed units: ${installedIds.join(', ')}.\n`
 				: `unbranded remove: no ${'.unbranded.json'} found — nothing is tracked in this directory.\n`,
 		);
-		return 1;
+		return EXIT_ERROR;
 	}
 	const target = unitId;
 
@@ -227,14 +227,14 @@ export async function runRemove(unitId: string, opts: RunRemoveOpts = {}): Promi
 		process.stderr.write(
 			`unbranded remove: ${dependents.join(', ')} ${dependents.length === 1 ? 'depends' : 'depend'} on ${target}. Remove ${dependents.length === 1 ? 'it' : 'them'} first, or re-run with --cascade to take the whole set out.\n`,
 		);
-		return 1;
+		return EXIT_ERROR;
 	}
 	const removeUnits: string[] = [target, ...(opts.cascade ? dependents : [])];
 
 	intro(opts.dryRun ? 'unbranded remove (dry run)' : 'unbranded remove');
 
 	// Same rationale as init's guard: on a clean tree `git checkout .` undoes
-	// every deletion below. Without a TTY we refuse before the prompt; --yes only warns.
+	// every deletion below. No TTY and no --yes refuses rather than prompts, so CI can't hang.
 	if (!opts.force && !opts.dryRun && (await isDirtyGitTree(cwd))) {
 		log.warn(
 			'Uncommitted changes in the git working tree — a clean tree is your undo button (`git checkout .`) if this removal goes sideways.',
