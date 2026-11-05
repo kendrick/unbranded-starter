@@ -213,7 +213,7 @@ You never write a namespace inside a definition. The loader attaches it, and tha
 
 ### Shadowing a Built-in
 
-A local unit may declare a built-in's id. `my-units/core-eslint` and `core-eslint` are different units, and a sibling implying `core-eslint` gets the local one. `unbranded` warns when it loads a directory holding such a unit, because reusing a familiar name usually means the author wanted to replace the built-in rather than sit beside it.
+A local unit may declare a built-in's id. `my-units/core-eslint` and `core-eslint` are different units, and a sibling implying `core-eslint` gets the local one. `unbranded` warns when it loads a directory holding such a unit, because reusing a familiar name usually means the author wanted to replace the built-in rather than sit beside it. If that local unit is skipped as invalid, a sibling naming it is skipped too. It never falls through to the built-in of the same name.
 
 ### Invalid Definitions
 

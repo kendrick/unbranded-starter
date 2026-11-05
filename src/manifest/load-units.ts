@@ -129,11 +129,11 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 		validated.push({ file: p.file, baseDir: p.baseDir, unit: result.unit });
 	}
 
-	// Every id the directory declared, dropped or not. A bare ref to one that's
-	// no longer alive must fail rather than fall through to a same-named built-in.
+	// A bare ref to a declared id that's no longer alive must fail rather than
+	// fall through to a same-named built-in.
 	const declaredIds = parsed.flatMap((p) => (p.bareId === undefined ? [] : [p.bareId]));
-	const ctxFor = (alive: Validated[]): UnitRefContext => {
-		const localBareIds = new Set(alive.map((v) => v.unit.id));
+	const ctxFor = (survivors: Validated[]): UnitRefContext => {
+		const localBareIds = new Set(survivors.map((v) => v.unit.id));
 		return {
 			builtinIds,
 			namespace,
@@ -169,14 +169,15 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 	const relationSkips: SkippedUnit[] = [];
 	let candidates = validated;
 	let alive: Validated[];
-	let losers: Map<Validated, SkippedUnit>;
+	let provisionalClaimSkips: Map<Validated, SkippedUnit>;
 	for (;;) {
 		const claimedOptionKeys = new Set<string>();
 		alive = [];
-		losers = new Map();
+		provisionalClaimSkips = new Map();
 		for (const v of candidates) {
 			const keys = (v.unit.options ?? []).map((o) => o.key);
 			const repeated = keys.find((k, i) => keys.indexOf(k) !== i);
+			const builtinHit = keys.some((k) => BUILTIN_OPTION_KEYS.has(k));
 			const collision = keys.find((k) => BUILTIN_OPTION_KEYS.has(k) || claimedOptionKeys.has(k));
 			if (collision !== undefined || repeated !== undefined) {
 				const skip: SkippedUnit = {
@@ -196,8 +197,8 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 								},
 					],
 				};
-				const permanent = repeated !== undefined || keys.some((k) => BUILTIN_OPTION_KEYS.has(k));
-				(permanent ? permanentClaimSkips : losers).set(v, skip);
+				const permanent = repeated !== undefined || builtinHit;
+				(permanent ? permanentClaimSkips : provisionalClaimSkips).set(v, skip);
 				continue;
 			}
 			for (const k of keys) claimedOptionKeys.add(k);
@@ -225,7 +226,7 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 	// Claim skips first, in load order, then relation skips: the order the
 	// separate passes reported them in before they shared a loop.
 	for (const v of validated) {
-		const skip = permanentClaimSkips.get(v) ?? losers.get(v);
+		const skip = permanentClaimSkips.get(v) ?? provisionalClaimSkips.get(v);
 		if (skip !== undefined) skipped.push(skip);
 	}
 	skipped.push(...relationSkips);
