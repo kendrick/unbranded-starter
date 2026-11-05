@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { STATE_SCHEMA } from '../../src/state/state';
+import { hashBuffer, STATE_SCHEMA } from '../../src/state/state';
 import { PKG_ROOT } from '../../src/util/paths';
 
 const CLI = join(PKG_ROOT, 'dist/cli.js');
@@ -415,5 +415,81 @@ describe('unbranded diff — merge modes into an existing file (#227)', () => {
 			diffDrifted: true,
 			updateDrifted: true,
 		});
+	});
+});
+
+// The #198 reproduction: .oxlintrc.json is an option-choice file, so it used to
+// read `unchanged` after its template moved. Aging a file means new bytes on disk
+// with the state (and baseline) recorded against them, leaving only the template axis.
+describe('unbranded diff — option-choice files (#198)', () => {
+	let tmp: string;
+
+	function scaffoldOxlint(): void {
+		writeJson(join(tmp, 'package.json'), { name: 'repro', version: '0.0.0' });
+		const applied = spawnSync(
+			'node',
+			[
+				CLI,
+				'--units',
+				'core-oxlint,core-editorconfig',
+				'--pm',
+				'npm',
+				'--post-install',
+				'none',
+				'--yes',
+			],
+			{ cwd: tmp, encoding: 'utf-8' },
+		);
+		expect(applied.status, `scaffold stderr: ${applied.stderr}`).toBe(0);
+	}
+
+	function age(rel: string): void {
+		const aged = Buffer.concat([readFileSync(join(tmp, rel)), Buffer.from('\n')]);
+		writeFileSync(join(tmp, rel), aged);
+		writeFileSync(join(tmp, '.unbranded', 'baseline', rel), aged);
+		const state = JSON.parse(readFileSync(join(tmp, '.unbranded.json'), 'utf-8')) as {
+			files: Record<string, string>;
+		};
+		state.files[rel] = hashBuffer(aged);
+		writeJson(join(tmp, '.unbranded.json'), state);
+	}
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-diff-options-'));
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	it('reports a fresh scaffold as clean', () => {
+		scaffoldOxlint();
+		const result = spawnSync('node', [CLI, 'diff'], { cwd: tmp, encoding: 'utf-8' });
+		expect(result.status, `stdout: ${result.stdout}`).toBe(0);
+		expect(result.stdout).toContain('No drift.');
+	});
+
+	it.each([
+		['both aged', ['.editorconfig', '.oxlintrc.json']],
+		['only .oxlintrc.json aged', ['.oxlintrc.json']],
+	])('exits 1 with .oxlintrc.json template-updated (%s)', (_label, aged) => {
+		scaffoldOxlint();
+		for (const rel of aged) age(rel);
+
+		const result = spawnSync('node', [CLI, 'diff'], { cwd: tmp, encoding: 'utf-8' });
+		expect(result.status).toBe(1);
+		expect(result.stdout).toMatch(/template-updated\s+\.oxlintrc\.json/);
+	});
+
+	it('--diff prints a unified patch for the drifted option-choice file', () => {
+		scaffoldOxlint();
+		age('.oxlintrc.json');
+
+		const result = spawnSync('node', [CLI, 'diff', '--diff'], { cwd: tmp, encoding: 'utf-8' });
+		expect(result.status).toBe(1);
+		expect(result.stdout).toContain('---');
+		expect(result.stdout).toContain('+++');
+		expect(result.stdout).toContain('@@');
+		expect(result.stdout).toContain('.oxlintrc.json');
 	});
 });
