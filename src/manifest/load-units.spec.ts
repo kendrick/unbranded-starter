@@ -218,6 +218,52 @@ describe('loadUnitsDir', () => {
 		expect(() => loadUnitsDir(emptyDir, BUILTIN_IDS)).toThrow(/no unit\.json/);
 	});
 
+	it('skips a unit whose bare ref names a dropped sibling instead of resolving to the same-named built-in', () => {
+		writeUnit(dir, 'a', { implies: ['core-eslint'] });
+		writeUnit(dir, 'core-eslint', { options: [option('eslintFlavor')] });
+
+		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
+		expect(loaded.units).toEqual([]);
+		expect(loaded.skipped.map((s) => s.id).sort()).toEqual(['a', 'core-eslint']);
+		const aSkip = loaded.skipped.find((s) => s.id === 'a');
+		expect(aSkip?.issues[0]?.path).toBe('(relations)');
+		expect(loaded.units.flatMap((u) => u.implies ?? [])).not.toContain('core-eslint');
+	});
+
+	it("frees a dropped unit's option keys so a survivor is not skipped as already claimed", () => {
+		writeUnit(dir, 'a', { options: [option('k1')], implies: ['gone'] });
+		writeUnit(dir, 'b', { options: [option('k1')] });
+		writeUnit(dir, 'gone', { options: [option('eslintFlavor')] });
+
+		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
+		expect(loaded.units.map((u) => u.id)).toEqual(['my-units/b']);
+		expect(loaded.skipped.find((s) => s.id === 'b')).toBeUndefined();
+		expect(
+			loaded.skipped
+				.filter((s) => s.issues.some((i) => i.got.includes('already claimed')))
+				.map((s) => s.id),
+		).toEqual(['gone']);
+	});
+
+	it('still loads a unit implying an undeclared built-in, keeping it in implies', () => {
+		writeUnit(dir, 'a', { implies: ['core-typescript'] });
+
+		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
+		expect(loaded.skipped).toEqual([]);
+		expect(loaded.units.find((u) => u.id === 'my-units/a')?.implies).toEqual(['core-typescript']);
+	});
+
+	it('gives one already-claimed skip, for the second in load order, when two survivors share an option key', () => {
+		writeUnit(dir, 'a', { options: [option('k1')] });
+		writeUnit(dir, 'b', { options: [option('k1')] });
+
+		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
+		expect(loaded.units.map((u) => u.id)).toEqual(['my-units/a']);
+		expect(loaded.skipped).toHaveLength(1);
+		expect(loaded.skipped[0]?.id).toBe('b');
+		expect(loaded.skipped[0]?.issues[0]?.got).toContain('already claimed');
+	});
+
 	it("maps baseDirs to each surviving unit's own directory", () => {
 		writeUnit(dir, 'banner');
 		const loaded = loadUnitsDir(dir, BUILTIN_IDS);
