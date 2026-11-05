@@ -129,6 +129,19 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 		validated.push({ file: p.file, baseDir: p.baseDir, unit: result.unit });
 	}
 
+	// Every id the directory declared, dropped or not. A bare ref to one that's
+	// no longer alive must fail rather than fall through to a same-named built-in.
+	const declaredIds = parsed.flatMap((p) => (p.bareId === undefined ? [] : [p.bareId]));
+	const ctxFor = (alive: Validated[]): UnitRefContext => {
+		const localBareIds = new Set(alive.map((v) => v.unit.id));
+		return {
+			builtinIds,
+			namespace,
+			localBareIds,
+			droppedLocalIds: new Set(declaredIds.filter((id) => !localBareIds.has(id))),
+		};
+	};
+
 	// Option keys are globally unique by contract (types.ts's `options` field
 	// comment) — enforced here since it's a cross-unit property no single
 	// definition's own validation can see. Skip the whole unit rather than the
@@ -136,52 +149,65 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 	// vanished would be a worse surprise than the unit not loading at all. The
 	// same holds inside one unit: a recipe's flat `options` map can't tell two
 	// options sharing a key apart, and claimedOptionKeys sees only earlier units.
-	const claimedOptionKeys = new Set<string>();
-	const survivors: Validated[] = [];
-	for (const v of validated) {
-		const keys = (v.unit.options ?? []).map((o) => o.key);
-		const repeated = keys.find((k, i) => keys.indexOf(k) !== i);
-		const collision = keys.find((k) => BUILTIN_OPTION_KEYS.has(k) || claimedOptionKeys.has(k));
-		if (collision !== undefined || repeated !== undefined) {
-			skipped.push({
-				path: v.file,
-				id: v.unit.id,
-				issues: [
-					collision !== undefined
-						? {
-								path: 'options',
-								expected: 'option keys not claimed by a built-in or a sibling unit',
-								got: `key "${collision}" already claimed`,
-							}
-						: {
-								path: 'options',
-								expected: 'each option key declared once within a unit',
-								got: `key "${repeated}" declared twice in this unit`,
-							},
-				],
-			});
-			continue;
-		}
-		for (const k of keys) claimedOptionKeys.add(k);
-		survivors.push(v);
-	}
-
+	//
+	// Claims run inside the relations fixed point and are recomputed per round,
+	// so a claimant dropped for its relations frees its key for a sibling (#266).
+	// A built-in key or a key repeated inside one unit drops a unit for good;
+	// losing only to a sibling's earlier claim is provisional until the loop
+	// settles.
+	//
 	// Dropping a unit can orphan a sibling that relates to it, so re-resolve
-	// against the surviving ids until a pass drops nothing. One pass would let a
-	// chain (a implies b implies c, c dropped) emit `a` pointing at the dropped
+	// against the surviving ids until a round drops nothing. One pass would let
+	// a chain (a implies b implies c, c dropped) emit `a` pointing at the dropped
 	// `b`, which resolveSelection would then add as a phantom unit.
-	let alive = survivors;
+	//
+	// shortcut: a unit whose relation names a sibling that's only a provisional
+	// claim loser that round is dropped for good, even if the loser is
+	// re-admitted later. Making relation drops provisional too would turn this
+	// loop into a search; upgrade if a report needs that chain to load.
+	const permanentClaimSkips = new Map<Validated, SkippedUnit>();
+	const relationSkips: SkippedUnit[] = [];
+	let candidates = validated;
+	let alive: Validated[];
+	let losers: Map<Validated, SkippedUnit>;
 	for (;;) {
-		const ctx: UnitRefContext = {
-			builtinIds,
-			namespace,
-			localBareIds: new Set(alive.map((v) => v.unit.id)),
-		};
-		const next = alive.filter((v) => resolveRelations(v.unit, ctx) !== undefined);
-		if (next.length === alive.length) break;
-		for (const v of alive) {
-			if (next.includes(v)) continue;
-			skipped.push({
+		const claimedOptionKeys = new Set<string>();
+		alive = [];
+		losers = new Map();
+		for (const v of candidates) {
+			const keys = (v.unit.options ?? []).map((o) => o.key);
+			const repeated = keys.find((k, i) => keys.indexOf(k) !== i);
+			const collision = keys.find((k) => BUILTIN_OPTION_KEYS.has(k) || claimedOptionKeys.has(k));
+			if (collision !== undefined || repeated !== undefined) {
+				const skip: SkippedUnit = {
+					path: v.file,
+					id: v.unit.id,
+					issues: [
+						collision !== undefined
+							? {
+									path: 'options',
+									expected: 'option keys not claimed by a built-in or a sibling unit',
+									got: `key "${collision}" already claimed`,
+								}
+							: {
+									path: 'options',
+									expected: 'each option key declared once within a unit',
+									got: `key "${repeated}" declared twice in this unit`,
+								},
+					],
+				};
+				const permanent = repeated !== undefined || keys.some((k) => BUILTIN_OPTION_KEYS.has(k));
+				(permanent ? permanentClaimSkips : losers).set(v, skip);
+				continue;
+			}
+			for (const k of keys) claimedOptionKeys.add(k);
+			alive.push(v);
+		}
+
+		const ctx = ctxFor(alive);
+		const dropped = alive.filter((v) => resolveRelations(v.unit, ctx) === undefined);
+		for (const v of dropped) {
+			relationSkips.push({
 				path: v.file,
 				id: v.unit.id,
 				issues: [
@@ -193,11 +219,18 @@ export function loadUnitsDir(absDir: string, builtinIds: ReadonlySet<string>): L
 				],
 			});
 		}
-		alive = next;
+		if (dropped.length === 0) break;
+		candidates = candidates.filter((v) => !permanentClaimSkips.has(v) && !dropped.includes(v));
 	}
+	// Claim skips first, in load order, then relation skips: the order the
+	// separate passes reported them in before they shared a loop.
+	for (const v of validated) {
+		const skip = permanentClaimSkips.get(v) ?? losers.get(v);
+		if (skip !== undefined) skipped.push(skip);
+	}
+	skipped.push(...relationSkips);
 
-	const localBareIds = new Set(alive.map((v) => v.unit.id));
-	const ctx: UnitRefContext = { builtinIds, namespace, localBareIds };
+	const ctx = ctxFor(alive);
 	const units: AnyUnit[] = [];
 	const baseDirs = new Map<string, string>();
 
