@@ -221,3 +221,90 @@ describe('cli --help documents the preview flags', () => {
 		expect(result.stdout).toContain('--diff');
 	});
 });
+
+// #176: init.ts carries a second copy of the skip policy in src/install/run.ts,
+// so each case checks the envelope against what a real run writes.
+describe('cli --dry-run --json dependency specs under --on-conflict skip (#176)', () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), 'unbranded-e2e-dryrun-skip-'));
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	function seed(dir: string, devDependencies?: Record<string, string>): void {
+		writeJson(join(dir, 'package.json'), {
+			name: 'skip-project',
+			version: '0.0.0',
+			...(devDependencies ? { devDependencies } : {}),
+		});
+	}
+
+	function run(dir: string, args: string[], mode: 'dry' | 'real') {
+		const flags =
+			mode === 'dry' ? ['--dry-run', '--json', '--pm', 'pnpm'] : ['--yes', '--pm', 'null'];
+		return spawnSync('node', [CLI, '--units', 'core-vitest', ...flags, ...args], {
+			cwd: dir,
+			encoding: 'utf-8',
+		});
+	}
+
+	function envelopeVitest(dir: string, args: string[]): string | undefined {
+		const res = run(dir, args, 'dry');
+		expect(res.status, `stderr: ${res.stderr}`).toBe(0);
+		return JSON.parse(res.stdout).devDependencies.vitest;
+	}
+
+	function writtenVitest(dir: string, args: string[]): string | undefined {
+		const res = run(dir, args, 'real');
+		expect(res.status, `stderr: ${res.stderr}`).toBe(0);
+		return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf-8')).devDependencies?.vitest;
+	}
+
+	// Read from a real run because weekly pin bumps (#272) would break a hard-coded pin.
+	function manifestPin(): string {
+		const dir = mkdtempSync(join(tmpdir(), 'unbranded-e2e-dryrun-pin-'));
+		try {
+			seed(dir);
+			const pin = writtenVitest(dir, ['--on-conflict', 'overwrite']);
+			expect(pin).toBeTruthy();
+			return pin as string;
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}
+
+	it('skip reports the existing spec for a colliding package', () => {
+		seed(tmp, { vitest: '1.0.0' });
+		expect(envelopeVitest(tmp, ['--on-conflict', 'skip'])).toBe('1.0.0');
+	});
+
+	it('overwrite reports the manifest pin even when the target holds another spec', () => {
+		seed(tmp, { vitest: '1.0.0' });
+		expect(envelopeVitest(tmp, ['--on-conflict', 'overwrite'])).toBe(manifestPin());
+	});
+
+	it('skip reports the manifest pin when the target has no vitest', () => {
+		seed(tmp);
+		expect(envelopeVitest(tmp, ['--on-conflict', 'skip'])).toBe(manifestPin());
+	});
+
+	it('--latest --on-conflict skip reports what the real run writes', () => {
+		seed(tmp, { vitest: '1.0.0' });
+		const args = ['--latest', '--on-conflict', 'skip'];
+		const reported = envelopeVitest(tmp, args);
+		expect(reported).not.toBe('1.0.0');
+		expect(writtenVitest(tmp, args)).toBe(reported);
+	});
+
+	it('a real skip run writes the spec the envelope reported', () => {
+		seed(tmp, { vitest: '1.0.0' });
+		const args = ['--on-conflict', 'skip'];
+		const reported = envelopeVitest(tmp, args);
+		expect(writtenVitest(tmp, args)).toBe(reported);
+		expect(reported).toBe('1.0.0');
+	});
+});

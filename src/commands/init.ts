@@ -22,6 +22,7 @@ import { detectPm } from '../detect/pm';
 import { detectTarget } from '../detect/target';
 import { copyFileOp, formatUnparseableSkip, planFileOp, renderPlanDiff } from '../fs/copy';
 import { createJournal, formatRollbackReport, rollbackJournal } from '../fs/journal';
+import { collectDepCollisions } from '../fs/merge-json';
 import { formatInstallFailure, formatKeepLine, resolveInstallFailure } from '../install/failure';
 import { isDirtyGitTree, maybeInitGit } from '../install/git';
 import { runPostInstalls } from '../install/post';
@@ -325,6 +326,22 @@ export async function runPlanJson(opts: {
 	// Same precedence as runInit (flag, then recipe).
 	const latest = opts.latest === true || config.versions === 'latest';
 	const written = specsToWrite(units, heldPins(selectedUnits, optionSelections), latest);
+	const sections = {
+		dependencies: mergedPins(written, 'dependencies'),
+		devDependencies: mergedPins(written, 'devDependencies'),
+	};
+
+	// Mirrors writeAndInstall's collision policy (src/install/run.ts), or the
+	// envelope reports pins the run never writes. --latest overwrites every
+	// collision, so skip can't apply with it. A malformed package.json still
+	// reports manifest pins here, though a real run aborts on the parse error.
+	if (config.onConflict === 'skip' && !latest) {
+		const read = readPackageJson(target.dir);
+		if (read.kind === 'ok') {
+			for (const c of collectDepCollisions(read.pkg, written))
+				sections[c.section][c.name] = c.existing;
+		}
+	}
 
 	const projectName = target.mode === 'new' ? basename(target.dir) : undefined;
 	const plans = units.flatMap((unit) =>
@@ -347,8 +364,7 @@ export async function runPlanJson(opts: {
 				auto: [...resolution.auto].sort(),
 				// Merged pins, so a consumer can see which TypeScript line (#158) a run
 				// would write before anything is written.
-				dependencies: mergedPins(written, 'dependencies'),
-				devDependencies: mergedPins(written, 'devDependencies'),
+				...sections,
 				// rel is native; the envelope speaks posix like every other surface.
 				files: plans.map((p) => ({ path: p.rel.split(sep).join('/'), action: p.outcome })),
 			},
