@@ -4,7 +4,7 @@ import type { SpawnOptions } from 'node:child_process';
 // CVE-2024-27980 child_process.spawn refuses to execute a `.cmd` without a
 // shell (it throws EINVAL). Running through the shell lets cmd.exe resolve the
 // shim via PATHEXT. POSIX spawns the bare binary directly. The subcommands we
-// pass (`install`, `exec husky init`, ...) carry no shell metacharacters, so
+// pass (`install`, `exec husky`, ...) carry no shell metacharacters, so
 // shell mode needs no extra quoting here. Only spawns that hit `.cmd` shims
 // belong here; git is a real executable and skips the shell, which would
 // re-split args like a commit message.

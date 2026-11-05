@@ -352,6 +352,7 @@ export const UNITS: Unit[] = [
 		},
 		postInstall: [
 			{
+				// Id predates the move off `husky init`; kept because recipes, logs and e2e match on it.
 				id: 'husky-init',
 				command: ['husky'],
 				prompt: 'Run `husky` to wire the git hooks?',

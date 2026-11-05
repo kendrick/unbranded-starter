@@ -96,7 +96,7 @@ async function runOne(cwd: string, pm: Pm, pi: PostInstall): Promise<RunResult> 
 	const { bin, args } = buildCommand(pm, pi.command);
 	// log.step renders a small marker before the child writes its own output.
 	// We deliberately don't wrap this in a spinner — post-install commands
-	// (husky init, playwright install) have informative output worth seeing.
+	// (husky, playwright install) have informative output worth seeing.
 	log.step(`${pi.id}: ${bin} ${args.join(' ')}`);
 
 	return new Promise((resolve) => {

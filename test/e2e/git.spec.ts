@@ -52,7 +52,7 @@ describe('cli git init (new-project mode)', () => {
 	it('runs the husky post-install because git init created the repo first', () => {
 		// The load-bearing ordering test: husky's post-install gates on `.git`.
 		// A real npm install pulls husky in; only if git init ran before the
-		// post-install pass does `husky` set up `.husky/_/`. The plain
+		// post-install pass does husky create `.husky/_/`. The plain
 		// `.husky/pre-commit` we copy in wouldn't prove that on its own.
 		writeJson(join(tmp, 'recipe.json'), {
 			units: ['opt-husky'],
