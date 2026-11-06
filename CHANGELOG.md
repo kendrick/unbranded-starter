@@ -1,5 +1,41 @@
 # Changelog
 
+## [3.1.0](https://github.com/kendrick/unbranded-starter/compare/v3.0.0...v3.1.0) (2026-11-05)
+
+
+### Features
+
+* **ci:** open one auto-merging weekly pin-bump PR, keep per-unit PRs as a fallback ([#272](https://github.com/kendrick/unbranded-starter/issues/272)) ([#273](https://github.com/kendrick/unbranded-starter/issues/273)) ([557784a](https://github.com/kendrick/unbranded-starter/commit/557784aef712a90f0d2d7d72cb3edec09886927a))
+
+
+### Bug Fixes
+
+* **bump-pins:** keep a refused unit's bump out of the next PR, and fail on real gh errors ([#218](https://github.com/kendrick/unbranded-starter/issues/218)) ([#256](https://github.com/kendrick/unbranded-starter/issues/256)) ([767091b](https://github.com/kendrick/unbranded-starter/commit/767091bdfa08988ce5fc2f6e0b18a0d08613ab65))
+* **cli:** pass --target to diff, doctor, remove and update ([#223](https://github.com/kendrick/unbranded-starter/issues/223)) ([#261](https://github.com/kendrick/unbranded-starter/issues/261)) ([19cdd71](https://github.com/kendrick/unbranded-starter/commit/19cdd718686caeaf8d35f28ccde303c512dc77f0))
+* **cli:** refuse a --target that doesn't exist for diff, doctor, remove and update ([#264](https://github.com/kendrick/unbranded-starter/issues/264)) ([#267](https://github.com/kendrick/unbranded-starter/issues/267)) ([d302902](https://github.com/kendrick/unbranded-starter/commit/d302902a1da8e9fd2d3a9a83c32f8f8e81eb152a))
+* **cli:** run the Node-version gate before any import needs styleText ([#226](https://github.com/kendrick/unbranded-starter/issues/226)) ([#258](https://github.com/kendrick/unbranded-starter/issues/258)) ([d77f705](https://github.com/kendrick/unbranded-starter/commit/d77f7055b3dc33a610e51222196558df16ba3665))
+* **cli:** set exitCode instead of exiting so piped output drains ([#230](https://github.com/kendrick/unbranded-starter/issues/230)) ([#263](https://github.com/kendrick/unbranded-starter/issues/263)) ([a785fcf](https://github.com/kendrick/unbranded-starter/commit/a785fcf152d0deff86b61a1707c831ac78a01bba))
+* **copy:** stop append-if-missing re-appending lines in a CRLF file ([#225](https://github.com/kendrick/unbranded-starter/issues/225)) ([#251](https://github.com/kendrick/unbranded-starter/issues/251)) ([dd8a5dd](https://github.com/kendrick/unbranded-starter/commit/dd8a5ddaa05ae503f43dd9c2a418075c6cba238e))
+* **detect:** rank the project's packageManager above an ancestor lockfile ([#224](https://github.com/kendrick/unbranded-starter/issues/224)) ([#250](https://github.com/kendrick/unbranded-starter/issues/250)) ([4aee763](https://github.com/kendrick/unbranded-starter/commit/4aee763c15fd23a2d9121bdfee416e6ddf9cf50a))
+* **diff:** judge merge-json and append-if-missing files by update's rule ([#227](https://github.com/kendrick/unbranded-starter/issues/227)) ([#262](https://github.com/kendrick/unbranded-starter/issues/262)) ([cb45788](https://github.com/kendrick/unbranded-starter/commit/cb457887758e8a72ff082f9a75bb8df2bb9af845))
+* **diff:** judge option-choice files against the template update replays ([#198](https://github.com/kendrick/unbranded-starter/issues/198)) ([#279](https://github.com/kendrick/unbranded-starter/issues/279)) ([77b9ec2](https://github.com/kendrick/unbranded-starter/commit/77b9ec2a94839b7e4a20e664af5fe397c3aceecb))
+* **git:** make the initial commit on Windows, and warn when it fails ([#221](https://github.com/kendrick/unbranded-starter/issues/221)) ([#257](https://github.com/kendrick/unbranded-starter/issues/257)) ([e37dab0](https://github.com/kendrick/unbranded-starter/commit/e37dab07b0f1f04edbcf1f035b64129579478d1d))
+* **init:** let --post-install answer the post-install prompts without a recipe ([#105](https://github.com/kendrick/unbranded-starter/issues/105)) ([#247](https://github.com/kendrick/unbranded-starter/issues/247)) ([4e6abce](https://github.com/kendrick/unbranded-starter/commit/4e6abce852e17d2fa5f9ccf90f6029f20fe8ccb7))
+* **init:** refuse the project-name prompt on non-interactive runs ([#203](https://github.com/kendrick/unbranded-starter/issues/203)) ([#268](https://github.com/kendrick/unbranded-starter/issues/268)) ([09d8c87](https://github.com/kendrick/unbranded-starter/commit/09d8c875b35aa7048e36a086c6dab524c37b57de))
+* **init:** report kept specs in the --dry-run --json envelope under --on-conflict skip ([#278](https://github.com/kendrick/unbranded-starter/issues/278)) ([752b863](https://github.com/kendrick/unbranded-starter/commit/752b86342163bc4b9a7eb37c1d03b5a75b9fe64b))
+* **load-units:** drop a unit whose relations reach a dropped sibling at any depth ([#229](https://github.com/kendrick/unbranded-starter/issues/229)) ([#252](https://github.com/kendrick/unbranded-starter/issues/252)) ([541388b](https://github.com/kendrick/unbranded-starter/commit/541388bf029ac430aba17a87a01db034126c50ac))
+* **manifest:** bump core-eslint pins ([#269](https://github.com/kendrick/unbranded-starter/issues/269)) ([8b131fc](https://github.com/kendrick/unbranded-starter/commit/8b131fc326d1e0d0d94177d8d120bc499f705b17))
+* **manifest:** bump core-oxlint pins ([#271](https://github.com/kendrick/unbranded-starter/issues/271)) ([b5555a4](https://github.com/kendrick/unbranded-starter/commit/b5555a4be8381ad7a81d80df7d248cbf8e2ec58a))
+* **manifest:** bump core-typescript pins ([#270](https://github.com/kendrick/unbranded-starter/issues/270)) ([1bd7cbb](https://github.com/kendrick/unbranded-starter/commit/1bd7cbb8b405b721795f95b6f16919bde2b9f378))
+* **manifest:** run plain husky in opt-husky's post-install so it keeps the lint-staged hook ([#277](https://github.com/kendrick/unbranded-starter/issues/277)) ([6548f5d](https://github.com/kendrick/unbranded-starter/commit/6548f5d7ddd47982144efb92f615b25290bd4b1a))
+* **manifest:** treat units dropped from a units dir as absent for siblings ([#266](https://github.com/kendrick/unbranded-starter/issues/266)) ([#275](https://github.com/kendrick/unbranded-starter/issues/275)) ([370f8a6](https://github.com/kendrick/unbranded-starter/commit/370f8a6c95a65132ac50399ab8766bad00637fa9))
+* **opt-husky:** run lint-staged without pnpm in the pre-commit hook ([#222](https://github.com/kendrick/unbranded-starter/issues/222)) ([#255](https://github.com/kendrick/unbranded-starter/issues/255)) ([0daf885](https://github.com/kendrick/unbranded-starter/commit/0daf885c78930a8369028cb75522e53b31e56f4a))
+* **opt-in:** take the Playwright port from E2E_PORT so each worktree tests its own server ([#274](https://github.com/kendrick/unbranded-starter/issues/274)) ([5750ec3](https://github.com/kendrick/unbranded-starter/commit/5750ec3847394d6b0298db6e264beb6548f702f4))
+* **remove:** refuse instead of prompting when stdin isn't a TTY ([#183](https://github.com/kendrick/unbranded-starter/issues/183)) ([#276](https://github.com/kendrick/unbranded-starter/issues/276)) ([7ae8226](https://github.com/kendrick/unbranded-starter/commit/7ae8226a3833f853cce2b7f0bd7d958209bc696c))
+* **resolve:** let tracked units satisfy requires and the picker preview ([#228](https://github.com/kendrick/unbranded-starter/issues/228)) ([#260](https://github.com/kendrick/unbranded-starter/issues/260)) ([28130cd](https://github.com/kendrick/unbranded-starter/commit/28130cd8d854a4967ba5dc942765ba8f740a8fdc))
+* **state:** refuse an .unbranded.json that doesn't parse in diff, update, remove and doctor ([#231](https://github.com/kendrick/unbranded-starter/issues/231)) ([#259](https://github.com/kendrick/unbranded-starter/issues/259)) ([e6b2306](https://github.com/kendrick/unbranded-starter/commit/e6b23068baed2e8df71e759fad32aa32c64424cc))
+* **state:** refuse to write over an .unbranded.json that doesn't parse ([#220](https://github.com/kendrick/unbranded-starter/issues/220)) ([#253](https://github.com/kendrick/unbranded-starter/issues/253)) ([f0c7a78](https://github.com/kendrick/unbranded-starter/commit/f0c7a78ea8bdcee8714e5eba460077bf94f7da73))
+
 ## [3.0.0](https://github.com/kendrick/unbranded-starter/compare/v2.0.5...v3.0.0) (2026-10-27)
 
 
