@@ -226,9 +226,9 @@ export const UNITS: Unit[] = [
 		description: 'CSS linting with stylelint-config-standard plus a Tailwind-aware preset.',
 		files: [{ src: 'stylelint.config.mjs', dest: 'stylelint.config.mjs' }],
 		devDependencies: {
-			'stylelint': '17.16.0',
-			'stylelint-config-standard': '40.0.0',
-			'@dreamsicle.io/stylelint-config-tailwindcss': '1.2.2',
+			'stylelint': '18.1.0',
+			'stylelint-config-standard': '41.1.0',
+			'@dreamsicle.io/stylelint-config-tailwindcss': '1.3.2',
 		},
 		packageJsonPatch: {
 			scripts: {
@@ -247,7 +247,7 @@ export const UNITS: Unit[] = [
 		// Tailwind v4 ships zero config files. Manifest is deps-only.
 		files: [],
 		devDependencies: {
-			tailwindcss: '4.3.3',
+			tailwindcss: '4.3.5',
 		},
 		recommendedExtensions: ['bradlc.vscode-tailwindcss'],
 	},
@@ -264,7 +264,7 @@ export const UNITS: Unit[] = [
 		// core-tailwind it would follow every Tailwind install, and `remove` would
 		// credit it to the wrong unit.
 		devDependencies: {
-			'@tailwindcss/postcss': '4.3.3',
+			'@tailwindcss/postcss': '4.3.5',
 		},
 		// The shipped config refers to @tailwindcss/postcss; without Tailwind
 		// installed, builds break at PostCSS plugin resolution time.
@@ -277,8 +277,8 @@ export const UNITS: Unit[] = [
 		description: 'Baseline jsdom test setup with the common excludes.',
 		files: [{ src: 'vitest.config.ts', dest: 'vitest.config.ts' }],
 		devDependencies: {
-			vitest: '5.0.5',
-			jsdom: '30.1.3',
+			vitest: '5.1.1',
+			jsdom: '31.0.1',
 		},
 		packageJsonPatch: {
 			scripts: {
@@ -295,7 +295,7 @@ export const UNITS: Unit[] = [
 		description: 'Mobile-first device matrix with @axe-core/playwright wired up.',
 		files: [{ src: 'opt-in/playwright/playwright.config.ts', dest: 'playwright.config.ts' }],
 		devDependencies: {
-			'@playwright/test': '1.64.1',
+			'@playwright/test': '1.65.1',
 			'@axe-core/playwright': '4.14.0',
 		},
 		packageJsonPatch: {
@@ -324,7 +324,7 @@ export const UNITS: Unit[] = [
 		],
 		dependencies: {
 			'clsx': '2.1.1',
-			'tailwind-merge': '3.7.0',
+			'tailwind-merge': '3.7.1',
 		},
 		// cn() uses tailwind-merge, which only earns its keep if Tailwind is
 		// actually doing the styling. Without it the utility runs but does
@@ -341,7 +341,7 @@ export const UNITS: Unit[] = [
 		files: [{ src: 'opt-in/husky-precommit/.husky/pre-commit', dest: '.husky/pre-commit' }],
 		devDependencies: {
 			'husky': '9.1.7',
-			'lint-staged': '17.6.0',
+			'lint-staged': '17.6.2',
 		},
 		packageJsonPatch: {
 			// `prepare` is npm's lifecycle hook for fresh clones — running it
@@ -416,7 +416,7 @@ export const UNITS: Unit[] = [
 			{ src: 'opt-in/monorepo/turbo.json', dest: 'turbo.json' },
 		],
 		devDependencies: {
-			turbo: '2.11.10',
+			turbo: '2.11.13',
 		},
 	},
 ];
