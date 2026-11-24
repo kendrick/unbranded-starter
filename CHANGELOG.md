@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.1](https://github.com/kendrick/unbranded-starter/compare/v3.1.0...v3.1.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* **manifest:** bump pins (weekly) ([#282](https://github.com/kendrick/unbranded-starter/issues/282)) ([8f9a131](https://github.com/kendrick/unbranded-starter/commit/8f9a131143cdd64b99deef6704ce061a30542c7e))
+
 ## [3.1.0](https://github.com/kendrick/unbranded-starter/compare/v3.0.0...v3.1.0) (2026-11-05)
 
 
