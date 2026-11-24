@@ -94,6 +94,6 @@ async function versionsOf(
 	};
 	const version = body['dist-tags']?.latest;
 	if (typeof version !== 'string')
-		throw new Error(`${registry} returned no latest dist-tag for ${name}.`);
+		throw new TypeError(`${registry} returned no latest dist-tag for ${name}.`);
 	return { latest: version, versions: Object.keys(body.versions ?? {}) };
 }
