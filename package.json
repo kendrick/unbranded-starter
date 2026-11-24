@@ -79,23 +79,23 @@
 		"node-diff3": "3.2.1"
 	},
 	"devDependencies": {
-		"@dreamsicle.io/stylelint-config-tailwindcss": "^1.2.2",
-		"@tailwindcss/postcss": "^4.0.0",
+		"@dreamsicle.io/stylelint-config-tailwindcss": "^1.3.2",
+		"@tailwindcss/postcss": "^4.3.5",
 		"@types/node": "^26.6.6",
 		"ajv": "8.20.0",
-		"jsdom": "^30.1.3",
-		"lint-staged": "^17.6.0",
-		"oxfmt": "0.75.0",
-		"oxlint": "1.90.0",
-		"oxlint-tsgolint": "7.0.2005",
+		"jsdom": "^31.0.1",
+		"lint-staged": "^17.6.2",
+		"oxfmt": "0.80.0",
+		"oxlint": "1.95.0",
+		"oxlint-tsgolint": "7.0.2008",
 		"simple-git-hooks": "^2.13.1",
-		"stylelint": "^17.16.0",
-		"stylelint-config-standard": "^40.0.0",
-		"tailwindcss": "^4.0.0",
+		"stylelint": "^18.1.0",
+		"stylelint-config-standard": "^41.1.0",
+		"tailwindcss": "^4.3.5",
 		"tsdown": "0.23.0",
 		"typescript": "^7.0.2",
 		"vite": "^8.2.2",
-		"vitest": "^5.0.5"
+		"vitest": "^5.1.1"
 	},
 	"pnpm": {
 		"onlyBuiltDependencies": [
